@@ -100,7 +100,47 @@ export function initBoard(state, persist, container) {
 
     container.appendChild(buildHeader(schedule));
     container.appendChild(buildTimeline(schedule));
+    container.appendChild(buildPrepList());
     container.appendChild(buildOverlapList(schedule));
+  }
+
+  // Untimed reminders attached to a step during the details phase — these
+  // never get their own board block, but the printed page is the actual
+  // deliverable, so they need a home somewhere on it.
+  function buildPrepList() {
+    const wrap = document.createElement("div");
+    wrap.className = "prep-list";
+
+    const stepsWithPrep = state.time.steps.filter((s) => Array.isArray(s.prep) && s.prep.length > 0);
+    if (stepsWithPrep.length === 0) return wrap;
+
+    const heading = document.createElement("h3");
+    heading.textContent = "Before you start each step";
+    wrap.appendChild(heading);
+
+    const groups = document.createElement("div");
+    groups.className = "prep-list__items";
+    for (const step of stepsWithPrep) {
+      const group = document.createElement("div");
+      group.className = "prep-list__group";
+
+      const label = document.createElement("div");
+      label.className = "prep-list__step-name";
+      label.textContent = step.name;
+      group.appendChild(label);
+
+      const ul = document.createElement("ul");
+      for (const item of step.prep) {
+        const li = document.createElement("li");
+        li.textContent = item;
+        ul.appendChild(li);
+      }
+      group.appendChild(ul);
+
+      groups.appendChild(group);
+    }
+    wrap.appendChild(groups);
+    return wrap;
   }
 
   function buildHeader(schedule) {

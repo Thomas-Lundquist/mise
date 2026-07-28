@@ -21,7 +21,7 @@ function defaultState(recipePrefill) {
     read: { done: false, hardest: "" },
     equipment: [],
     bowls: Array.from({ length: DEFAULT_BOWL_COUNT }, emptyBowl),
-    time: { service: "12:35", steps: [], elicitationDone: false },
+    time: { service: "12:35", steps: [], elicitationDone: false, detailsDone: false },
   };
 }
 
@@ -36,6 +36,10 @@ let state = loadState(storageKey) || defaultState(recipePrefill);
 // Defensive defaults for state saved by an earlier version of the app.
 if (!Array.isArray(state.time.steps)) state.time.steps = [];
 if (typeof state.time.elicitationDone !== "boolean") state.time.elicitationDone = false;
+if (typeof state.time.detailsDone !== "boolean") state.time.detailsDone = false;
+for (const step of state.time.steps) {
+  if (!Array.isArray(step.prep)) step.prep = [];
+}
 
 function persist() {
   saveState(storageKey, state);

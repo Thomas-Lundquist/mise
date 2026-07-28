@@ -1,8 +1,14 @@
-// Section 04 — Time planner, scaffolded mode. Owns phase 1 (backward
-// elicitation) directly and hands off to board.js for phase 2 (the board)
-// once elicitation is marked done.
+// Section 04 — Time planner, scaffolded mode. Three phases:
+//   1. Backward elicitation of major steps (this is the actual time-planning
+//      skill being taught — see docs/design-brief.md and the build spec).
+//   2. A forward pass to attach quick untimed prep reminders to each major
+//      step. These are NOT scheduled — no duration, no hands/unattended
+//      flag, never shown on the board. They exist so the tedious backward
+//      "what happens right before X?" interrogation only has to cover the
+//      steps that actually shape the timeline, not every small task.
+//   3. The board (board.js).
 //
-// Steps are stored in forward chronological order: each new answer is
+// Steps are stored in forward chronological order: each new major is
 // unshifted onto the front of the array, and because every new answer is
 // chronologically earlier than everything already entered, the array is
 // always in correct forward order, growing earlier at index 0 as the
@@ -19,6 +25,16 @@ function handsLabel(hands) {
   return hands ? "Hands on it" : "Runs by itself";
 }
 
+function withFocusPreserved(fn) {
+  const active = document.activeElement;
+  const id = active && active.id;
+  fn();
+  if (id) {
+    const el = document.getElementById(id);
+    if (el) el.focus();
+  }
+}
+
 export function initTimePlanner(state, persist) {
   const container = document.getElementById("time-planner");
 
@@ -28,6 +44,9 @@ export function initTimePlanner(state, persist) {
     if (!state.time.elicitationDone) {
       container.appendChild(buildPromptForm());
       if (state.time.steps.length > 0) container.appendChild(buildReviewList());
+      container.appendChild(buildFooterControls());
+    } else if (!state.time.detailsDone) {
+      container.appendChild(buildDetailsPhase());
       container.appendChild(buildFooterControls());
     } else {
       const boardMount = document.createElement("div");
@@ -142,6 +161,7 @@ export function initTimePlanner(state, persist) {
         hands: handsValue,
         lane: null,
         par: null,
+        prep: [],
       });
       persist();
       render();
@@ -216,6 +236,93 @@ export function initTimePlanner(state, persist) {
     return wrap;
   }
 
+  function buildDetailsPhase() {
+    const wrap = document.createElement("div");
+    wrap.className = "details-phase";
+
+    const heading = document.createElement("p");
+    heading.className = "elicit-prompt no-print";
+    heading.textContent =
+      "Anything else you need to do to get ready for each step? Add quick reminders — these don't get their own time slot.";
+    wrap.appendChild(heading);
+
+    const list = document.createElement("div");
+    list.className = "details-list";
+
+    state.time.steps.forEach((step, index) => {
+      const row = document.createElement("div");
+      row.className = "details-step";
+
+      const header = document.createElement("div");
+      header.className = "details-step__header";
+
+      const name = document.createElement("span");
+      name.className = "details-step__name";
+      name.textContent = step.name;
+      header.appendChild(name);
+
+      const tag = document.createElement("span");
+      tag.className = `step-review__tag ${step.hands ? "step-review__tag--hands" : "step-review__tag--unattended"}`;
+      tag.textContent = handsLabel(step.hands);
+      header.appendChild(tag);
+
+      row.appendChild(header);
+
+      if (step.prep.length > 0) {
+        const prepList = document.createElement("ul");
+        prepList.className = "details-step__prep-list";
+        step.prep.forEach((item, itemIndex) => {
+          const li = document.createElement("li");
+
+          const span = document.createElement("span");
+          span.textContent = item;
+          li.appendChild(span);
+
+          const removeBtn = document.createElement("button");
+          removeBtn.type = "button";
+          removeBtn.className = "details-step__prep-remove no-print";
+          removeBtn.setAttribute("aria-label", `Remove ${item}`);
+          removeBtn.textContent = "×";
+          removeBtn.addEventListener("click", () => {
+            step.prep.splice(itemIndex, 1);
+            persist();
+            render();
+          });
+          li.appendChild(removeBtn);
+
+          prepList.appendChild(li);
+        });
+        row.appendChild(prepList);
+      }
+
+      const entryRow = document.createElement("div");
+      entryRow.className = "details-step__entry no-print";
+      const entryInput = document.createElement("input");
+      entryInput.type = "text";
+      entryInput.id = `prep-input-${index}`;
+      entryInput.placeholder = "Add a reminder, press Enter";
+      entryInput.setAttribute("aria-label", `Add prep reminder for ${step.name}`);
+      entryInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          const value = entryInput.value.trim();
+          if (!value) return;
+          step.prep.push(value);
+          persist();
+          entryInput.value = "";
+          withFocusPreserved(render);
+        }
+      });
+      entryRow.appendChild(entryInput);
+      row.appendChild(entryRow);
+
+      list.appendChild(row);
+    });
+
+    wrap.appendChild(list);
+    return wrap;
+  }
+
   function buildFooterControls() {
     const wrap = document.createElement("div");
     wrap.className = "elicit-footer no-print";
@@ -225,7 +332,7 @@ export function initTimePlanner(state, persist) {
         const doneBtn = document.createElement("button");
         doneBtn.type = "button";
         doneBtn.className = "btn btn--secondary";
-        doneBtn.textContent = "That's my first step — build my board";
+        doneBtn.textContent = "I'm done adding steps";
         doneBtn.addEventListener("click", () => {
           state.time.elicitationDone = true;
           persist();
@@ -233,17 +340,50 @@ export function initTimePlanner(state, persist) {
         });
         wrap.appendChild(doneBtn);
       }
-    } else {
-      const editBtn = document.createElement("button");
-      editBtn.type = "button";
-      editBtn.className = "btn btn--small";
-      editBtn.textContent = "Edit steps";
-      editBtn.addEventListener("click", () => {
+    } else if (!state.time.detailsDone) {
+      const backBtn = document.createElement("button");
+      backBtn.type = "button";
+      backBtn.className = "btn btn--small";
+      backBtn.textContent = "Back to steps";
+      backBtn.addEventListener("click", () => {
         state.time.elicitationDone = false;
         persist();
         render();
       });
-      wrap.appendChild(editBtn);
+      wrap.appendChild(backBtn);
+
+      const boardBtn = document.createElement("button");
+      boardBtn.type = "button";
+      boardBtn.className = "btn btn--secondary";
+      boardBtn.textContent = "Build my board";
+      boardBtn.addEventListener("click", () => {
+        state.time.detailsDone = true;
+        persist();
+        render();
+      });
+      wrap.appendChild(boardBtn);
+    } else {
+      const editStepsBtn = document.createElement("button");
+      editStepsBtn.type = "button";
+      editStepsBtn.className = "btn btn--small";
+      editStepsBtn.textContent = "Edit steps";
+      editStepsBtn.addEventListener("click", () => {
+        state.time.elicitationDone = false;
+        persist();
+        render();
+      });
+      wrap.appendChild(editStepsBtn);
+
+      const editPrepBtn = document.createElement("button");
+      editPrepBtn.type = "button";
+      editPrepBtn.className = "btn btn--small";
+      editPrepBtn.textContent = "Edit prep list";
+      editPrepBtn.addEventListener("click", () => {
+        state.time.detailsDone = false;
+        persist();
+        render();
+      });
+      wrap.appendChild(editPrepBtn);
     }
 
     return wrap;

@@ -541,6 +541,74 @@ input[type="time"] {
   flex-wrap: wrap;
 }
 
+/* ---------- Time planner: prep details (phase 1.5) ---------- */
+
+.details-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0.75rem 0 1rem;
+}
+
+.details-step {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  padding: 0.65rem 0.85rem;
+}
+
+.details-step__header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.4rem;
+}
+
+.details-step__name {
+  font-weight: 600;
+  flex: 1 1 auto;
+}
+
+.details-step__prep-list {
+  list-style: none;
+  margin: 0 0 0.4rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.details-step__prep-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.9rem;
+  border-bottom: 1px dashed var(--line);
+  padding: 0.2rem 0;
+}
+
+.details-step__prep-remove {
+  border: none;
+  background: transparent;
+  color: var(--steel);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.15rem 0.35rem;
+  min-width: 28px;
+  min-height: 28px;
+  border-radius: 999px;
+}
+
+.details-step__prep-remove:hover {
+  background: var(--line);
+  color: var(--ink);
+}
+
+.details-step__entry input {
+  width: 100%;
+}
+
 /* ---------- Time planner: board ---------- */
 
 .board-header {
@@ -648,12 +716,6 @@ input[type="time"] {
   min-width: 0;
 }
 
-/* A small notch at the top — a ticket already torn off the rail. */
-.block--hands,
-.block--unattended {
-  clip-path: polygon(0 0, 42% 0, 46% 45%, 54% 45%, 58% 0, 100% 0, 100% 100%, 0 100%);
-}
-
 .block--hands {
   background: var(--sear);
   color: var(--accent-ink);
@@ -737,6 +799,40 @@ input[type="time"] {
   font-size: 0.9rem;
 }
 
+.prep-list {
+  margin-bottom: 1.25rem;
+}
+
+.prep-list h3 {
+  font-size: 0.85rem;
+}
+
+.prep-list__items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.prep-list__group {
+  flex: 1 1 200px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.5rem 0.65rem;
+  background: var(--paper);
+}
+
+.prep-list__step-name {
+  font-weight: 600;
+  font-size: 0.85rem;
+  margin-bottom: 0.25rem;
+}
+
+.prep-list__group ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.85rem;
+}
+
 /* ---------- Placeholder ---------- */
 
 .placeholder-note {
@@ -807,6 +903,13 @@ footer code {
     padding: 0.6rem;
   }
 
+  /* Sections 01-03 fit together on page one; the time plan is dense enough
+     on its own to deserve a page to itself rather than being squeezed to fit. */
+  #section-time {
+    break-before: page;
+    page-break-before: always;
+  }
+
   .chip--selected {
     background: #fff;
     color: #000;
@@ -856,6 +959,12 @@ footer code {
     background: #fff;
     border: 1px solid #000;
     color: #000;
+  }
+
+  .prep-list__group {
+    background: #fff;
+    border: 1px solid #000;
+    break-inside: avoid;
   }
 
   a[href]::after {
