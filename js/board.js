@@ -20,36 +20,8 @@
 // window; only hands-on steps can be guests, since a window exists to answer
 // "what could your hands be doing right now."
 
-import { STATIONS, STATION_KEYWORDS } from "./config.js";
-
-function clockToMinutes(hhmm) {
-  const [h, m] = (hhmm || "00:00").split(":").map(Number);
-  return (h || 0) * 60 + (m || 0);
-}
-
-function minutesToClock(mins) {
-  const wrapped = ((Math.round(mins) % 1440) + 1440) % 1440;
-  const h = Math.floor(wrapped / 60);
-  const m = wrapped % 60;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-}
-
-function formatDuration(mins) {
-  const rounded = Math.round(mins);
-  if (rounded < 60) return `${rounded} min`;
-  const h = Math.floor(rounded / 60);
-  const m = rounded % 60;
-  return m === 0 ? `${h}h` : `${h}h ${m}m`;
-}
-
-function guessStation(name) {
-  const lower = (name || "").toLowerCase();
-  for (const station of STATIONS) {
-    const keywords = STATION_KEYWORDS[station] || [];
-    if (keywords.some((kw) => lower.includes(kw))) return station;
-  }
-  return "Prep";
-}
+import { STATIONS } from "./config.js";
+import { clockToMinutes, minutesToClock, formatDuration, guessStation } from "./time-utils.js";
 
 function ensureStationDefaults(steps) {
   for (const step of steps) {

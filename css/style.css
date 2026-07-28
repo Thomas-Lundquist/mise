@@ -34,6 +34,15 @@
   box-sizing: border-box;
 }
 
+/* The `hidden` attribute loses to any author rule that sets `display`
+   (e.g. `.field { display: flex; }`), regardless of specificity, because
+   the UA stylesheet's `[hidden] { display: none }` is a separate, lower-
+   priority cascade origin. Restoring it here so `el.hidden = true` always
+   means "not rendered," everywhere in the app. */
+[hidden] {
+  display: none !important;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .chip, .btn, .bowl-card, .banner {
     transition: background-color 120ms ease, border-color 120ms ease, transform 80ms ease;
@@ -109,6 +118,35 @@ select:focus-visible,
 .banner-warning {
   background: var(--warning-bg);
   color: var(--warning-ink);
+}
+
+.banner-warning__text {
+  margin: 0 0 0.5rem;
+}
+
+.banner-warning__controls {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.banner-warning .btn {
+  border-color: var(--warning-ink);
+}
+
+.banner-warning .btn--secondary {
+  color: var(--warning-ink);
+}
+
+.restore-draft-status {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.restore-draft-status:empty {
+  display: none;
 }
 
 /* ---------- Identity strip ---------- */
@@ -746,6 +784,21 @@ input[type="time"] {
 .block--window:hover {
   background: rgba(217, 195, 106, 0.35);
   border-color: var(--sear);
+}
+
+.block--open {
+  cursor: pointer;
+}
+
+.block--conflict {
+  outline: 2px dashed var(--sear);
+  outline-offset: 2px;
+}
+
+.block--conflict::before {
+  content: "\26A0";
+  margin-right: 0.3rem;
+  flex: none;
 }
 
 .picker {

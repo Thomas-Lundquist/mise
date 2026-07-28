@@ -12,8 +12,19 @@
 <body>
 
 <div id="storage-warning" class="banner banner-warning" hidden role="status">
-  Your browser is blocking on-page storage, so your work won't survive a refresh.
-  <a id="storage-warning-link" href="#" target="_blank" rel="noopener">Open this page in a new tab</a> to be safe.
+  <p class="banner-warning__text">
+    Your browser is blocking on-page storage, so your work won't survive closing this tab.
+    <a id="storage-warning-link" href="#" target="_blank" rel="noopener">Open this page in a new tab</a> to be safe,
+    and download a backup as you go.
+  </p>
+  <div class="banner-warning__controls">
+    <button type="button" id="download-draft-btn" class="btn btn--small">Download a backup</button>
+    <label class="btn btn--small btn--secondary" for="restore-draft-input">
+      Restore a backup
+      <input type="file" id="restore-draft-input" accept="application/json" hidden>
+    </label>
+  </div>
+  <p id="restore-draft-status" class="restore-draft-status" aria-live="polite"></p>
 </div>
 
 <header class="identity-strip">

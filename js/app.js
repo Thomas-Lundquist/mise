@@ -1,6 +1,7 @@
-import { EQUIPMENT_PALETTE, DEFAULT_BOWL_COUNT } from "./config.js";
-import { saveState, loadState } from "./storage.js";
+import { EQUIPMENT_PALETTE, DEFAULT_BOWL_COUNT, DEFAULT_SERVICE_TIME, DEFAULT_TIMER_MINUTES } from "./config.js";
+import { saveState, loadState, downloadDraft, restoreDraftFromFile } from "./storage.js";
 import { initTimePlanner } from "./time-planner.js";
+import { initOpenMode } from "./open-mode.js";
 
 // --- State -------------------------------------------------------------
 
@@ -15,28 +16,40 @@ function emptyBowl() {
   return { label: "", items: [] };
 }
 
-function defaultState(recipePrefill) {
+function defaultState(recipePrefill, servicePrefill) {
   return {
     meta: { name: "", kitchen: "", date: todayISO(), role: "", recipe: recipePrefill || "" },
     read: { done: false, hardest: "" },
     equipment: [],
     bowls: Array.from({ length: DEFAULT_BOWL_COUNT }, emptyBowl),
-    time: { service: "12:35", steps: [], elicitationDone: false, detailsDone: false },
+    time: {
+      service: servicePrefill || DEFAULT_SERVICE_TIME,
+      steps: [],
+      elicitationDone: false,
+      detailsDone: false,
+      openBlocks: [],
+    },
   };
 }
 
 const urlParams = new URLSearchParams(window.location.search);
 const recipePrefill = urlParams.get("recipe") || "";
+const serviceParam = urlParams.get("service") || "";
+const servicePrefill = /^\d{1,2}:\d{2}$/.test(serviceParam) ? serviceParam : "";
+const mode = urlParams.get("mode") === "open" ? "open" : "scaffold";
+const timerParam = urlParams.get("timer");
+const timerMinutes = timerParam === null || timerParam === "" ? DEFAULT_TIMER_MINUTES : Number(timerParam);
 
 // Storage key is fixed for the session once determined — see storage.js comment.
 const storageKey = recipePrefill || "untitled";
 
-let state = loadState(storageKey) || defaultState(recipePrefill);
+let state = loadState(storageKey) || defaultState(recipePrefill, servicePrefill);
 
 // Defensive defaults for state saved by an earlier version of the app.
 if (!Array.isArray(state.time.steps)) state.time.steps = [];
 if (typeof state.time.elicitationDone !== "boolean") state.time.elicitationDone = false;
 if (typeof state.time.detailsDone !== "boolean") state.time.detailsDone = false;
+if (!Array.isArray(state.time.openBlocks)) state.time.openBlocks = [];
 for (const step of state.time.steps) {
   if (!Array.isArray(step.prep)) step.prep = [];
 }
@@ -305,6 +318,29 @@ function initBowls() {
   renderBowls();
 }
 
+// --- Timer ---------------------------------------------------------------
+
+function initTimer() {
+  const el = document.getElementById("timer");
+  if (!el || !Number.isFinite(timerMinutes) || timerMinutes <= 0) return;
+
+  el.hidden = false;
+  let remaining = timerMinutes * 60;
+
+  function render() {
+    const m = Math.floor(remaining / 60);
+    const s = remaining % 60;
+    el.textContent = `${m}:${String(s).padStart(2, "0")}`;
+  }
+
+  render();
+  const interval = setInterval(() => {
+    remaining -= 1;
+    render();
+    if (remaining <= 0) clearInterval(interval);
+  }, 1000);
+}
+
 // --- Print -------------------------------------------------------------
 
 function initPrint() {
@@ -318,12 +354,48 @@ function initStorageWarningLink() {
   if (link) link.href = window.location.href;
 }
 
+function initDraftControls() {
+  const downloadBtn = document.getElementById("download-draft-btn");
+  const restoreInput = document.getElementById("restore-draft-input");
+  const status = document.getElementById("restore-draft-status");
+
+  if (downloadBtn) {
+    downloadBtn.addEventListener("click", () => {
+      downloadDraft(state.meta.recipe, state);
+    });
+  }
+
+  if (restoreInput) {
+    restoreInput.addEventListener("change", () => {
+      const file = restoreInput.files && restoreInput.files[0];
+      if (!file) return;
+      restoreDraftFromFile(file)
+        .then((parsed) => {
+          saveState(storageKey, parsed);
+          window.location.reload();
+        })
+        .catch((err) => {
+          if (status) status.textContent = err.message;
+          restoreInput.value = "";
+        });
+    });
+  }
+}
+
 // --- Boot ----------------------------------------------------------------
 
 initIdentityStrip();
 initRead();
 initEquipment();
 initBowls();
-initTimePlanner(state, persist);
+
+if (mode === "open") {
+  initOpenMode(state, persist, document.getElementById("time-planner"));
+} else {
+  initTimePlanner(state, persist);
+}
+
 initPrint();
 initStorageWarningLink();
+initDraftControls();
+initTimer();
