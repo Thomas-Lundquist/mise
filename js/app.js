@@ -111,7 +111,7 @@ function initPlanBar() {
   });
 
   newBtn.addEventListener("click", () => {
-    const hasWork = plan.steps.length > 0 || plan.equipment.length > 0 || plan.read.done;
+    const hasWork = plan.steps.length > 0 || plan.equipment.length > 0 || plan.read.done || plan.meta.name || plan.meta.recipe;
     if (hasWork && !window.confirm("Start over? You'll lose everything on your current plan.")) return;
     switchToPlan(freshPlan());
     if (status) status.textContent = "Started a new plan.";
@@ -543,7 +543,7 @@ initStorageWarning();
 initTimer();
 
 window.addEventListener("beforeunload", (e) => {
-  const hasWork = plan.steps.length > 0 || plan.equipment.length > 0 || plan.read.done;
+  const hasWork = plan.steps.length > 0 || plan.equipment.length > 0 || plan.read.done || plan.meta.name || plan.meta.recipe;
   if (hasWork) {
     e.preventDefault();
     e.returnValue = "";
