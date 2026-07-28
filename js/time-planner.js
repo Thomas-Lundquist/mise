@@ -338,6 +338,7 @@ export function initTimePlanner(state, persist) {
         lane: null,
         par: null,
         prep: [],
+        windowNotes: [],
       });
       persist();
       render();

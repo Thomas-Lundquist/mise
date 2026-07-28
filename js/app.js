@@ -56,6 +56,7 @@ if (typeof state.time.detailsDone !== "boolean") state.time.detailsDone = false;
 if (!Array.isArray(state.time.openBlocks)) state.time.openBlocks = [];
 for (const step of state.time.steps) {
   if (!Array.isArray(step.prep)) step.prep = [];
+  if (!Array.isArray(step.windowNotes)) step.windowNotes = [];
 }
 
 // Migrate drafts saved before "components" existed: a draft with steps but

@@ -101,6 +101,16 @@ function blockLabel(text) {
   return span;
 }
 
+function withFocusPreserved(fn) {
+  const active = document.activeElement;
+  const id = active && active.id;
+  fn();
+  if (id) {
+    const el = document.getElementById(id);
+    if (el) el.focus();
+  }
+}
+
 export function initBoard(state, persist, container) {
   let openWindowId = null;
   const componentsById = new Map(state.time.components.map((c) => [c.id, c]));
@@ -115,6 +125,7 @@ export function initBoard(state, persist, container) {
     container.appendChild(buildHeader(schedule));
     container.appendChild(buildTimeline(schedule, serviceMinutes));
     container.appendChild(buildPrepList());
+    container.appendChild(buildWindowNotesSummary());
     container.appendChild(buildOverlapList(schedule));
   }
 
@@ -147,6 +158,47 @@ export function initBoard(state, persist, container) {
       for (const item of step.prep) {
         const li = document.createElement("li");
         li.textContent = item;
+        ul.appendChild(li);
+      }
+      group.appendChild(ul);
+
+      groups.appendChild(group);
+    }
+    wrap.appendChild(groups);
+    return wrap;
+  }
+
+  // Typed-in ideas for a free-hands window that never got matched to one of
+  // the student's own steps — see buildWindowNotes. Untimed, like the prep
+  // list, so they need a home on the printed page too.
+  function buildWindowNotesSummary() {
+    const wrap = document.createElement("div");
+    wrap.className = "prep-list";
+
+    const anchorsWithNotes = state.time.steps.filter(
+      (s) => !s.hands && Array.isArray(s.windowNotes) && s.windowNotes.length > 0
+    );
+    if (anchorsWithNotes.length === 0) return wrap;
+
+    const heading = document.createElement("h3");
+    heading.textContent = "During your free-hands windows";
+    wrap.appendChild(heading);
+
+    const groups = document.createElement("div");
+    groups.className = "prep-list__items";
+    for (const anchor of anchorsWithNotes) {
+      const group = document.createElement("div");
+      group.className = "prep-list__group";
+
+      const label = document.createElement("div");
+      label.className = "prep-list__step-name";
+      label.textContent = anchor.name;
+      group.appendChild(label);
+
+      const ul = document.createElement("ul");
+      for (const note of anchor.windowNotes) {
+        const li = document.createElement("li");
+        li.textContent = note;
         ul.appendChild(li);
       }
       group.appendChild(ul);
@@ -423,6 +475,8 @@ export function initBoard(state, persist, container) {
       panel.appendChild(list);
     }
 
+    panel.appendChild(buildWindowNotes(anchor));
+
     const declineBtn = document.createElement("button");
     declineBtn.type = "button";
     declineBtn.className = "btn btn--secondary btn--small";
@@ -434,6 +488,85 @@ export function initBoard(state, persist, container) {
     panel.appendChild(declineBtn);
 
     return panel;
+  }
+
+  // Not every good free-hands idea is one of the student's own backward-
+  // elicited steps — sometimes it's something small (wipe the counter, get
+  // plates ready) that never earned its own timed slot. This is a typed,
+  // untimed note attached to the window's anchor step, not a scheduled
+  // block — it doesn't compete with the picker's own candidate list above.
+  function buildWindowNotes(anchor) {
+    const wrap = document.createElement("div");
+    wrap.className = "window-notes";
+
+    const label = document.createElement("p");
+    label.className = "window-notes__label";
+    label.textContent = "Or write in something else:";
+    wrap.appendChild(label);
+
+    if (!Array.isArray(anchor.windowNotes)) anchor.windowNotes = [];
+
+    if (anchor.windowNotes.length > 0) {
+      const list = document.createElement("ul");
+      list.className = "window-notes__list";
+      anchor.windowNotes.forEach((note, index) => {
+        const li = document.createElement("li");
+
+        const span = document.createElement("span");
+        span.textContent = note;
+        li.appendChild(span);
+
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "window-notes__remove no-print";
+        removeBtn.setAttribute("aria-label", `Remove ${note}`);
+        removeBtn.textContent = "×";
+        removeBtn.addEventListener("click", () => {
+          anchor.windowNotes.splice(index, 1);
+          persist();
+          render();
+        });
+        li.appendChild(removeBtn);
+
+        list.appendChild(li);
+      });
+      wrap.appendChild(list);
+    }
+
+    const entryRow = document.createElement("div");
+    entryRow.className = "inline-add";
+    const input = document.createElement("input");
+    input.type = "text";
+    input.id = `window-note-input-${anchor.id}`;
+    input.placeholder = "e.g. Wipe down the counter";
+    input.setAttribute("aria-label", `Add a note for the "${anchor.name}" window`);
+    entryRow.appendChild(input);
+
+    const addBtn = document.createElement("button");
+    addBtn.type = "button";
+    addBtn.className = "btn btn--small";
+    addBtn.textContent = "Add";
+    entryRow.appendChild(addBtn);
+
+    function submit() {
+      const value = input.value.trim();
+      if (!value) return;
+      anchor.windowNotes.push(value);
+      persist();
+      input.value = "";
+      withFocusPreserved(render);
+    }
+
+    addBtn.addEventListener("click", submit);
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        submit();
+      }
+    });
+
+    wrap.appendChild(entryRow);
+    return wrap;
   }
 
   function buildOverlapList(schedule) {

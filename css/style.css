@@ -922,6 +922,53 @@ input[type="time"] {
   margin: 0 0 0.5rem;
 }
 
+.window-notes {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--line);
+}
+
+.window-notes__label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin: 0 0 0.4rem;
+}
+
+.window-notes__list {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.window-notes__list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.9rem;
+  border-bottom: 1px dashed var(--line);
+  padding: 0.25rem 0;
+}
+
+.window-notes__remove {
+  border: none;
+  background: transparent;
+  color: var(--steel);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.15rem 0.35rem;
+  min-width: 28px;
+  min-height: 28px;
+}
+
+.window-notes__remove:hover {
+  background: var(--line);
+  color: var(--ink);
+}
+
 .overlap-list h3 {
   font-size: 0.85rem;
 }
