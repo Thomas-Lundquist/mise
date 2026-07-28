@@ -13,21 +13,29 @@
 
 <div id="storage-warning" class="banner banner-warning" hidden role="status">
   <p class="banner-warning__text">
-    Your browser is blocking on-page storage, so your work won't survive closing this tab.
+    This browser won't let the page save your work, so it won't survive closing the tab.
     <a id="storage-warning-link" href="#" target="_blank" rel="noopener">Open this page in a new tab</a> to be safe,
     and download a backup as you go.
   </p>
-  <div class="banner-warning__controls">
-    <button type="button" id="download-draft-btn" class="btn btn--small">Download a backup</button>
-    <label class="btn btn--small btn--secondary" for="restore-draft-input">
-      Restore a backup
-      <input type="file" id="restore-draft-input" accept="application/json" hidden>
-    </label>
-  </div>
-  <p id="restore-draft-status" class="restore-draft-status" aria-live="polite"></p>
 </div>
 
 <header class="identity-strip">
+  <div class="identity-strip__row identity-strip__row--plans no-print">
+    <div class="field field--wide">
+      <label for="plan-picker">Plan</label>
+      <select id="plan-picker"></select>
+    </div>
+    <div class="plan-bar__actions">
+      <button type="button" id="new-plan-btn" class="btn btn--small">New plan</button>
+      <button type="button" id="download-plan-btn" class="btn btn--small btn--secondary">Download backup</button>
+      <label class="btn btn--small btn--secondary" for="restore-plan-input">
+        Restore
+        <input type="file" id="restore-plan-input" accept="application/json" hidden>
+      </label>
+    </div>
+    <p id="plan-status" class="plan-status" aria-live="polite"></p>
+  </div>
+
   <div class="identity-strip__row">
     <div class="field">
       <label for="meta-name">Name</label>
@@ -41,17 +49,17 @@
       <label for="meta-date">Date</label>
       <input type="date" id="meta-date">
     </div>
-    <div class="field field--narrow">
-      <label for="meta-role">Today's role</label>
-      <input type="text" id="meta-role" autocomplete="off">
-    </div>
     <div class="field field--wide">
       <label for="meta-recipe">Recipe</label>
       <input type="text" id="meta-recipe" autocomplete="off">
     </div>
   </div>
+
   <div class="identity-strip__row identity-strip__row--controls no-print">
-    <span id="timer" class="timer" hidden></span>
+    <span id="timer" class="timer" role="timer" hidden>
+      <span class="timer__label">Planning time left</span>
+      <span id="timer-value" class="timer__value"></span>
+    </span>
     <button type="button" id="print-btn" class="btn btn--secondary">Print / Save PDF</button>
   </div>
 </header>
@@ -68,10 +76,15 @@
       <label for="read-hardest">The step I think will be hardest today:</label>
       <input type="text" id="read-hardest" autocomplete="off">
     </div>
+    <div id="read-hardest-link"></div>
   </section>
 
   <section class="card" id="section-pull" aria-labelledby="section-pull-heading">
     <h2 id="section-pull-heading"><span class="section-num">Step 2</span> Pull</h2>
+    <p class="section-intro">
+      Everything you'll need out of the cupboards. What you pull here is what you can
+      assign to your steps later, so it's worth being thorough.
+    </p>
 
     <div class="field no-print">
       <label for="equipment-search">Search equipment</label>
@@ -96,11 +109,19 @@
 
   <section class="card" id="section-group" aria-labelledby="section-group-heading">
     <h2 id="section-group-heading"><span class="section-num">Step 3</span> Group</h2>
+    <p class="section-intro">
+      Group ingredients that go in at the same moment — one bowl per moment.
+      You'll attach these to your steps later, so a bowl is ready before you need it.
+    </p>
     <div id="bowl-grid" class="bowl-grid"></div>
     <button type="button" id="bowl-add" class="btn btn--small no-print">+ Add bowl</button>
   </section>
 
   <section class="card" id="section-time" aria-labelledby="section-time-heading">
+    <!-- The time plan always prints on its own sheet, so it needs its own
+         identity line — otherwise page two is anonymous once the sheets are
+         separated. Hidden on screen, filled in by app.js. -->
+    <p class="print-identity" id="print-identity" aria-hidden="true"></p>
     <h2 id="section-time-heading"><span class="section-num">Step 4</span> Time</h2>
     <div id="time-planner"></div>
   </section>

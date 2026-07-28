@@ -1,610 +1,690 @@
-// Time planner, scaffolded mode, phase 2 — the board.
+// The board — one renderer for both guided and free placement (spec §4.4).
 //
-// Scheduling model: `par` is the only per-step scheduling state (per the
-// build spec's data model). A step with par === null is an "anchor" and
-// sits in its component's own serial chain, in original chronological
-// order. A step with par set to another step's id is a "guest" pulled out
-// of its chain to run concurrently inside that anchor's window,
-// start-aligned to the anchor's start time.
+// Open mode used to be a second app: its own data model (openBlocks), its own
+// timeline renderer, its own inspector, and no way to carry work between them.
+// It's now a toggle on this board. Guided derives every step's start from the
+// backward chains; free lets the student set starts directly. Same blocks, same
+// lanes, same conflicts, same print path.
 //
-// Multiple components: each component (state.time.components) is backward-
-// elicited independently, so each has its own serial chain of steps. Every
-// component's chain is scheduled backward from the SAME plate-up time —
-// that's what makes "these parts must finish together" true by
-// construction, without the app ever deciding an order for the student.
-// The board expresses this by placing every component's steps on one
-// shared absolute clock, then merging every component's hands-on steps
-// onto a single "You" lane, because it's the same one student doing all of
-// it regardless of which component a step belongs to. Two hands-on steps
-// from different components landing on the same minute is a real
-// conflict — flagged, never auto-resolved (constraint #1 in the build
-// spec: the app never decides what can overlap).
-//
-// Note on the data model: the build spec describes `par` as "index of step
-// this runs concurrently inside." This implementation stores the target
-// step's `id` instead of its array index, because indices shift when a step
-// is removed while editing (see time-planner.js's remove handler) and a
-// dangling numeric index would silently mispair steps. `id` is stable across
-// edits. The role — "the only scheduling state, everything else derives from
-// it" — is unchanged.
-//
-// Only unattended steps (hands === false) can be anchors that offer a
-// window; only hands-on steps can be guests, since a window exists to answer
-// "what could your hands be doing right now." A guest can come from any
-// component — a free-hands window is exactly where cross-component overlap
-// is supposed to happen.
+// Layout note: overlapping blocks are packed into sub-rows rather than drawn on
+// top of each other. The previous build absolutely positioned everything on one
+// track, so two steps at the same minute painted over one another — labels
+// became unreadable on screen and a step vanished entirely from the printout.
 
-import { STATIONS } from "./config.js";
-import { clockToMinutes, minutesToClock, formatDuration, guessStation, computeConflicts } from "./time-utils.js";
+import { STATIONS, PERIODS } from "./config.js";
+import {
+  resolveSchedule, computeConflicts, describeConflict, planSpan,
+  equipmentById, laneForStep, stepsForComponent, foodUpFor,
+  clockToMinutes, minutesToClock, formatDuration,
+} from "./plan.js";
 
-function ensureStationDefaults(steps) {
-  for (const step of steps) {
-    if (!step.hands && !step.lane) step.lane = guessStation(step.name);
-  }
+const ROW_H = 32;      // px per stacked sub-row within a lane
+const SNAP = 5;        // free-mode nudge, minutes
+
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
 }
 
-function isWindowFilled(steps, anchorId) {
-  return steps.some((s) => s.par === anchorId);
-}
-
-// Builds one component's own serial chain, then shifts it so the
-// component's own end lands exactly on `serviceMinutes` — every part of the
-// dish finishes at the same absolute moment by construction.
-function scheduleComponent(componentSteps, serviceMinutes) {
-  const anchors = componentSteps.filter((s) => s.par == null);
-  const localById = new Map();
-
-  let t = 0;
-  for (const anchor of anchors) {
-    localById.set(anchor.id, { start: t, end: t + anchor.mins });
-    t += anchor.mins;
-  }
-  const currentTotal = t;
-  const baselineTotal = componentSteps.reduce((sum, s) => sum + s.mins, 0);
-
-  for (const step of componentSteps) {
-    if (step.par == null) continue;
-    const anchorRange = localById.get(step.par);
-    if (!anchorRange) continue; // dangling reference; treat as unscheduled
-    localById.set(step.id, { start: anchorRange.start, end: anchorRange.start + step.mins });
-  }
-
-  const offset = serviceMinutes - currentTotal;
-  const byId = new Map();
-  for (const [id, range] of localById) {
-    byId.set(id, { start: offset + range.start, end: offset + range.end });
-  }
-
-  return { byId, currentTotal, baselineTotal };
-}
-
-function computeSchedule(steps, components, serviceMinutes) {
-  const byId = new Map();
-  let currentTotal = 0;
-  let baselineTotal = 0;
-
-  for (const component of components) {
-    const componentSteps = steps.filter((s) => s.component === component.id);
-    const result = scheduleComponent(componentSteps, serviceMinutes);
-    for (const [id, range] of result.byId) byId.set(id, range);
-    currentTotal = Math.max(currentTotal, result.currentTotal);
-    baselineTotal = Math.max(baselineTotal, result.baselineTotal);
-  }
-
-  return { byId, currentTotal, baselineTotal };
-}
-
-function blockLabel(text) {
-  const span = document.createElement("span");
-  span.className = "block__label";
-  span.textContent = text;
-  return span;
-}
-
-function withFocusPreserved(fn) {
-  const active = document.activeElement;
-  const id = active && active.id;
-  fn();
-  if (id) {
-    const el = document.getElementById(id);
-    if (el) el.focus();
-  }
-}
-
-export function initBoard(state, persist, container) {
-  let openWindowId = null;
-  const componentsById = new Map(state.time.components.map((c) => [c.id, c]));
-  const showComponentOnLane = state.time.components.length > 1;
-
-  function render() {
-    container.innerHTML = "";
-    ensureStationDefaults(state.time.steps);
-    const serviceMinutes = clockToMinutes(state.time.service);
-    const schedule = computeSchedule(state.time.steps, state.time.components, serviceMinutes);
-
-    container.appendChild(buildHeader(schedule));
-    container.appendChild(buildTimeline(schedule, serviceMinutes));
-    container.appendChild(buildPrepList());
-    container.appendChild(buildWindowNotesSummary());
-    container.appendChild(buildOverlapList(schedule));
-  }
-
-  // Untimed reminders attached to a step during the details phase — these
-  // never get their own board block, but the printed page is the actual
-  // deliverable, so they need a home somewhere on it.
-  function buildPrepList() {
-    const wrap = document.createElement("div");
-    wrap.className = "prep-list";
-
-    const stepsWithPrep = state.time.steps.filter((s) => Array.isArray(s.prep) && s.prep.length > 0);
-    if (stepsWithPrep.length === 0) return wrap;
-
-    const heading = document.createElement("h3");
-    heading.textContent = "Before you start each step";
-    wrap.appendChild(heading);
-
-    const groups = document.createElement("div");
-    groups.className = "prep-list__items";
-    for (const step of stepsWithPrep) {
-      const group = document.createElement("div");
-      group.className = "prep-list__group";
-
-      const label = document.createElement("div");
-      label.className = "prep-list__step-name";
-      label.textContent = step.name;
-      group.appendChild(label);
-
-      const ul = document.createElement("ul");
-      for (const item of step.prep) {
-        const li = document.createElement("li");
-        li.textContent = item;
-        ul.appendChild(li);
-      }
-      group.appendChild(ul);
-
-      groups.appendChild(group);
+// Greedy interval packing: each item goes in the first sub-row whose previous
+// block has already finished. This is what stops blocks from overlapping.
+function packRows(items) {
+  const sorted = [...items].sort((a, b) => a.range.start - b.range.start || a.range.end - b.range.end);
+  const rowEnds = [];
+  for (const item of sorted) {
+    let row = rowEnds.findIndex((end) => end <= item.range.start);
+    if (row === -1) {
+      row = rowEnds.length;
+      rowEnds.push(-Infinity);
     }
-    wrap.appendChild(groups);
-    return wrap;
+    rowEnds[row] = item.range.end;
+    item.row = row;
+  }
+  return { items: sorted, rowCount: Math.max(1, rowEnds.length) };
+}
+
+export function renderBoard(plan, ctx, mount) {
+  const { persist, rerender } = ctx;
+  const vertical = ctx.orientation === "vertical";
+  mount.innerHTML = "";
+
+  const byId = equipmentById(plan);
+  const ranges = resolveSchedule(plan);
+  const conflicts = computeConflicts(plan, ranges);
+  const span = planSpan(plan, ranges);
+
+  const foodUp = clockToMinutes(foodUpFor(plan));
+  const leftEdge = Math.min(span.start, foodUp) - 2;
+  const rightEdge = Math.max(span.end, foodUp) + 2;
+  const denom = Math.max(rightEdge - leftEdge, 1);
+
+  function place(node, range) {
+    const leftPct = ((range.start - leftEdge) / denom) * 100;
+    const widthPct = Math.max((range.end - range.start) / denom, 0.005) * 100;
+    node.style.left = `${leftPct}%`;
+    node.style.width = `calc(${widthPct}% - 2px)`;
   }
 
-  // Typed-in ideas for a free-hands window that never got matched to one of
-  // the student's own steps — see buildWindowNotes. Untimed, like the prep
-  // list, so they need a home on the printed page too.
-  function buildWindowNotesSummary() {
-    const wrap = document.createElement("div");
-    wrap.className = "prep-list";
+  mount.appendChild(buildHeader());
+  mount.appendChild(vertical ? buildVerticalTimeline() : buildTimeline());
+  mount.appendChild(buildPartBreakdown());
+  mount.appendChild(buildConflictSummary());
+  mount.appendChild(buildBeforeYouStart());
+  mount.appendChild(buildNotesSummary());
+  if (plan.schedule.mode === "guided") mount.appendChild(buildOverlapList());
 
-    const anchorsWithNotes = state.time.steps.filter(
-      (s) => !s.hands && Array.isArray(s.windowNotes) && s.windowNotes.length > 0
-    );
-    if (anchorsWithNotes.length === 0) return wrap;
+  // ---------- Header: times and readouts ----------
 
-    const heading = document.createElement("h3");
-    heading.textContent = "During your free-hands windows";
-    wrap.appendChild(heading);
+  function buildHeader() {
+    const wrap = el("div", "board-header");
 
-    const groups = document.createElement("div");
-    groups.className = "prep-list__items";
-    for (const anchor of anchorsWithNotes) {
-      const group = document.createElement("div");
-      group.className = "prep-list__group";
+    wrap.appendChild(buildWhenControls());
 
-      const label = document.createElement("div");
-      label.className = "prep-list__step-name";
-      label.textContent = anchor.name;
-      group.appendChild(label);
+    const readouts = el("div", "readouts");
+    readouts.appendChild(readout("Start cooking at", minutesToClock(span.start), "readout--primary"));
+    readouts.appendChild(readout("Your plan takes", formatDuration(span.end - span.start)));
 
-      const ul = document.createElement("ul");
-      for (const note of anchor.windowNotes) {
-        const li = document.createElement("li");
-        li.textContent = note;
-        ul.appendChild(li);
-      }
-      group.appendChild(ul);
+    // Slack against the real deadline. The old readout reported
+    // "overlapping saves you X" as a max across components, so overlapping
+    // inside any component that wasn't the longest changed nothing at all —
+    // the student did the thing the app is built to teach and every number
+    // stayed identical. Measuring against kitchen time always moves.
+    // Measured against the cooking window, not against a pair of clock times.
+    // Same number in every period, so the plan means the same thing wherever
+    // and whenever it's cooked.
+    const available = plan.schedule.windowMins;
+    const needed = span.end - span.start;
+    const slack = available - needed;
 
-      groups.appendChild(group);
+    if (plan.steps.length === 0) {
+      readouts.appendChild(readout("You get", formatDuration(Math.max(available, 0))));
+    } else if (slack >= 0) {
+      readouts.appendChild(readout("Time to spare", formatDuration(slack), "readout--good"));
+    } else {
+      readouts.appendChild(readout("Over by", formatDuration(-slack), "readout--warn"));
     }
-    wrap.appendChild(groups);
-    return wrap;
-  }
-
-  function buildHeader(schedule) {
-    const wrap = document.createElement("div");
-    wrap.className = "board-header";
-
-    const serviceField = document.createElement("div");
-    serviceField.className = "field field--narrow no-print";
-    const serviceLabel = document.createElement("label");
-    serviceLabel.setAttribute("for", "service-time");
-    serviceLabel.textContent = "Plate up at";
-    const serviceInput = document.createElement("input");
-    serviceInput.type = "time";
-    serviceInput.id = "service-time";
-    serviceInput.value = state.time.service;
-    serviceInput.addEventListener("input", () => {
-      state.time.service = serviceInput.value;
-      persist();
-      render();
-    });
-    serviceField.append(serviceLabel, serviceInput);
-    wrap.appendChild(serviceField);
-
-    const readouts = document.createElement("div");
-    readouts.className = "readouts";
-
-    const startAt = minutesToClock(clockToMinutes(state.time.service) - schedule.currentTotal);
-    const savings = schedule.baselineTotal - schedule.currentTotal;
-
-    readouts.appendChild(buildReadout("Start cooking at", startAt, "readout--primary"));
-    readouts.appendChild(buildReadout("Total time", formatDuration(schedule.currentTotal)));
-    readouts.appendChild(
-      buildReadout(
-        "Overlapping saves you",
-        savings > 0 ? `${formatDuration(savings)} later start` : "Tap a dashed window to save time"
-      )
-    );
-
     wrap.appendChild(readouts);
+
+    if (plan.steps.length > 0 && slack < 0) {
+      // Warn, never block (spec §6). The plan is left exactly as it is.
+      const warn = el("p", "board-warning",
+        `Your plan needs ${formatDuration(needed)} but you only get ` +
+        `${formatDuration(available)} to cook — you're over by ${formatDuration(-slack)}. ` +
+        `You can still plan it this way; nothing here stops you. But look for something ` +
+        `that could run while your hands are free.`);
+      wrap.appendChild(warn);
+    }
+
+    wrap.appendChild(buildModeToggle());
     return wrap;
   }
 
-  function buildReadout(label, value, extraClass) {
-    const box = document.createElement("div");
-    box.className = `readout ${extraClass || ""}`.trim();
-    const val = document.createElement("div");
-    val.className = "readout__value";
-    val.textContent = value;
-    const lab = document.createElement("div");
-    lab.className = "readout__label";
-    lab.textContent = label;
-    box.append(val, lab);
+  // The plan is stored as durations; this is the only thing that turns it into
+  // wall-clock times. Getting it wrong makes every printed time wrong while
+  // looking authoritative, so the period is named on the board and on the
+  // printout — a wrong pick should be visible, not silent.
+  function buildWhenControls() {
+    const wrap = el("div", "board-header__times");
+
+    const custom = Boolean(plan.schedule.foodUpOverride);
+
+    const field = el("div", "field field--narrow no-print");
+    const label = el("label", null, "Which period?");
+    label.setAttribute("for", "board-period");
+    const select = document.createElement("select");
+    select.id = "board-period";
+    for (const period of PERIODS) {
+      const opt = document.createElement("option");
+      opt.value = period.id;
+      opt.textContent = `${period.label} — food up ${period.foodUp}`;
+      opt.selected = !custom && period.id === plan.schedule.periodId;
+      select.appendChild(opt);
+    }
+    const otherOpt = document.createElement("option");
+    otherOpt.value = "__other";
+    otherOpt.textContent = "Another time (special day)";
+    otherOpt.selected = custom;
+    select.appendChild(otherOpt);
+
+    select.addEventListener("change", () => {
+      if (select.value === "__other") {
+        plan.schedule.foodUpOverride = foodUpFor(plan);
+      } else {
+        plan.schedule.foodUpOverride = "";
+        plan.schedule.periodId = select.value;
+      }
+      persist();
+      rerender();
+    });
+    field.append(label, select);
+    wrap.appendChild(field);
+
+    if (custom) {
+      const overrideField = el("div", "field field--narrow no-print");
+      const overrideLabel = el("label", null, "Food up by");
+      overrideLabel.setAttribute("for", "board-food-up");
+      const input = document.createElement("input");
+      input.type = "time";
+      input.id = "board-food-up";
+      input.value = plan.schedule.foodUpOverride;
+      input.addEventListener("change", () => {
+        plan.schedule.foodUpOverride = input.value;
+        persist();
+        rerender();
+      });
+      overrideField.append(overrideLabel, input);
+      wrap.appendChild(overrideField);
+    }
+
+    // Prints, so a separated sheet still says which period it was for.
+    const summary = el("div", "when-summary");
+    const period = PERIODS.find((p) => p.id === plan.schedule.periodId);
+    const periodName = custom ? "Special day" : (period ? period.label : "");
+    summary.textContent =
+      `${periodName ? periodName + " · " : ""}${formatDuration(plan.schedule.windowMins)} to cook, ` +
+      `food up by ${minutesToClock(foodUp)}`;
+    wrap.appendChild(summary);
+
+    return wrap;
+  }
+
+  function readout(labelText, value, extraClass) {
+    const box = el("div", `readout ${extraClass || ""}`.trim());
+    box.appendChild(el("div", "readout__value", value));
+    box.appendChild(el("div", "readout__label", labelText));
     return box;
   }
 
-  function buildAxis(leftEdge, serviceMinutes) {
-    const axis = document.createElement("div");
-    axis.className = "timeline__axis no-print";
+  // ---------- Guided / free toggle ----------
+
+  function buildModeToggle() {
+    const wrap = el("div", "mode-toggle no-print");
+    const isFree = plan.schedule.mode === "free";
+
+    wrap.appendChild(el("span", "mode-toggle__label",
+      isFree ? "You're placing steps yourself." : "Times come from your backward plan."));
+
+    const btn = el("button", "btn btn--small btn--secondary",
+      isFree ? "Go back to guided timing" : "Place steps myself");
+    btn.type = "button";
+    btn.addEventListener("click", () => {
+      if (isFree) {
+        // Going back re-derives positions, which throws away hand placement.
+        // Say so rather than silently rearranging their work.
+        const ok = window.confirm(
+          "Guided timing will re-calculate every start time from your backward plan, " +
+          "replacing the positions you set by hand.\n\nSwitch back?"
+        );
+        if (!ok) return;
+        plan.schedule.mode = "guided";
+      } else {
+        // Guided has already written resolved starts onto every step, so free
+        // mode inherits the current layout instead of starting from nothing.
+        plan.schedule.mode = "free";
+      }
+      persist();
+      rerender();
+    });
+    wrap.appendChild(btn);
+
+    if (isFree) {
+      wrap.appendChild(el("p", "toggle-hint",
+        "Click a step, then use ← and → to move it, or shift + ← → to change how long it takes."));
+    }
+    return wrap;
+  }
+
+  // ---------- Timeline ----------
+
+  function buildTimeline() {
+    const wrap = el("div", "timeline");
+    if (plan.steps.length === 0) {
+      wrap.appendChild(el("p", "placeholder-note", "Add some steps and your plan will appear here."));
+      return wrap;
+    }
+
+    wrap.appendChild(buildAxis());
+
+    // "You" lane: every hands-on step, from every part of the dish, because
+    // it's the same one student doing all of it.
+    wrap.appendChild(buildLane("You", null, handsItems()));
+
+    // One row per station, not one per step. The previous build gave every
+    // step its own row, so two things fighting over the oven never visually
+    // collided and identical lane labels repeated down the page.
+    for (const station of STATIONS) {
+      const items = stationItems(station);
+      if (items.length === 0) continue;
+      wrap.appendChild(buildLane(station.label, station, items));
+    }
+
+    return wrap;
+  }
+
+  function buildAxis() {
+    const axis = el("div", "timeline__axis");
     const stops = 4;
     for (let i = 0; i <= stops; i++) {
-      const tick = document.createElement("span");
-      tick.className = "timeline__tick";
-      const minutes = leftEdge + ((serviceMinutes - leftEdge) * i) / stops;
-      tick.textContent = minutesToClock(minutes);
-      axis.appendChild(tick);
+      axis.appendChild(el("span", "timeline__tick", minutesToClock(leftEdge + (denom * i) / stops)));
     }
     return axis;
   }
 
-  function buildTimeline(schedule, serviceMinutes) {
-    const wrap = document.createElement("div");
-    wrap.className = "timeline";
+  function buildLane(labelText, station, items) {
+    const lane = el("div", "lane");
 
-    // Percentages are relative to the worst-case (unpaired) span so the
-    // axis doesn't rescale — and jump every block around — every time a
-    // student pairs something into a window.
-    const denom = Math.max(schedule.baselineTotal, 1);
-    const leftEdge = serviceMinutes - denom;
-
-    wrap.appendChild(buildAxis(leftEdge, serviceMinutes));
-
-    function placeBlock(el, id) {
-      const range = schedule.byId.get(id);
-      if (!range) return;
-      const leftPct = ((range.start - leftEdge) / denom) * 100;
-      const widthPct = Math.max((range.end - range.start) / denom, 0.01) * 100;
-      // Inset by 2px on each side so adjacent blocks that touch exactly at a
-      // boundary (the common case) still read as visually distinct blocks.
-      el.style.left = `calc(${leftPct}% + 2px)`;
-      el.style.width = `calc(${widthPct}% - 4px)`;
+    const label = el("div", "lane__label");
+    label.appendChild(el("span", "lane__name", labelText));
+    if (station && station.exclusive) {
+      label.appendChild(el("span", "lane__flag", "one at a time"));
     }
+    lane.appendChild(label);
 
-    // Two hands-on steps can't genuinely both be in the student's hands at
-    // once, even if they belong to different components running "in
-    // parallel" — flag it so the student notices and resolves it
-    // themselves (pick different steps to overlap, or accept doing one
-    // after the other).
-    function toConflictItem(step) {
-      const range = schedule.byId.get(step.id);
-      if (!range) return null;
-      return { id: step.id, hands: step.hands, lane: step.lane, start: range.start, mins: step.mins };
+    const track = el("div", "lane__track");
+    const packed = packRows(items);
+    track.style.height = `${packed.rowCount * ROW_H + 4}px`;
+
+    for (const item of packed.items) {
+      track.appendChild(buildBlock(item));
     }
-
-    const handsConflicts = computeConflicts(
-      state.time.steps.filter((s) => s.hands).map(toConflictItem).filter(Boolean)
-    );
-    // Same idea for equipment: two unattended steps sharing a station (one
-    // oven, one burner) at the same time.
-    const stationConflicts = computeConflicts(
-      state.time.steps.filter((s) => !s.hands).map(toConflictItem).filter(Boolean)
-    );
-
-    // You lane
-    const youRow = document.createElement("div");
-    youRow.className = "lane";
-    const youLabel = document.createElement("div");
-    youLabel.className = "lane__label";
-    youLabel.textContent = "You";
-    youRow.appendChild(youLabel);
-
-    const youTrack = document.createElement("div");
-    youTrack.className = "lane__track";
-
-    for (const step of state.time.steps.filter((s) => s.hands)) {
-      const block = document.createElement("div");
-      const isConflicted = handsConflicts.has(step.id);
-      block.className = `block block--hands${isConflicted ? " block--conflict" : ""}`;
-      block.appendChild(blockLabel(step.name));
-      if (isConflicted) {
-        block.setAttribute("aria-label", `${step.name}, schedule conflict — overlaps another hands-on step`);
-      }
-      placeBlock(block, step.id);
-      youTrack.appendChild(block);
-    }
-
-    let openPickerPanel = null;
-
-    for (const anchor of state.time.steps.filter((s) => !s.hands)) {
-      if (isWindowFilled(state.time.steps, anchor.id)) continue;
-      const range = schedule.byId.get(anchor.id);
-      if (!range) continue;
-
-      const windowBtn = document.createElement("button");
-      windowBtn.type = "button";
-      windowBtn.className = "block block--window no-print";
-      windowBtn.appendChild(blockLabel("Free hands?"));
-      windowBtn.setAttribute(
-        "aria-label",
-        `${anchor.name} runs for ${anchor.mins} minutes without you. What could you be doing?`
-      );
-      placeBlock(windowBtn, anchor.id);
-      windowBtn.addEventListener("click", () => {
-        openWindowId = openWindowId === anchor.id ? null : anchor.id;
-        render();
-      });
-      youTrack.appendChild(windowBtn);
-
-      if (openWindowId === anchor.id) {
-        openPickerPanel = buildPicker(anchor, range, schedule);
-      }
-    }
-
-    youRow.appendChild(youTrack);
-    if (openPickerPanel) youRow.appendChild(openPickerPanel);
-    wrap.appendChild(youRow);
-
-    // Station lanes — one row per unattended step
-    for (const step of state.time.steps.filter((s) => !s.hands)) {
-      const row = document.createElement("div");
-      row.className = "lane";
-
-      const label = document.createElement("div");
-      label.className = "lane__label";
-      label.appendChild(document.createTextNode(step.lane + " "));
-
-      if (showComponentOnLane) {
-        const componentTag = document.createElement("span");
-        componentTag.className = "lane__component";
-        const component = componentsById.get(step.component);
-        componentTag.textContent = component ? component.name : "";
-        label.appendChild(componentTag);
-      }
-
-      const stationSelect = document.createElement("select");
-      stationSelect.className = "lane__station-select no-print";
-      stationSelect.setAttribute("aria-label", `Station for ${step.name}`);
-      for (const station of STATIONS) {
-        const opt = document.createElement("option");
-        opt.value = station;
-        opt.textContent = station;
-        opt.selected = station === step.lane;
-        stationSelect.appendChild(opt);
-      }
-      stationSelect.addEventListener("change", () => {
-        step.lane = stationSelect.value;
-        persist();
-        render();
-      });
-      label.appendChild(stationSelect);
-      row.appendChild(label);
-
-      const track = document.createElement("div");
-      track.className = "lane__track";
-      const block = document.createElement("div");
-      const isConflicted = stationConflicts.has(step.id);
-      block.className = `block block--unattended${isConflicted ? " block--conflict" : ""}`;
-      block.appendChild(blockLabel(step.name));
-      if (isConflicted) {
-        block.setAttribute("aria-label", `${step.name}, schedule conflict — shares a station with another step`);
-      }
-      placeBlock(block, step.id);
-      track.appendChild(block);
-      row.appendChild(track);
-
-      wrap.appendChild(row);
-    }
-
-    return wrap;
+    lane.appendChild(track);
+    return lane;
   }
 
-  function buildPicker(anchor, anchorRange, schedule) {
-    const panel = document.createElement("div");
-    panel.className = "picker no-print";
+  function buildBlock({ step, range, row }, opts = {}) {
+    const isFree = plan.schedule.mode === "free";
+    const reasons = conflicts.get(step.id);
+    const isHardest = plan.read.hardestStepId === step.id;
 
-    const prompt = document.createElement("p");
-    prompt.className = "picker__prompt";
-    prompt.textContent = `"${anchor.name}" runs for ${anchor.mins} minutes without you. What could you be doing during that window?`;
-    panel.appendChild(prompt);
+    // Interactive in free mode (arrow keys move it); a plain div otherwise, so
+    // guided-mode boards don't advertise controls that do nothing.
+    const node = document.createElement(isFree ? "button" : "div");
+    if (isFree) node.type = "button";
+    node.className = [
+      "block",
+      step.hands ? "block--hands" : "block--unattended",
+      reasons ? "block--conflict" : "",
+      isHardest ? "block--hardest" : "",
+      opts.vertical ? "block--vertical" : "",
+      opts.tiny ? "block--tiny" : "",
+    ].filter(Boolean).join(" ");
+    // Vertical positions come from the caller, which has the pixels-per-minute
+    // scale; horizontal packs into fixed-height sub-rows.
+    if (!opts.vertical) {
+      node.style.top = `${row * ROW_H + 2}px`;
+      node.style.height = `${ROW_H - 4}px`;
+    }
 
-    const windowMins = anchorRange.end - anchorRange.start;
-    // A candidate has to fit the window, still be unpaired, and — per its
-    // own natural (unpaired) position on the shared clock — not already be
-    // in the past relative to this window. That last check now works the
-    // same way whether the candidate comes from this component or another
-    // one, because every component's steps live on one absolute timeline.
-    const candidates = state.time.steps.filter((s) => {
-      if (!s.hands || s.par != null || s === anchor) return false;
-      if (s.mins > windowMins) return false;
-      const naturalRange = schedule.byId.get(s.id);
-      return naturalRange && naturalRange.start >= anchorRange.start;
-    });
+    const timeText = `${minutesToClock(range.start)} · ${step.mins}m`;
+    node.appendChild(el("span", "block__label", step.name));
+    node.appendChild(el("span", "block__time", timeText));
 
-    if (candidates.length === 0) {
-      const none = document.createElement("p");
-      none.className = "picker__empty";
-      none.textContent = "Nothing later in your plan fits in this window.";
-      panel.appendChild(none);
+    // Labels get clipped on short blocks, so the full story lives in the
+    // title and the accessible name too.
+    const detail = [step.name, timeText, isHardest ? "you flagged this as the hardest step" : "",
+      reasons ? describeConflict(reasons) : ""].filter(Boolean).join(" — ");
+    node.title = detail;
+    if (isFree) {
+      node.setAttribute("aria-label", `${detail}. Arrow keys move it, shift and arrow keys change its length.`);
+      node.id = `block-${step.id}`;
+      node.addEventListener("keydown", (e) => onBlockKey(e, step));
     } else {
-      const list = document.createElement("div");
-      list.className = "picker__list";
-      for (const candidate of candidates) {
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "btn btn--small";
-        const component = componentsById.get(candidate.component);
-        const componentNote = showComponentOnLane && component ? ` — ${component.name}` : "";
-        btn.textContent = `${candidate.name} (${candidate.mins} min)${componentNote}`;
-        btn.addEventListener("click", () => {
-          candidate.par = anchor.id;
-          openWindowId = null;
-          persist();
-          render();
-        });
-        list.appendChild(btn);
-      }
-      panel.appendChild(list);
+      node.setAttribute("aria-label", detail);
     }
 
-    panel.appendChild(buildWindowNotes(anchor));
-
-    const declineBtn = document.createElement("button");
-    declineBtn.type = "button";
-    declineBtn.className = "btn btn--secondary btn--small";
-    declineBtn.textContent = "Never mind";
-    declineBtn.addEventListener("click", () => {
-      openWindowId = null;
-      render();
-    });
-    panel.appendChild(declineBtn);
-
-    return panel;
+    if (!opts.vertical) place(node, range);
+    return node;
   }
 
-  // Not every good free-hands idea is one of the student's own backward-
-  // elicited steps — sometimes it's something small (wipe the counter, get
-  // plates ready) that never earned its own timed slot. This is a typed,
-  // untimed note attached to the window's anchor step, not a scheduled
-  // block — it doesn't compete with the picker's own candidate list above.
-  function buildWindowNotes(anchor) {
-    const wrap = document.createElement("div");
-    wrap.className = "window-notes";
-
-    const label = document.createElement("p");
-    label.className = "window-notes__label";
-    label.textContent = "Or write in something else:";
-    wrap.appendChild(label);
-
-    if (!Array.isArray(anchor.windowNotes)) anchor.windowNotes = [];
-
-    if (anchor.windowNotes.length > 0) {
-      const list = document.createElement("ul");
-      list.className = "window-notes__list";
-      anchor.windowNotes.forEach((note, index) => {
-        const li = document.createElement("li");
-
-        const span = document.createElement("span");
-        span.textContent = note;
-        li.appendChild(span);
-
-        const removeBtn = document.createElement("button");
-        removeBtn.type = "button";
-        removeBtn.className = "window-notes__remove no-print";
-        removeBtn.setAttribute("aria-label", `Remove ${note}`);
-        removeBtn.textContent = "×";
-        removeBtn.addEventListener("click", () => {
-          anchor.windowNotes.splice(index, 1);
-          persist();
-          render();
-        });
-        li.appendChild(removeBtn);
-
-        list.appendChild(li);
-      });
-      wrap.appendChild(list);
+  function onBlockKey(e, step) {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    const delta = e.key === "ArrowRight" ? SNAP : -SNAP;
+    if (e.shiftKey) {
+      step.mins = Math.max(SNAP, step.mins + delta);
+    } else {
+      step.start += delta;
     }
-
-    const entryRow = document.createElement("div");
-    entryRow.className = "inline-add";
-    const input = document.createElement("input");
-    input.type = "text";
-    input.id = `window-note-input-${anchor.id}`;
-    input.placeholder = "e.g. Wipe down the counter";
-    input.setAttribute("aria-label", `Add a note for the "${anchor.name}" window`);
-    entryRow.appendChild(input);
-
-    const addBtn = document.createElement("button");
-    addBtn.type = "button";
-    addBtn.className = "btn btn--small";
-    addBtn.textContent = "Add";
-    entryRow.appendChild(addBtn);
-
-    function submit() {
-      const value = input.value.trim();
-      if (!value) return;
-      anchor.windowNotes.push(value);
-      persist();
-      input.value = "";
-      withFocusPreserved(render);
-    }
-
-    addBtn.addEventListener("click", submit);
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        submit();
-      }
+    persist();
+    // Keep focus on the block being nudged; without preventScroll the page
+    // jumps to it on every keypress.
+    rerender(() => {
+      const again = document.getElementById(`block-${step.id}`);
+      if (again) again.focus({ preventScroll: true });
     });
+  }
 
-    wrap.appendChild(entryRow);
+  // ---------- Vertical timeline ----------
+  //
+  // Time runs down the page and lanes become columns. Portrait paper is tall
+  // and narrow, which is the wrong shape for a horizontal time axis: a 2-minute
+  // block in a 30-minute span is ~45px wide and its label truncates to "Pl…".
+  // Vertically that same block gets a full column width for its label and its
+  // height carries the duration instead. It also makes narrow screens work
+  // properly rather than as a compromise — unlimited scroll height is exactly
+  // what a long time axis wants.
+  //
+  // The packing algorithm is unchanged; sub-rows simply become sub-columns.
+  function buildVerticalTimeline() {
+    const wrap = el("div", "vtimeline");
+    if (plan.steps.length === 0) {
+      wrap.appendChild(el("p", "placeholder-note", "Add some steps and your plan will appear here."));
+      return wrap;
+    }
+
+    // A fixed cooking window means every plan is the same height, so students
+    // learn to read the shape instead of re-orienting each time. The window is
+    // the floor; a plan that overruns it grows past it, visibly.
+    const windowStart = foodUp - plan.schedule.windowMins;
+    const top = Math.min(windowStart, span.start);
+    const bottom = Math.max(foodUp, span.end);
+    const totalMins = Math.max(bottom - top, 1);
+    const PX_PER_MIN = 9;
+    const height = totalMins * PX_PER_MIN;
+
+    const lanes = [{ label: "You", station: null, items: handsItems() }];
+    for (const station of STATIONS) {
+      const items = stationItems(station);
+      if (items.length > 0) lanes.push({ label: station.label, station, items });
+    }
+
+    const grid = el("div", "vtimeline__grid");
+    grid.style.gridTemplateColumns = `var(--vtime-gutter) repeat(${lanes.length}, 1fr)`;
+
+    // Header row
+    grid.appendChild(el("div", "vtimeline__corner"));
+    for (const lane of lanes) {
+      const head = el("div", "vtimeline__head");
+      head.appendChild(el("span", "vtimeline__head-name", lane.label));
+      if (lane.station && lane.station.exclusive) {
+        head.appendChild(el("span", "lane__flag", "one at a time"));
+      }
+      grid.appendChild(head);
+    }
+
+    // Clock gutter — a label every 10 minutes, like a calendar day view.
+    const gutter = el("div", "vtimeline__gutter");
+    gutter.style.height = `${height}px`;
+    const firstTick = Math.ceil(top / 10) * 10;
+    for (let t = firstTick; t <= bottom; t += 10) {
+      const tick = el("div", "vtimeline__tick", minutesToClock(t));
+      tick.style.top = `${(t - top) * PX_PER_MIN}px`;
+      gutter.appendChild(tick);
+    }
+    grid.appendChild(gutter);
+
+    for (const lane of lanes) {
+      const track = el("div", "vtimeline__track");
+      track.style.height = `${height}px`;
+
+      // Hour lines, so a block's position is readable without tracing to the
+      // gutter. Drawn per lane because the grid gap breaks a single overlay.
+      for (let t = firstTick; t <= bottom; t += 10) {
+        const rule = el("div", "vtimeline__rule");
+        rule.style.top = `${(t - top) * PX_PER_MIN}px`;
+        track.appendChild(rule);
+      }
+
+      // Anything outside the cooking window is over budget, and should look it.
+      if (span.start < windowStart) {
+        const over = el("div", "vtimeline__over");
+        over.style.top = "0";
+        over.style.height = `${Math.max(0, (windowStart - top) * PX_PER_MIN)}px`;
+        track.appendChild(over);
+      }
+
+      const packed = packRows(lane.items);
+      for (const item of packed.items) {
+        const blockHeight = Math.max(item.range.end - item.range.start, 1) * PX_PER_MIN - 2;
+        const node = buildBlock(item, { vertical: true, tiny: blockHeight < 30 });
+        node.style.top = `${(item.range.start - top) * PX_PER_MIN}px`;
+        node.style.height = `${blockHeight}px`;
+        node.style.left = `${(item.row / packed.rowCount) * 100}%`;
+        node.style.width = `calc(${(1 / packed.rowCount) * 100}% - 2px)`;
+        track.appendChild(node);
+      }
+      grid.appendChild(track);
+    }
+
+    wrap.appendChild(grid);
     return wrap;
   }
 
-  function buildOverlapList(schedule) {
-    const wrap = document.createElement("div");
-    wrap.className = "overlap-list";
+  function handsItems() {
+    return plan.steps
+      .filter((s) => s.hands)
+      .map((s) => ({ step: s, range: ranges.get(s.id) }))
+      .filter((item) => item.range);
+  }
 
-    const paired = state.time.steps.filter((s) => s.par != null);
-    if (paired.length === 0) return wrap;
+  function stationItems(station) {
+    return plan.steps
+      .filter((s) => !s.hands && laneForStep(s, byId) === station.id)
+      .map((s) => ({ step: s, range: ranges.get(s.id) }))
+      .filter((item) => item.range);
+  }
 
-    const heading = document.createElement("h3");
-    heading.textContent = "Double-check: can each of these genuinely happen at the same time?";
-    wrap.appendChild(heading);
+  // ---------- Which part sets the start time ----------
+  //
+  // Without this, overlapping something inside a part that isn't the longest
+  // changes no visible number at all: the plan still starts when the longest
+  // part says it does. The student does the exact thing the app is built to
+  // teach and gets no feedback. Per-part give always moves, and it teaches the
+  // more useful idea — that one part is deciding your whole start time.
+  function buildPartBreakdown() {
+    const wrap = el("div", "part-breakdown");
+    if (plan.components.length < 2 || plan.steps.length === 0) return wrap;
 
-    const list = document.createElement("ul");
-    for (const step of paired) {
-      const anchor = state.time.steps.find((s) => s.id === step.par);
-      const li = document.createElement("li");
+    const parts = [];
+    for (const component of plan.components) {
+      const steps = stepsForComponent(plan, component.id)
+        .map((s) => ranges.get(s.id))
+        .filter(Boolean);
+      if (steps.length === 0) continue;
+      const start = Math.min(...steps.map((r) => r.start));
+      const end = Math.max(...steps.map((r) => r.end));
+      parts.push({ component, length: end - start });
+    }
+    if (parts.length < 2) return wrap;
 
-      const text = document.createElement("span");
-      text.textContent = anchor ? `"${step.name}" runs during "${anchor.name}"` : step.name;
-      li.appendChild(text);
+    const longest = Math.max(...parts.map((p) => p.length));
+    wrap.appendChild(el("h3", null, "Where your time goes"));
 
-      const undoBtn = document.createElement("button");
-      undoBtn.type = "button";
-      undoBtn.className = "btn btn--small btn--secondary no-print";
-      undoBtn.textContent = "Undo";
-      undoBtn.addEventListener("click", () => {
-        step.par = null;
-        persist();
-        render();
-      });
-      li.appendChild(undoBtn);
-
+    const list = el("ul", "part-breakdown__list");
+    for (const part of parts.sort((a, b) => b.length - a.length)) {
+      const give = longest - part.length;
+      const li = el("li", give === 0 ? "part-breakdown__item part-breakdown__item--critical" : "part-breakdown__item");
+      li.appendChild(el("span", "part-breakdown__name", part.component.name));
+      li.appendChild(el("span", "part-breakdown__length", formatDuration(part.length)));
+      li.appendChild(el("span", "part-breakdown__note", give === 0
+        ? "your longest part — this is what decides when you start"
+        : `${formatDuration(give)} of give`));
       list.appendChild(li);
     }
     wrap.appendChild(list);
     return wrap;
   }
 
-  render();
+  // ---------- Conflicts, in words ----------
+
+  function buildConflictSummary() {
+    const wrap = el("div", "conflict-summary");
+    if (conflicts.size === 0) return wrap;
+
+    const lines = [];
+    const seen = new Set();
+    for (const [stepId, reasons] of conflicts) {
+      const step = plan.steps.find((s) => s.id === stepId);
+      if (!step) continue;
+      const range = ranges.get(stepId);
+      const partners = [...conflicts.keys()].filter((otherId) => {
+        if (otherId === stepId || seen.has(`${otherId}|${stepId}`)) return false;
+        const other = ranges.get(otherId);
+        return other && other.start < range.end && range.start < other.end;
+      });
+      for (const otherId of partners) {
+        const other = plan.steps.find((s) => s.id === otherId);
+        if (!other) continue;
+        seen.add(`${stepId}|${otherId}`);
+        lines.push(`"${step.name}" and "${other.name}" — ${describeConflict(reasons)}.`);
+      }
+    }
+    if (lines.length === 0) return wrap;
+
+    wrap.appendChild(el("h3", null,
+      lines.length === 1 ? "One thing to sort out" : `${lines.length} things to sort out`));
+    const list = el("ul");
+    for (const line of lines) list.appendChild(el("li", null, line));
+    wrap.appendChild(list);
+    wrap.appendChild(el("p", "conflict-summary__hint",
+      "Nothing here stops you — a real kitchen has these problems too. Move something, " +
+      "or decide to do them one after the other."));
+    return wrap;
+  }
+
+  // ---------- Bowls and notes ----------
+
+  // Mise en place means the bowl is ready before the step starts, so the board
+  // opens with what has to exist before anything else happens.
+  function buildBeforeYouStart() {
+    const wrap = el("div", "prep-list");
+    const bowlsById = new Map(plan.bowls.map((b) => [b.id, b]));
+    const used = [];
+    for (const step of plan.steps) {
+      for (const bowlId of step.bowlIds) {
+        const bowl = bowlsById.get(bowlId);
+        if (bowl && !used.some((u) => u.bowl.id === bowl.id)) used.push({ bowl, step });
+      }
+    }
+    if (used.length === 0) return wrap;
+
+    wrap.appendChild(el("h3", null, "Before you start: these bowls must be prepped"));
+    const groups = el("div", "prep-list__items");
+    for (const { bowl, step } of used) {
+      const group = el("div", "prep-list__group");
+      group.appendChild(el("div", "prep-list__step-name", bowl.label || "Unlabelled bowl"));
+      const ul = el("ul");
+      for (const item of bowl.items) ul.appendChild(el("li", null, item));
+      group.appendChild(ul);
+      group.appendChild(el("div", "prep-list__for", `for "${step.name}"`));
+      groups.appendChild(group);
+    }
+    wrap.appendChild(groups);
+    return wrap;
+  }
+
+  function buildNotesSummary() {
+    const wrap = el("div", "prep-list");
+    const withNotes = plan.steps.filter((s) => s.note && s.note.trim());
+    if (withNotes.length === 0) return wrap;
+
+    wrap.appendChild(el("h3", null, "Don't forget"));
+    const groups = el("div", "prep-list__items");
+    for (const step of withNotes) {
+      const group = el("div", "prep-list__group");
+      group.appendChild(el("div", "prep-list__step-name", step.name));
+      group.appendChild(el("p", null, step.note));
+      groups.appendChild(group);
+    }
+    wrap.appendChild(groups);
+    return wrap;
+  }
+
+  // ---------- Free-hands windows (guided only) ----------
+
+  function buildOverlapList() {
+    const wrap = el("div", "overlap-list no-print");
+
+    const windows = plan.steps.filter((s) => !s.hands && !plan.steps.some((o) => o.par === s.id));
+    const paired = plan.steps.filter((s) => s.par != null);
+
+    if (windows.length > 0) {
+      wrap.appendChild(el("h3", null, "Free hands"));
+      wrap.appendChild(el("p", "overlap-list__intro",
+        "While these run by themselves your hands are free. Anything you could be doing then?"));
+      const list = el("div", "window-list");
+      for (const anchor of windows) {
+        const range = ranges.get(anchor.id);
+        if (!range) continue;
+        const btn = el("button", "btn btn--small window-list__btn",
+          `${anchor.name} — ${anchor.mins} min free`);
+        btn.type = "button";
+        btn.addEventListener("click", () => openPicker(anchor, range, wrap));
+        list.appendChild(btn);
+      }
+      wrap.appendChild(list);
+    }
+
+    if (paired.length > 0) {
+      wrap.appendChild(el("h3", null, "Double-check: can each of these genuinely happen at the same time?"));
+      const list = el("ul");
+      for (const step of paired) {
+        const anchor = plan.steps.find((s) => s.id === step.par);
+        const li = el("li");
+        li.appendChild(el("span", null,
+          anchor ? `"${step.name}" runs during "${anchor.name}"` : step.name));
+        const undo = el("button", "btn btn--small btn--secondary", "Undo");
+        undo.type = "button";
+        undo.addEventListener("click", () => {
+          step.par = null;
+          persist();
+          rerender();
+        });
+        li.appendChild(undo);
+        list.appendChild(li);
+      }
+      wrap.appendChild(list);
+    }
+
+    return wrap;
+  }
+
+  function openPicker(anchor, anchorRange, container) {
+    const existing = container.querySelector(".picker");
+    if (existing) existing.remove();
+
+    const panel = el("div", "picker no-print");
+    panel.appendChild(el("p", "picker__prompt",
+      `"${anchor.name}" runs for ${anchor.mins} minutes without you. What could you be doing?`));
+
+    const windowMins = anchorRange.end - anchorRange.start;
+    const candidates = plan.steps.filter((s) => {
+      if (!s.hands || s.par != null || s.id === anchor.id) return false;
+      if (s.mins > windowMins) return false;
+      const natural = ranges.get(s.id);
+      return natural && natural.start >= anchorRange.start;
+    });
+
+    if (candidates.length === 0) {
+      panel.appendChild(el("p", "picker__empty", "Nothing later in your plan fits in this window."));
+    } else {
+      const list = el("div", "picker__list");
+      const componentName = new Map(plan.components.map((c) => [c.id, c.name]));
+      for (const candidate of candidates) {
+        const suffix = plan.components.length > 1 ? ` — ${componentName.get(candidate.component) || ""}` : "";
+        const btn = el("button", "btn btn--small", `${candidate.name} (${candidate.mins} min)${suffix}`);
+        btn.type = "button";
+        btn.addEventListener("click", () => {
+          candidate.par = anchor.id;
+          persist();
+          rerender();
+        });
+        list.appendChild(btn);
+      }
+      panel.appendChild(list);
+    }
+
+    const close = el("button", "btn btn--small btn--secondary", "Never mind");
+    close.type = "button";
+    close.addEventListener("click", () => panel.remove());
+    panel.appendChild(close);
+
+    container.appendChild(panel);
+  }
+}
+
+export function stepsSummary(plan) {
+  return plan.components.map((c) => ({ component: c, steps: stepsForComponent(plan, c.id) }));
 }
