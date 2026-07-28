@@ -346,6 +346,119 @@ input[type="date"] {
   width: 100%;
 }
 
+/* ---------- Time planner: elicitation ---------- */
+
+.elicit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  padding: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.elicit-form .field {
+  flex: none;
+}
+
+.elicit-prompt {
+  font-weight: 700;
+  font-size: 1.05rem;
+  margin: 0;
+}
+
+.hands-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.hands-toggle__btn {
+  flex: 1 1 220px;
+  font-size: 0.9rem;
+  padding: 0.65rem 0.85rem;
+  min-height: 44px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+
+.hands-toggle__btn--selected {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.step-review {
+  margin-bottom: 1rem;
+}
+
+.step-review__list {
+  list-style: decimal;
+  margin: 0;
+  padding-left: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.step-review__list li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--line);
+  padding: 0.3rem 0;
+}
+
+.step-review__name {
+  font-weight: 600;
+  flex: 1 1 auto;
+}
+
+.step-review__mins {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.step-review__tag {
+  font-size: 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+}
+
+.step-review__remove {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  min-width: 32px;
+  min-height: 32px;
+  border-radius: 999px;
+}
+
+.step-review__remove:hover {
+  background: var(--line);
+  color: var(--ink);
+}
+
+.elicit-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
 /* ---------- Placeholder ---------- */
 
 .placeholder-note {

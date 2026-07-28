@@ -1,5 +1,6 @@
 import { EQUIPMENT_PALETTE, DEFAULT_BOWL_COUNT } from "./config.js";
 import { saveState, loadState } from "./storage.js";
+import { initTimePlanner } from "./time-planner.js";
 
 // --- State -------------------------------------------------------------
 
@@ -20,7 +21,7 @@ function defaultState(recipePrefill) {
     read: { done: false, hardest: "" },
     equipment: [],
     bowls: Array.from({ length: DEFAULT_BOWL_COUNT }, emptyBowl),
-    time: { service: "12:35", steps: [] },
+    time: { service: "12:35", steps: [], elicitationDone: false },
   };
 }
 
@@ -31,6 +32,10 @@ const recipePrefill = urlParams.get("recipe") || "";
 const storageKey = recipePrefill || "untitled";
 
 let state = loadState(storageKey) || defaultState(recipePrefill);
+
+// Defensive defaults for state saved by an earlier version of the app.
+if (!Array.isArray(state.time.steps)) state.time.steps = [];
+if (typeof state.time.elicitationDone !== "boolean") state.time.elicitationDone = false;
 
 function persist() {
   saveState(storageKey, state);
@@ -315,5 +320,6 @@ initIdentityStrip();
 initRead();
 initEquipment();
 initBowls();
+initTimePlanner(state, persist);
 initPrint();
 initStorageWarningLink();
