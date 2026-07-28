@@ -91,13 +91,13 @@ export function initTimePlanner(state, persist) {
 
     const handsOnBtn = document.createElement("button");
     handsOnBtn.type = "button";
-    handsOnBtn.className = "hands-toggle__btn";
+    handsOnBtn.className = "hands-toggle__btn hands-toggle__btn--hands";
     handsOnBtn.textContent = "Hands on it (chopping, stirring, searing)";
     handsOnBtn.setAttribute("aria-pressed", "false");
 
     const unattendedBtn = document.createElement("button");
     unattendedBtn.type = "button";
-    unattendedBtn.className = "hands-toggle__btn";
+    unattendedBtn.className = "hands-toggle__btn hands-toggle__btn--unattended";
     unattendedBtn.textContent = "Runs by itself (baking, simmering, chilling, resting)";
     unattendedBtn.setAttribute("aria-pressed", "false");
 
@@ -185,7 +185,7 @@ export function initTimePlanner(state, persist) {
       li.appendChild(mins);
 
       const tag = document.createElement("span");
-      tag.className = "step-review__tag";
+      tag.className = `step-review__tag ${step.hands ? "step-review__tag--hands" : "step-review__tag--unattended"}`;
       tag.textContent = handsLabel(step.hands);
       li.appendChild(tag);
 
