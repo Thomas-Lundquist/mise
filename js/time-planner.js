@@ -1,6 +1,13 @@
-// Section 04 — Time planner, scaffolded mode. Three phases:
-//   1. Backward elicitation of major steps (this is the actual time-planning
-//      skill being taught — see docs/design-brief.md and the build spec).
+// Section 04 — Time planner, scaffolded mode. Four phases:
+//   0. Name the separate parts of the dish that need to be ready at the same
+//      time (protein, starch, sauce...). A dish with one part skips straight
+//      past this with no extra UI — see buildComponentsPhase.
+//   1. Backward elicitation of major steps, once per part (this is the
+//      actual time-planning skill being taught — see docs/design-brief.md
+//      and the build spec). Every part's chain is built backward from the
+//      same plate-up time, which is what makes "these need to finish
+//      together" true by construction rather than something the app has to
+//      compute or decide.
 //   2. A forward pass to attach quick untimed prep reminders to each major
 //      step. These are NOT scheduled — no duration, no hands/unattended
 //      flag, never shown on the board. They exist so the tedious backward
@@ -9,17 +16,15 @@
 //   3. The board (board.js).
 //
 // Steps are stored in forward chronological order: each new major is
-// unshifted onto the front of the array, and because every new answer is
-// chronologically earlier than everything already entered, the array is
-// always in correct forward order, growing earlier at index 0 as the
-// conversation continues. state.time.steps[0] is therefore always "the step
-// most recently entered" — the thing the next prompt asks about.
+// unshifted onto the front of the shared state.time.steps array, and
+// because every new answer is chronologically earlier than everything
+// already entered for its component, filtering that array down to one
+// component's steps always yields that component's own steps in correct
+// forward order too — interleaving entry order across components doesn't
+// break this. See the components phase for how `component` gets assigned.
 
 import { initBoard } from "./board.js";
-
-function newId() {
-  return (crypto.randomUUID && crypto.randomUUID()) || `step-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
+import { newId } from "./time-utils.js";
 
 function handsLabel(hands) {
   return hands ? "Hands on it" : "Runs by itself";
@@ -38,12 +43,24 @@ function withFocusPreserved(fn) {
 export function initTimePlanner(state, persist) {
   const container = document.getElementById("time-planner");
 
+  function activeComponent() {
+    return state.time.components[state.time.activeComponentIndex] || null;
+  }
+
+  function stepsFor(componentId) {
+    return state.time.steps.filter((s) => s.component === componentId);
+  }
+
   function render() {
     container.innerHTML = "";
 
-    if (!state.time.elicitationDone) {
+    if (!state.time.componentsNamingDone) {
+      container.appendChild(buildComponentsPhase());
+    } else if (!state.time.elicitationDone) {
+      if (state.time.components.length > 1) container.appendChild(buildComponentProgress());
       container.appendChild(buildPromptForm());
-      if (state.time.steps.length > 0) container.appendChild(buildReviewList());
+      const componentSteps = stepsFor(activeComponent().id);
+      if (componentSteps.length > 0) container.appendChild(buildReviewList(componentSteps));
       container.appendChild(buildFooterControls());
     } else if (!state.time.detailsDone) {
       container.appendChild(buildDetailsPhase());
@@ -56,14 +73,165 @@ export function initTimePlanner(state, persist) {
     }
   }
 
+  // ---------- Phase 0: name the parts ----------
+
+  function buildComponentsPhase() {
+    const wrap = document.createElement("div");
+    wrap.className = "elicit-form no-print";
+
+    const prompt = document.createElement("p");
+    prompt.className = "elicit-prompt";
+    prompt.textContent =
+      "What are the separate parts of this dish that need to be ready at the same time?";
+    wrap.appendChild(prompt);
+
+    const sub = document.createElement("p");
+    sub.className = "elicit-subtext";
+    sub.textContent = "Think protein, starch, sauce, vegetable — anything that has its own steps.";
+    wrap.appendChild(sub);
+
+    const entryRow = document.createElement("div");
+    entryRow.className = "inline-add";
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.id = "component-name-input";
+    nameInput.placeholder = "e.g. Seared chicken";
+    nameInput.setAttribute("aria-label", "Part of the dish");
+    entryRow.appendChild(nameInput);
+
+    const addBtn = document.createElement("button");
+    addBtn.type = "button";
+    addBtn.className = "btn btn--small";
+    addBtn.textContent = "Add part";
+    entryRow.appendChild(addBtn);
+    wrap.appendChild(entryRow);
+
+    function addComponent() {
+      const value = nameInput.value.trim();
+      if (!value) return;
+      state.time.components.push({ id: newId("component"), name: value });
+      persist();
+      nameInput.value = "";
+      withFocusPreserved(render);
+    }
+
+    addBtn.addEventListener("click", addComponent);
+    nameInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        addComponent();
+      }
+    });
+
+    if (state.time.components.length > 0) {
+      const list = document.createElement("ul");
+      list.className = "component-list";
+      state.time.components.forEach((component, index) => {
+        const li = document.createElement("li");
+        li.className = "component-list__item";
+
+        const name = document.createElement("span");
+        name.textContent = component.name;
+        li.appendChild(name);
+
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "component-list__remove no-print";
+        removeBtn.setAttribute("aria-label", `Remove ${component.name}`);
+        removeBtn.textContent = "×";
+        removeBtn.addEventListener("click", () => {
+          state.time.components.splice(index, 1);
+          persist();
+          render();
+        });
+        li.appendChild(removeBtn);
+
+        list.appendChild(li);
+      });
+      wrap.appendChild(list);
+    }
+
+    const footer = document.createElement("div");
+    footer.className = "elicit-footer";
+
+    if (state.time.components.length > 0) {
+      const startBtn = document.createElement("button");
+      startBtn.type = "button";
+      startBtn.className = "btn";
+      startBtn.textContent = "Start planning";
+      startBtn.addEventListener("click", () => {
+        state.time.componentsNamingDone = true;
+        state.time.activeComponentIndex = 0;
+        persist();
+        render();
+      });
+      footer.appendChild(startBtn);
+    } else {
+      const skipBtn = document.createElement("button");
+      skipBtn.type = "button";
+      skipBtn.className = "btn btn--secondary";
+      skipBtn.textContent = "It's all one thing";
+      skipBtn.addEventListener("click", () => {
+        state.time.components.push({ id: newId("component"), name: state.meta.recipe || "The dish" });
+        state.time.componentsNamingDone = true;
+        state.time.activeComponentIndex = 0;
+        persist();
+        render();
+      });
+      footer.appendChild(skipBtn);
+    }
+
+    wrap.appendChild(footer);
+    return wrap;
+  }
+
+  // A quiet wizard strip so a student planning several parts always knows
+  // where they are, and can jump back to an earlier part without redoing
+  // the "I'm done" click-through.
+  function buildComponentProgress() {
+    const wrap = document.createElement("nav");
+    wrap.className = "component-progress no-print";
+    wrap.setAttribute("aria-label", "Parts of the dish");
+
+    state.time.components.forEach((component, index) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      const isActive = index === state.time.activeComponentIndex;
+      const isDone = index < state.time.activeComponentIndex;
+      btn.className = `component-progress__item${isActive ? " component-progress__item--active" : ""}${
+        isDone ? " component-progress__item--done" : ""
+      }`;
+      btn.textContent = component.name;
+      btn.setAttribute("aria-current", isActive ? "step" : "false");
+      btn.addEventListener("click", () => {
+        state.time.activeComponentIndex = index;
+        persist();
+        render();
+      });
+      wrap.appendChild(btn);
+    });
+
+    return wrap;
+  }
+
+  // ---------- Phase 1: backward elicitation, one component at a time ----------
+
   function buildPromptForm() {
     const wrap = document.createElement("div");
     wrap.className = "elicit-form no-print";
 
-    const steps = state.time.steps;
-    const promptText = steps.length === 0
-      ? "What is the very last thing you do before it goes on the plate?"
-      : `And what happens right before "${steps[0].name}"?`;
+    const component = activeComponent();
+    const componentSteps = stepsFor(component.id);
+    const singleComponent = state.time.components.length === 1;
+
+    let promptText;
+    if (componentSteps.length === 0) {
+      promptText = singleComponent
+        ? "What is the very last thing you do before it goes on the plate?"
+        : `What's the last thing you do to "${component.name}" before it's ready to plate?`;
+    } else {
+      promptText = `And what happens right before "${componentSteps[0].name}"?`;
+    }
 
     const prompt = document.createElement("p");
     prompt.className = "elicit-prompt";
@@ -79,6 +247,7 @@ export function initTimePlanner(state, persist) {
     const nameInput = document.createElement("input");
     nameInput.type = "text";
     nameInput.id = "elicit-name";
+    nameInput.placeholder = componentSteps.length === 0 ? "e.g. Plate and garnish" : "e.g. Rest the meat";
     nameInput.setAttribute("aria-describedby", "elicit-prompt");
     nameField.append(nameLabel, nameInput);
     wrap.appendChild(nameField);
@@ -134,6 +303,12 @@ export function initTimePlanner(state, persist) {
 
     toggleGroup.append(handsOnBtn, unattendedBtn);
     toggleField.appendChild(toggleGroup);
+
+    const toggleHint = document.createElement("p");
+    toggleHint.className = "toggle-hint";
+    toggleHint.textContent = "This decides whether it gets a window on your board.";
+    toggleField.appendChild(toggleHint);
+
     wrap.appendChild(toggleField);
 
     const addBtn = document.createElement("button");
@@ -155,7 +330,8 @@ export function initTimePlanner(state, persist) {
     function submit() {
       if (addBtn.disabled) return;
       state.time.steps.unshift({
-        id: newId(),
+        id: newId("step"),
+        component: component.id,
         name: nameInput.value.trim(),
         mins: Number(minsInput.value),
         hands: handsValue,
@@ -180,18 +356,19 @@ export function initTimePlanner(state, persist) {
     return wrap;
   }
 
-  function buildReviewList() {
+  function buildReviewList(componentSteps) {
     const wrap = document.createElement("div");
     wrap.className = "step-review";
 
     const heading = document.createElement("h3");
-    heading.textContent = "Your plan so far";
+    heading.textContent =
+      state.time.components.length > 1 ? `Your plan so far — ${activeComponent().name}` : "Your plan so far";
     wrap.appendChild(heading);
 
     const list = document.createElement("ol");
     list.className = "step-review__list";
 
-    state.time.steps.forEach((step) => {
+    componentSteps.forEach((step) => {
       const li = document.createElement("li");
 
       const name = document.createElement("span");
@@ -236,6 +413,8 @@ export function initTimePlanner(state, persist) {
     return wrap;
   }
 
+  // ---------- Phase 1.5: untimed prep reminders ----------
+
   function buildDetailsPhase() {
     const wrap = document.createElement("div");
     wrap.className = "details-phase";
@@ -249,12 +428,23 @@ export function initTimePlanner(state, persist) {
     const list = document.createElement("div");
     list.className = "details-list";
 
+    const showComponent = state.time.components.length > 1;
+    const componentsById = new Map(state.time.components.map((c) => [c.id, c]));
+
     state.time.steps.forEach((step, index) => {
       const row = document.createElement("div");
       row.className = "details-step";
 
       const header = document.createElement("div");
       header.className = "details-step__header";
+
+      if (showComponent) {
+        const componentTag = document.createElement("span");
+        componentTag.className = "details-step__component";
+        const component = componentsById.get(step.component);
+        componentTag.textContent = component ? component.name : "";
+        header.appendChild(componentTag);
+      }
 
       const name = document.createElement("span");
       name.className = "details-step__name";
@@ -323,18 +513,41 @@ export function initTimePlanner(state, persist) {
     return wrap;
   }
 
+  // ---------- Footer controls, per phase ----------
+
   function buildFooterControls() {
     const wrap = document.createElement("div");
     wrap.className = "elicit-footer no-print";
 
     if (!state.time.elicitationDone) {
-      if (state.time.steps.length > 0) {
+      const component = activeComponent();
+      const componentSteps = stepsFor(component.id);
+      const isLastComponent = state.time.activeComponentIndex === state.time.components.length - 1;
+
+      if (state.time.activeComponentIndex > 0) {
+        const backBtn = document.createElement("button");
+        backBtn.type = "button";
+        backBtn.className = "btn btn--small";
+        backBtn.textContent = "Back a part";
+        backBtn.addEventListener("click", () => {
+          state.time.activeComponentIndex -= 1;
+          persist();
+          render();
+        });
+        wrap.appendChild(backBtn);
+      }
+
+      if (componentSteps.length > 0) {
         const doneBtn = document.createElement("button");
         doneBtn.type = "button";
         doneBtn.className = "btn btn--secondary";
-        doneBtn.textContent = "I'm done adding steps";
+        doneBtn.textContent = isLastComponent ? "I'm done adding steps" : `Done with ${component.name}`;
         doneBtn.addEventListener("click", () => {
-          state.time.elicitationDone = true;
+          if (isLastComponent) {
+            state.time.elicitationDone = true;
+          } else {
+            state.time.activeComponentIndex += 1;
+          }
           persist();
           render();
         });
@@ -347,6 +560,7 @@ export function initTimePlanner(state, persist) {
       backBtn.textContent = "Back to steps";
       backBtn.addEventListener("click", () => {
         state.time.elicitationDone = false;
+        state.time.activeComponentIndex = state.time.components.length - 1;
         persist();
         render();
       });
@@ -369,6 +583,7 @@ export function initTimePlanner(state, persist) {
       editStepsBtn.textContent = "Edit steps";
       editStepsBtn.addEventListener("click", () => {
         state.time.elicitationDone = false;
+        state.time.activeComponentIndex = 0;
         persist();
         render();
       });

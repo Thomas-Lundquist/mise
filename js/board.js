@@ -1,12 +1,24 @@
 // Time planner, scaffolded mode, phase 2 — the board.
 //
-// Scheduling model: `par` is the only scheduling state (per the build spec's
-// data model). A step with par === null is an "anchor" and sits in the main
-// serial chain, in original chronological order. A step with par set to
-// another step's id is a "guest" pulled out of the serial chain to run
-// concurrently inside that anchor's window, start-aligned to the anchor's
-// start time. Everything else (start/end times, totals, the free-hands
-// windows on the You lane) is derived fresh from that on every render.
+// Scheduling model: `par` is the only per-step scheduling state (per the
+// build spec's data model). A step with par === null is an "anchor" and
+// sits in its component's own serial chain, in original chronological
+// order. A step with par set to another step's id is a "guest" pulled out
+// of its chain to run concurrently inside that anchor's window,
+// start-aligned to the anchor's start time.
+//
+// Multiple components: each component (state.time.components) is backward-
+// elicited independently, so each has its own serial chain of steps. Every
+// component's chain is scheduled backward from the SAME plate-up time —
+// that's what makes "these parts must finish together" true by
+// construction, without the app ever deciding an order for the student.
+// The board expresses this by placing every component's steps on one
+// shared absolute clock, then merging every component's hands-on steps
+// onto a single "You" lane, because it's the same one student doing all of
+// it regardless of which component a step belongs to. Two hands-on steps
+// from different components landing on the same minute is a real
+// conflict — flagged, never auto-resolved (constraint #1 in the build
+// spec: the app never decides what can overlap).
 //
 // Note on the data model: the build spec describes `par` as "index of step
 // this runs concurrently inside." This implementation stores the target
@@ -18,10 +30,12 @@
 //
 // Only unattended steps (hands === false) can be anchors that offer a
 // window; only hands-on steps can be guests, since a window exists to answer
-// "what could your hands be doing right now."
+// "what could your hands be doing right now." A guest can come from any
+// component — a free-hands window is exactly where cross-component overlap
+// is supposed to happen.
 
 import { STATIONS } from "./config.js";
-import { clockToMinutes, minutesToClock, formatDuration, guessStation } from "./time-utils.js";
+import { clockToMinutes, minutesToClock, formatDuration, guessStation, computeConflicts } from "./time-utils.js";
 
 function ensureStationDefaults(steps) {
   for (const step of steps) {
@@ -29,30 +43,55 @@ function ensureStationDefaults(steps) {
   }
 }
 
-function computeSchedule(steps) {
-  const anchors = steps.filter((s) => s.par == null);
-  const byId = new Map();
+function isWindowFilled(steps, anchorId) {
+  return steps.some((s) => s.par === anchorId);
+}
+
+// Builds one component's own serial chain, then shifts it so the
+// component's own end lands exactly on `serviceMinutes` — every part of the
+// dish finishes at the same absolute moment by construction.
+function scheduleComponent(componentSteps, serviceMinutes) {
+  const anchors = componentSteps.filter((s) => s.par == null);
+  const localById = new Map();
 
   let t = 0;
   for (const anchor of anchors) {
-    byId.set(anchor.id, { start: t, end: t + anchor.mins });
+    localById.set(anchor.id, { start: t, end: t + anchor.mins });
     t += anchor.mins;
   }
   const currentTotal = t;
-  const baselineTotal = steps.reduce((sum, s) => sum + s.mins, 0);
+  const baselineTotal = componentSteps.reduce((sum, s) => sum + s.mins, 0);
 
-  for (const step of steps) {
+  for (const step of componentSteps) {
     if (step.par == null) continue;
-    const anchorRange = byId.get(step.par);
+    const anchorRange = localById.get(step.par);
     if (!anchorRange) continue; // dangling reference; treat as unscheduled
-    byId.set(step.id, { start: anchorRange.start, end: anchorRange.start + step.mins });
+    localById.set(step.id, { start: anchorRange.start, end: anchorRange.start + step.mins });
+  }
+
+  const offset = serviceMinutes - currentTotal;
+  const byId = new Map();
+  for (const [id, range] of localById) {
+    byId.set(id, { start: offset + range.start, end: offset + range.end });
   }
 
   return { byId, currentTotal, baselineTotal };
 }
 
-function isWindowFilled(steps, anchorId) {
-  return steps.some((s) => s.par === anchorId);
+function computeSchedule(steps, components, serviceMinutes) {
+  const byId = new Map();
+  let currentTotal = 0;
+  let baselineTotal = 0;
+
+  for (const component of components) {
+    const componentSteps = steps.filter((s) => s.component === component.id);
+    const result = scheduleComponent(componentSteps, serviceMinutes);
+    for (const [id, range] of result.byId) byId.set(id, range);
+    currentTotal = Math.max(currentTotal, result.currentTotal);
+    baselineTotal = Math.max(baselineTotal, result.baselineTotal);
+  }
+
+  return { byId, currentTotal, baselineTotal };
 }
 
 function blockLabel(text) {
@@ -64,14 +103,17 @@ function blockLabel(text) {
 
 export function initBoard(state, persist, container) {
   let openWindowId = null;
+  const componentsById = new Map(state.time.components.map((c) => [c.id, c]));
+  const showComponentOnLane = state.time.components.length > 1;
 
   function render() {
     container.innerHTML = "";
     ensureStationDefaults(state.time.steps);
-    const schedule = computeSchedule(state.time.steps);
+    const serviceMinutes = clockToMinutes(state.time.service);
+    const schedule = computeSchedule(state.time.steps, state.time.components, serviceMinutes);
 
     container.appendChild(buildHeader(schedule));
-    container.appendChild(buildTimeline(schedule));
+    container.appendChild(buildTimeline(schedule, serviceMinutes));
     container.appendChild(buildPrepList());
     container.appendChild(buildOverlapList(schedule));
   }
@@ -168,21 +210,62 @@ export function initBoard(state, persist, container) {
     return box;
   }
 
-  function buildTimeline(schedule) {
+  function buildAxis(leftEdge, serviceMinutes) {
+    const axis = document.createElement("div");
+    axis.className = "timeline__axis no-print";
+    const stops = 4;
+    for (let i = 0; i <= stops; i++) {
+      const tick = document.createElement("span");
+      tick.className = "timeline__tick";
+      const minutes = leftEdge + ((serviceMinutes - leftEdge) * i) / stops;
+      tick.textContent = minutesToClock(minutes);
+      axis.appendChild(tick);
+    }
+    return axis;
+  }
+
+  function buildTimeline(schedule, serviceMinutes) {
     const wrap = document.createElement("div");
     wrap.className = "timeline";
+
+    // Percentages are relative to the worst-case (unpaired) span so the
+    // axis doesn't rescale — and jump every block around — every time a
+    // student pairs something into a window.
     const denom = Math.max(schedule.baselineTotal, 1);
+    const leftEdge = serviceMinutes - denom;
+
+    wrap.appendChild(buildAxis(leftEdge, serviceMinutes));
 
     function placeBlock(el, id) {
       const range = schedule.byId.get(id);
       if (!range) return;
-      const leftPct = (range.start / denom) * 100;
+      const leftPct = ((range.start - leftEdge) / denom) * 100;
       const widthPct = Math.max((range.end - range.start) / denom, 0.01) * 100;
       // Inset by 2px on each side so adjacent blocks that touch exactly at a
       // boundary (the common case) still read as visually distinct blocks.
       el.style.left = `calc(${leftPct}% + 2px)`;
       el.style.width = `calc(${widthPct}% - 4px)`;
     }
+
+    // Two hands-on steps can't genuinely both be in the student's hands at
+    // once, even if they belong to different components running "in
+    // parallel" — flag it so the student notices and resolves it
+    // themselves (pick different steps to overlap, or accept doing one
+    // after the other).
+    function toConflictItem(step) {
+      const range = schedule.byId.get(step.id);
+      if (!range) return null;
+      return { id: step.id, hands: step.hands, lane: step.lane, start: range.start, mins: step.mins };
+    }
+
+    const handsConflicts = computeConflicts(
+      state.time.steps.filter((s) => s.hands).map(toConflictItem).filter(Boolean)
+    );
+    // Same idea for equipment: two unattended steps sharing a station (one
+    // oven, one burner) at the same time.
+    const stationConflicts = computeConflicts(
+      state.time.steps.filter((s) => !s.hands).map(toConflictItem).filter(Boolean)
+    );
 
     // You lane
     const youRow = document.createElement("div");
@@ -197,8 +280,12 @@ export function initBoard(state, persist, container) {
 
     for (const step of state.time.steps.filter((s) => s.hands)) {
       const block = document.createElement("div");
-      block.className = "block block--hands";
+      const isConflicted = handsConflicts.has(step.id);
+      block.className = `block block--hands${isConflicted ? " block--conflict" : ""}`;
       block.appendChild(blockLabel(step.name));
+      if (isConflicted) {
+        block.setAttribute("aria-label", `${step.name}, schedule conflict — overlaps another hands-on step`);
+      }
       placeBlock(block, step.id);
       youTrack.appendChild(block);
     }
@@ -226,7 +313,7 @@ export function initBoard(state, persist, container) {
       youTrack.appendChild(windowBtn);
 
       if (openWindowId === anchor.id) {
-        openPickerPanel = buildPicker(anchor, range);
+        openPickerPanel = buildPicker(anchor, range, schedule);
       }
     }
 
@@ -242,6 +329,14 @@ export function initBoard(state, persist, container) {
       const label = document.createElement("div");
       label.className = "lane__label";
       label.appendChild(document.createTextNode(step.lane + " "));
+
+      if (showComponentOnLane) {
+        const componentTag = document.createElement("span");
+        componentTag.className = "lane__component";
+        const component = componentsById.get(step.component);
+        componentTag.textContent = component ? component.name : "";
+        label.appendChild(componentTag);
+      }
 
       const stationSelect = document.createElement("select");
       stationSelect.className = "lane__station-select no-print";
@@ -264,8 +359,12 @@ export function initBoard(state, persist, container) {
       const track = document.createElement("div");
       track.className = "lane__track";
       const block = document.createElement("div");
-      block.className = "block block--unattended";
+      const isConflicted = stationConflicts.has(step.id);
+      block.className = `block block--unattended${isConflicted ? " block--conflict" : ""}`;
       block.appendChild(blockLabel(step.name));
+      if (isConflicted) {
+        block.setAttribute("aria-label", `${step.name}, schedule conflict — shares a station with another step`);
+      }
       placeBlock(block, step.id);
       track.appendChild(block);
       row.appendChild(track);
@@ -276,7 +375,7 @@ export function initBoard(state, persist, container) {
     return wrap;
   }
 
-  function buildPicker(anchor, anchorRange) {
+  function buildPicker(anchor, anchorRange, schedule) {
     const panel = document.createElement("div");
     panel.className = "picker no-print";
 
@@ -285,11 +384,18 @@ export function initBoard(state, persist, container) {
     prompt.textContent = `"${anchor.name}" runs for ${anchor.mins} minutes without you. What could you be doing during that window?`;
     panel.appendChild(prompt);
 
-    const anchorIndex = state.time.steps.indexOf(anchor);
     const windowMins = anchorRange.end - anchorRange.start;
-    const candidates = state.time.steps.filter(
-      (s, idx) => s.hands && s.par == null && idx > anchorIndex && s.mins <= windowMins
-    );
+    // A candidate has to fit the window, still be unpaired, and — per its
+    // own natural (unpaired) position on the shared clock — not already be
+    // in the past relative to this window. That last check now works the
+    // same way whether the candidate comes from this component or another
+    // one, because every component's steps live on one absolute timeline.
+    const candidates = state.time.steps.filter((s) => {
+      if (!s.hands || s.par != null || s === anchor) return false;
+      if (s.mins > windowMins) return false;
+      const naturalRange = schedule.byId.get(s.id);
+      return naturalRange && naturalRange.start >= anchorRange.start;
+    });
 
     if (candidates.length === 0) {
       const none = document.createElement("p");
@@ -303,7 +409,9 @@ export function initBoard(state, persist, container) {
         const btn = document.createElement("button");
         btn.type = "button";
         btn.className = "btn btn--small";
-        btn.textContent = `${candidate.name} (${candidate.mins} min)`;
+        const component = componentsById.get(candidate.component);
+        const componentNote = showComponentOnLane && component ? ` — ${component.name}` : "";
+        btn.textContent = `${candidate.name} (${candidate.mins} min)${componentNote}`;
         btn.addEventListener("click", () => {
           candidate.par = anchor.id;
           openWindowId = null;

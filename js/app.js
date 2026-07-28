@@ -2,6 +2,7 @@ import { EQUIPMENT_PALETTE, DEFAULT_BOWL_COUNT, DEFAULT_SERVICE_TIME, DEFAULT_TI
 import { saveState, loadState, downloadDraft, restoreDraftFromFile } from "./storage.js";
 import { initTimePlanner } from "./time-planner.js";
 import { initOpenMode } from "./open-mode.js";
+import { newId } from "./time-utils.js";
 
 // --- State -------------------------------------------------------------
 
@@ -24,6 +25,9 @@ function defaultState(recipePrefill, servicePrefill) {
     bowls: Array.from({ length: DEFAULT_BOWL_COUNT }, emptyBowl),
     time: {
       service: servicePrefill || DEFAULT_SERVICE_TIME,
+      components: [],
+      componentsNamingDone: false,
+      activeComponentIndex: 0,
       steps: [],
       elicitationDone: false,
       detailsDone: false,
@@ -52,6 +56,21 @@ if (typeof state.time.detailsDone !== "boolean") state.time.detailsDone = false;
 if (!Array.isArray(state.time.openBlocks)) state.time.openBlocks = [];
 for (const step of state.time.steps) {
   if (!Array.isArray(step.prep)) step.prep = [];
+}
+
+// Migrate drafts saved before "components" existed: a draft with steps but
+// no components list was a single implicit component. Give it one so
+// existing in-progress plans keep working, and skip straight past the new
+// naming phase since the student already answered it implicitly.
+if (!Array.isArray(state.time.components)) state.time.components = [];
+if (typeof state.time.componentsNamingDone !== "boolean") state.time.componentsNamingDone = false;
+if (typeof state.time.activeComponentIndex !== "number") state.time.activeComponentIndex = 0;
+if (state.time.components.length === 0 && state.time.steps.length > 0) {
+  state.time.components = [{ id: newId("component"), name: "The dish" }];
+  state.time.componentsNamingDone = true;
+}
+for (const step of state.time.steps) {
+  if (!step.component && state.time.components[0]) step.component = state.time.components[0].id;
 }
 
 function persist() {

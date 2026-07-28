@@ -22,10 +22,13 @@
   /* Deliberately outside the kraft palette: focus needs to be unmistakable,
      never confusable with content styling. */
   --focus: #1a5fb4;
-  --radius: 8px;
+  /* Corners stay square everywhere except the time-plan blocks, which get
+     a small deliberate radius (see .block) — the one place "cut from a
+     ticket rail" is the actual metaphor, not incidental softness. */
+  --block-radius: 3px;
   --gap: 1rem;
 
-  --font-display: "Zilla Slab", Georgia, serif;
+  --font-display: "Roboto Slab", Georgia, serif;
   --font-body: "Work Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: "IBM Plex Mono", "Courier New", monospace;
 }
@@ -92,7 +95,6 @@ h3 {
   letter-spacing: 0.02em;
   color: var(--paper);
   background: var(--ink);
-  border-radius: 4px;
   padding: 0.12rem 0.45rem;
 }
 
@@ -213,7 +215,6 @@ input[type="time"] {
   font-size: 1rem;
   padding: 0.55rem 0.6rem;
   border: 1px solid var(--line);
-  border-radius: 6px;
   background: var(--paper);
   color: var(--ink);
   min-height: 44px;
@@ -234,7 +235,6 @@ input[type="time"] {
   font-weight: 600;
   padding: 0.6rem 1rem;
   min-height: 44px;
-  border-radius: 6px;
   border: 1px solid var(--accent);
   background: var(--accent);
   color: var(--accent-ink);
@@ -257,7 +257,6 @@ input[type="time"] {
   font-size: 0.9rem;
   padding: 0.5rem 0.85rem 0.5rem 1.65rem;
   min-height: 40px;
-  border-radius: 6px;
   border: 1px solid var(--line);
   background: var(--paper);
   color: var(--ink);
@@ -290,7 +289,6 @@ input[type="time"] {
 
 .card {
   border: 1px solid var(--line);
-  border-radius: var(--radius);
   background: var(--card-bg);
   padding: 1rem;
   margin: 1rem 0;
@@ -359,7 +357,6 @@ input[type="time"] {
   gap: 0.4rem;
   background: var(--paper);
   border: 1px solid var(--line);
-  border-radius: 999px;
   padding: 0.4rem 0.5rem 0.4rem 0.85rem;
   font-size: 0.9rem;
 }
@@ -376,7 +373,6 @@ input[type="time"] {
   padding: 0.2rem 0.4rem;
   min-width: 32px;
   min-height: 32px;
-  border-radius: 999px;
 }
 
 .tray__remove:hover,
@@ -397,7 +393,6 @@ input[type="time"] {
 .bowl-card {
   background: var(--paper);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
   padding: 0.75rem;
 }
 
@@ -412,7 +407,6 @@ input[type="time"] {
   flex: 1;
   background: var(--tape);
   border: 1px dashed var(--tape-line);
-  border-radius: 3px;
   padding: 0.5rem 0.6rem;
   font-family: var(--font-display);
   font-weight: 700;
@@ -451,7 +445,6 @@ input[type="time"] {
   flex-direction: column;
   gap: 0.75rem;
   border: 1px solid var(--line);
-  border-radius: var(--radius);
   background: var(--paper);
   padding: 0.85rem;
   margin-bottom: 1rem;
@@ -468,6 +461,18 @@ input[type="time"] {
   margin: 0;
 }
 
+.elicit-subtext {
+  margin: -0.4rem 0 0;
+  font-size: 0.85rem;
+  color: var(--steel);
+}
+
+.toggle-hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.78rem;
+  color: var(--steel);
+}
+
 .hands-toggle {
   display: flex;
   flex-wrap: wrap;
@@ -479,7 +484,6 @@ input[type="time"] {
   font-size: 0.9rem;
   padding: 0.65rem 0.85rem;
   min-height: 44px;
-  border-radius: 6px;
   border: 1px solid var(--line);
   background: var(--paper);
   color: var(--ink);
@@ -539,7 +543,6 @@ input[type="time"] {
 .step-review__tag {
   font-size: 0.78rem;
   font-weight: 600;
-  border-radius: 999px;
   padding: 0.15rem 0.6rem;
 }
 
@@ -563,7 +566,6 @@ input[type="time"] {
   padding: 0.2rem 0.4rem;
   min-width: 32px;
   min-height: 32px;
-  border-radius: 999px;
 }
 
 .step-review__remove:hover {
@@ -578,6 +580,74 @@ input[type="time"] {
   flex-wrap: wrap;
 }
 
+/* ---------- Time planner: naming the parts of the dish ---------- */
+
+.component-list {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.component-list__item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  padding: 0.4rem 0.5rem 0.4rem 0.85rem;
+  font-size: 0.9rem;
+}
+
+.component-list__remove {
+  border: none;
+  background: transparent;
+  color: var(--steel);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  min-width: 32px;
+  min-height: 32px;
+}
+
+.component-list__remove:hover {
+  background: var(--line);
+  color: var(--ink);
+}
+
+.component-progress {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.component-progress__item {
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.35rem 0.7rem;
+  min-height: 36px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--steel);
+  cursor: pointer;
+}
+
+.component-progress__item--done {
+  color: var(--ink);
+  border-color: var(--steel);
+}
+
+.component-progress__item--active {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+
 /* ---------- Time planner: prep details (phase 1.5) ---------- */
 
 .details-list {
@@ -589,7 +659,6 @@ input[type="time"] {
 
 .details-step {
   border: 1px solid var(--line);
-  border-radius: var(--radius);
   background: var(--paper);
   padding: 0.65rem 0.85rem;
 }
@@ -599,6 +668,14 @@ input[type="time"] {
   align-items: center;
   gap: 0.6rem;
   margin-bottom: 0.4rem;
+}
+
+.details-step__component {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.68rem;
+  color: var(--steel);
 }
 
 .details-step__name {
@@ -634,7 +711,6 @@ input[type="time"] {
   padding: 0.15rem 0.35rem;
   min-width: 28px;
   min-height: 28px;
-  border-radius: 999px;
 }
 
 .details-step__prep-remove:hover {
@@ -697,6 +773,16 @@ input[type="time"] {
   margin-bottom: 1.25rem;
 }
 
+.timeline__axis {
+  display: flex;
+  justify-content: space-between;
+  margin-left: calc(110px + 0.6rem);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.68rem;
+  color: var(--steel);
+}
+
 .lane {
   display: flex;
   align-items: center;
@@ -717,11 +803,19 @@ input[type="time"] {
   gap: 0.3rem;
 }
 
+.lane__component {
+  font-family: var(--font-body);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--steel);
+  font-size: 0.68rem;
+}
+
 .lane__station-select {
   font-family: var(--font-body);
   font-size: 0.75rem;
   padding: 0.15rem;
-  border-radius: 4px;
   border: 1px solid var(--line);
 }
 
@@ -731,14 +825,15 @@ input[type="time"] {
   min-width: 200px;
   height: 42px;
   background: var(--card-bg);
-  border-radius: 4px;
 }
 
+/* The one place corners stay soft — a scheduled block reads as something
+   cut from a ticket rail, not a flat rectangle. */
 .block {
   position: absolute;
   top: 2px;
   bottom: 2px;
-  border-radius: 4px;
+  border-radius: var(--block-radius);
   font-size: 0.78rem;
   padding: 0.25rem 0.5rem;
   overflow: hidden;
@@ -804,7 +899,6 @@ input[type="time"] {
 .picker {
   flex: 1 1 100%;
   border: 1px solid var(--line);
-  border-radius: 8px;
   background: var(--paper);
   padding: 0.75rem;
   margin-top: 0.25rem;
@@ -868,7 +962,6 @@ input[type="time"] {
 .prep-list__group {
   flex: 1 1 200px;
   border: 1px solid var(--line);
-  border-radius: 8px;
   padding: 0.5rem 0.65rem;
   background: var(--paper);
 }
@@ -906,7 +999,6 @@ footer code {
   font-family: var(--font-mono);
   background: var(--card-bg);
   padding: 0.1rem 0.35rem;
-  border-radius: 4px;
 }
 
 /* ---------- Responsive floor ---------- */

@@ -12,40 +12,13 @@
 // kitchen would have too (only one oven) — flag, don't block, per spec.
 
 import { STATIONS } from "./config.js";
-import { clockToMinutes, minutesToClock, formatDuration, guessStation } from "./time-utils.js";
+import { clockToMinutes, minutesToClock, formatDuration, guessStation, newId, computeConflicts } from "./time-utils.js";
 
 const SNAP = 5;
 const MIN_DURATION = 5;
 
-function newId() {
-  return (crypto.randomUUID && crypto.randomUUID()) || `block-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
 function snap(mins) {
   return Math.max(MIN_DURATION, Math.round(mins / SNAP) * SNAP);
-}
-
-function overlaps(a, b) {
-  return a.start < b.start + b.mins && b.start < a.start + a.mins;
-}
-
-function computeConflicts(blocks) {
-  const conflicted = new Set();
-  function check(list) {
-    for (let i = 0; i < list.length; i++) {
-      for (let j = i + 1; j < list.length; j++) {
-        if (overlaps(list[i], list[j])) {
-          conflicted.add(list[i].id);
-          conflicted.add(list[j].id);
-        }
-      }
-    }
-  }
-  check(blocks.filter((b) => b.hands));
-  for (const station of STATIONS) {
-    check(blocks.filter((b) => !b.hands && b.lane === station));
-  }
-  return conflicted;
 }
 
 function blockLabel(text) {
@@ -192,7 +165,7 @@ export function initOpenMode(state, persist, container) {
       const laneBlocks = blocks().filter((b) => (handsValue ? b.hands : !b.hands && b.lane === lane));
       const start = laneBlocks.length > 0 ? Math.max(...laneBlocks.map((b) => b.start + b.mins)) : 0;
 
-      const block = { id: newId(), name: nameInput.value.trim(), mins, start, hands: handsValue, lane };
+      const block = { id: newId("block"), name: nameInput.value.trim(), mins, start, hands: handsValue, lane };
       blocks().push(block);
       persist();
       selectedId = block.id;
