@@ -3,3 +3,9 @@ Thumbs.db
 node_modules/
 .claude/
 .playwright-mcp/
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
