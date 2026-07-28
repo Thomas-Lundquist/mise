@@ -1,5 +1,14 @@
 # Mise en Place Planner — Design Brief
 
+> **Status: historical. Not a source of requirements.**
+>
+> This brief drove a set of styling decisions (kraft paper, sear/herb accents,
+> ticket rails, tape labels) that were never actually asked for and that
+> outran the functional work. It is not the visual direction to build toward.
+>
+> Current intent lives in [`spec.md`](spec.md). The visual layer is explicitly
+> deferred there; function comes first. Kept for history.
+
 For handoff to design software (Figma, etc.). The current build (plain HTML/CSS,
 functional but generic) is at github.com/Thomas-Lundquist/mise — treat this as
 the visual direction to design against, not a description of what exists today.
