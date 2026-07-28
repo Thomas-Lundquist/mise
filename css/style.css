@@ -1,0 +1,435 @@
+/* ---------- Base / tokens ---------- */
+
+:root {
+  --ink: #1a1a1a;
+  --paper: #ffffff;
+  --muted: #6b6b6b;
+  --line: #cfcfcf;
+  --accent: #2f6f4f;
+  --accent-ink: #ffffff;
+  --card-bg: #fafaf8;
+  --warning-bg: #fff3cd;
+  --warning-ink: #664d03;
+  --focus: #1a5fb4;
+  --radius: 10px;
+  --gap: 1rem;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chip, .btn, .bowl-card, .banner {
+    transition: background-color 120ms ease, border-color 120ms ease, transform 80ms ease;
+  }
+}
+
+html {
+  font-size: 16px;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+  line-height: 1.4;
+  padding-bottom: 3rem;
+}
+
+main {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+h2 {
+  font-size: 1.15rem;
+  margin: 0 0 0.75rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+h3 {
+  font-size: 0.95rem;
+  margin: 0 0 0.5rem;
+  color: var(--muted);
+}
+
+.section-num {
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 0.85rem;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 0.05rem 0.4rem;
+}
+
+/* ---------- Focus visibility ---------- */
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* ---------- Banners ---------- */
+
+.banner {
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.banner-warning {
+  background: var(--warning-bg);
+  color: var(--warning-ink);
+}
+
+/* ---------- Identity strip ---------- */
+
+.identity-strip {
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--line);
+  padding: 0.85rem 1rem;
+}
+
+.identity-strip__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.identity-strip__row--controls {
+  margin-top: 0.75rem;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1 1 160px;
+}
+
+.field--narrow {
+  flex: 1 1 110px;
+}
+
+.field--wide {
+  flex: 2 1 220px;
+}
+
+label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+input[type="text"],
+input[type="number"],
+input[type="date"] {
+  font-size: 1rem;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+  min-height: 44px;
+}
+
+.timer {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+/* ---------- Buttons / chips ---------- */
+
+.btn {
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 0.6rem 1rem;
+  min-height: 44px;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+  cursor: pointer;
+}
+
+.btn--secondary {
+  background: var(--paper);
+  color: var(--accent);
+}
+
+.btn--small {
+  padding: 0.45rem 0.75rem;
+  min-height: 40px;
+  font-size: 0.85rem;
+}
+
+.chip {
+  font-size: 0.9rem;
+  padding: 0.5rem 0.85rem;
+  min-height: 40px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.chip--selected {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+/* ---------- Cards ---------- */
+
+.card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card-bg);
+  padding: 1rem;
+  margin: 1rem 0;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.checkbox-row input {
+  width: 22px;
+  height: 22px;
+}
+
+/* ---------- Equipment palette / tray ---------- */
+
+.palette__group {
+  margin-bottom: 0.75rem;
+}
+
+.palette__group-heading {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.75rem;
+}
+
+.palette__items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.inline-add {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.inline-add input {
+  flex: 1;
+}
+
+.tray {
+  margin-top: 1rem;
+  border-top: 1px dashed var(--line);
+  padding-top: 0.75rem;
+}
+
+.tray__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.tray__item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.4rem 0.5rem 0.4rem 0.85rem;
+  font-size: 0.9rem;
+}
+
+.tray__remove,
+.bowl-card__remove,
+.bowl-card__item-remove {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  min-width: 32px;
+  min-height: 32px;
+  border-radius: 999px;
+}
+
+.tray__remove:hover,
+.bowl-card__remove:hover,
+.bowl-card__item-remove:hover {
+  background: var(--line);
+  color: var(--ink);
+}
+
+/* ---------- Bowls ---------- */
+
+.bowl-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--gap);
+}
+
+.bowl-card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.75rem;
+}
+
+.bowl-card__label-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+
+.bowl-card__label {
+  flex: 1;
+  background: #fff8d6;
+  border: 1px dashed #c9b95a;
+  border-radius: 4px;
+  padding: 0.5rem 0.6rem;
+  font-weight: 600;
+  transform: rotate(-0.4deg);
+}
+
+.bowl-card__items {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.bowl-card__items li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+  padding: 0.3rem 0.1rem;
+}
+
+.bowl-card__entry input {
+  width: 100%;
+}
+
+/* ---------- Placeholder ---------- */
+
+.placeholder-note {
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* ---------- Footer ---------- */
+
+footer {
+  max-width: 900px;
+  margin: 1rem auto 0;
+  padding: 0 1rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+footer code {
+  background: var(--card-bg);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+}
+
+/* ---------- Responsive floor ---------- */
+
+@media (max-width: 400px) {
+  .identity-strip__row {
+    flex-direction: column;
+  }
+  .field, .field--narrow, .field--wide {
+    flex: 1 1 auto;
+  }
+}
+
+/* ---------- Print ---------- */
+
+@media print {
+  .no-print,
+  #storage-warning,
+  .identity-strip__row--controls {
+    display: none !important;
+  }
+
+  body {
+    padding: 0;
+    color: #000;
+    background: #fff;
+  }
+
+  main {
+    max-width: 100%;
+  }
+
+  .identity-strip {
+    border-bottom: 1px solid #000;
+  }
+
+  .card {
+    background: #fff;
+    border: 1px solid #000;
+    break-inside: avoid;
+    margin: 0.5rem 0;
+    padding: 0.6rem;
+  }
+
+  .chip--selected {
+    background: #fff;
+    color: #000;
+    border: 1px solid #000;
+    font-weight: 700;
+  }
+
+  .bowl-card__label {
+    background: #fff;
+    border: 1px solid #000;
+    transform: none;
+  }
+
+  .section-num {
+    color: #000;
+    border-color: #000;
+  }
+
+  a[href]::after {
+    content: "";
+  }
+}
