@@ -1,5 +1,14 @@
 # Mise En Place Planner — Build Spec
 
+> **Status: historical. Not a source of requirements.**
+>
+> This was an early sketch written to get the project moving. It was never
+> iterated on or fully thought through, and parts of it were taken more
+> literally than intended — the Apps Script hosting decision and the visual
+> direction in particular. Do not build toward this document.
+>
+> Current intent lives in [`docs/spec.md`](docs/spec.md). Kept for history.
+
 **For:** Culinary 2 / Culinary 1, Skyline High School
 **Target:** single-page web app, hosted on Google Apps Script, embedded in Canvas assignments via iframe
 **Status:** spec for first build
