@@ -30,7 +30,7 @@ const periodPrefill = urlParams.get("period") || null;
 const modePrefill = urlParams.get("mode") === "free" || urlParams.get("mode") === "open" ? "free" : "guided";
 // Vertical timeline, off by default while it's being compared against the
 // horizontal board. Remove the flag once one of them wins.
-const orientation = urlParams.get("board") === "vertical" ? "vertical" : "horizontal";
+const orientation = urlParams.get("board") === "horizontal" ? "horizontal" : "vertical";
 
 const timerParam = urlParams.get("timer");
 const timerMinutes = timerParam === null || timerParam === "" ? DEFAULT_TIMER_MINUTES : Number(timerParam);
@@ -53,7 +53,7 @@ let plan = (() => {
   // A teacher link naming a recipe should open that recipe's plan if the
   // student already has one, rather than resuming whatever they last touched.
   if (recipePrefill) {
-    const match = listPlans().find((entry) => entry.recipe === recipePrefill);
+    const match = listPlans().find((entry) => entry.recipe.toLowerCase() === recipePrefill.toLowerCase());
     if (match) return loadPlan(match.id) || freshPlan();
     return freshPlan();
   }
@@ -111,8 +111,10 @@ function initPlanBar() {
   });
 
   newBtn.addEventListener("click", () => {
+    const hasWork = plan.steps.length > 0 || plan.equipment.length > 0 || plan.read.done;
+    if (hasWork && !window.confirm("Start over? You'll lose everything on your current plan.")) return;
     switchToPlan(freshPlan());
-    if (status) status.textContent = "Started a new plan. Your other plans are still in the list.";
+    if (status) status.textContent = "Started a new plan.";
   });
 
   downloadBtn.addEventListener("click", () => downloadPlan(plan));
@@ -539,3 +541,11 @@ renderAll();
 initPrint();
 initStorageWarning();
 initTimer();
+
+window.addEventListener("beforeunload", (e) => {
+  const hasWork = plan.steps.length > 0 || plan.equipment.length > 0 || plan.read.done;
+  if (hasWork) {
+    e.preventDefault();
+    e.returnValue = "";
+  }
+});

@@ -254,7 +254,7 @@ input[type="time"] {
   font-family: var(--font-body);
   font-size: 0.95rem;
   font-weight: 600;
-  padding: 0.6rem 1rem;
+  padding: 0.75rem 1.25rem;
   min-height: 44px;
   border: 1px solid var(--accent);
   background: var(--accent);
@@ -268,7 +268,7 @@ input[type="time"] {
 }
 
 .btn--small {
-  padding: 0.45rem 0.75rem;
+  padding: 0.55rem 0.9rem;
   min-height: 40px;
   font-size: 0.85rem;
 }
@@ -295,7 +295,7 @@ input[type="time"] {
 .chip {
   position: relative;
   font-size: 0.9rem;
-  padding: 0.5rem 0.85rem 0.5rem 1.65rem;
+  padding: 0.6rem 1rem 0.6rem 1.85rem;
   min-height: 40px;
   border: 1px solid var(--line);
   background: var(--paper);

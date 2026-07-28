@@ -60,24 +60,20 @@ function probe(getStore) {
 let tier = "memory";
 let store = makeMemoryStore();
 
-const local = probe(() => window.localStorage);
-if (local) {
-  tier = "local";
-  store = local;
-} else {
-  const session = probe(() => window.sessionStorage);
-  if (session) {
-    tier = "session";
-    store = session;
-  }
+const session = probe(() => window.sessionStorage);
+if (session) {
+  tier = "session";
+  store = session;
 }
 
 export function getStorageTier() {
   return tier;
 }
 
+// "Persistent" now means survives a refresh — sessionStorage is the intended
+// tier. Only falls to false when the iframe blocks storage entirely.
 export function isStoragePersistent() {
-  return tier === "local";
+  return tier === "session";
 }
 
 // --- Legacy cleanup -------------------------------------------------------
