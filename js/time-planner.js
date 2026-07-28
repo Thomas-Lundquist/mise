@@ -1,6 +1,6 @@
-// Section 04 — Time planner, scaffolded mode, phase 1 (backward elicitation).
-// Phase 2 (the board) is a separate pass; this module currently renders a
-// read-only summary list once elicitation is marked done.
+// Section 04 — Time planner, scaffolded mode. Owns phase 1 (backward
+// elicitation) directly and hands off to board.js for phase 2 (the board)
+// once elicitation is marked done.
 //
 // Steps are stored in forward chronological order: each new answer is
 // unshifted onto the front of the array, and because every new answer is
@@ -8,6 +8,8 @@
 // always in correct forward order, growing earlier at index 0 as the
 // conversation continues. state.time.steps[0] is therefore always "the step
 // most recently entered" — the thing the next prompt asks about.
+
+import { initBoard } from "./board.js";
 
 function newId() {
   return (crypto.randomUUID && crypto.randomUUID()) || `step-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -25,13 +27,14 @@ export function initTimePlanner(state, persist) {
 
     if (!state.time.elicitationDone) {
       container.appendChild(buildPromptForm());
+      if (state.time.steps.length > 0) container.appendChild(buildReviewList());
+      container.appendChild(buildFooterControls());
+    } else {
+      const boardMount = document.createElement("div");
+      container.appendChild(boardMount);
+      initBoard(state, persist, boardMount);
+      container.appendChild(buildFooterControls());
     }
-
-    if (state.time.steps.length > 0) {
-      container.appendChild(buildReviewList());
-    }
-
-    container.appendChild(buildFooterControls());
   }
 
   function buildPromptForm() {
@@ -195,6 +198,11 @@ export function initTimePlanner(state, persist) {
         removeBtn.addEventListener("click", () => {
           const idx = state.time.steps.indexOf(step);
           if (idx !== -1) state.time.steps.splice(idx, 1);
+          // Clear any pairing that pointed at the step we just removed —
+          // its window no longer exists.
+          for (const other of state.time.steps) {
+            if (other.par === step.id) other.par = null;
+          }
           persist();
           render();
         });
@@ -226,11 +234,6 @@ export function initTimePlanner(state, persist) {
         wrap.appendChild(doneBtn);
       }
     } else {
-      const note = document.createElement("p");
-      note.className = "placeholder-note";
-      note.textContent = "Board view coming next.";
-      wrap.appendChild(note);
-
       const editBtn = document.createElement("button");
       editBtn.type = "button";
       editBtn.className = "btn btn--small";
