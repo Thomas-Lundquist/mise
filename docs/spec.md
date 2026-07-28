@@ -331,7 +331,7 @@ Set once per assignment, via URL parameters on the Canvas embed:
 | `recipe` | Prefills recipe name, keys the saved plan | — |
 | `foodUp` | Pins plate-up time, overriding the period picker | period's time |
 | `period` | Preselects a period by id | nearest by time of day |
-| `board` | `vertical` to try the vertical timeline | horizontal |
+| `board` | `horizontal` to fall back to the old timeline | vertical |
 | `mode` | `guided` or `free` **starting** state — student may change it (§4.4) | `guided` |
 | `timer` | Planning countdown, minutes | **off** |
 
@@ -387,6 +387,20 @@ See the end of this section for what's built but not yet verified.
   own copies regardless of what the Canvas iframe allows. Lands here rather than
   later because it's a persistence change and the data model is already being
   reshaped; doing both at once avoids migrating saved plans twice.
+
+> **Storage is sessionStorage, deliberately — not localStorage.** These are
+> shared district Chromebooks, and one student's name and plan must not still
+> be sitting in the browser for whoever uses the machine next. That privacy
+> concern outranks convenience.
+>
+> The cost is real and worth stating: **work does not survive closing the tab**,
+> so plan history is scoped to a single browser session. A student can switch
+> between plans they made this period, but cannot reopen last week's — which
+> was the original reason for building history. The download-a-backup control
+> is what covers that case, and `beforeunload` warns before work is lost.
+>
+> If keeping work across days turns out to matter more than the shared-device
+> concern, the tier choice is one line in `js/storage.js`.
 
 ### Phase 2 — one board
 

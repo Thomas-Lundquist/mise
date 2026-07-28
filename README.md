@@ -28,9 +28,15 @@ is what steps can use in Step 4, bowls from Step 3 attach to steps, and Step 1's
    `github.io` is blocked by the content filter, and whether browser storage
    works inside the nested Canvas iframe.
 
-A vertical timeline is available behind `?board=vertical` for comparison
-against the default horizontal one; one of them should win and the other be
-deleted.
+The timeline runs **vertically** — time down the page, lanes as columns, which
+suits portrait paper and narrow screens. The old horizontal board is still
+reachable via `?board=horizontal` and should be deleted once vertical has been
+used in anger.
+
+Work is saved to **sessionStorage, not localStorage** — these are shared
+Chromebooks and a student's plan shouldn't outlive their session on the
+machine. That means work does not survive closing the tab; the page warns
+before that happens, and "Download backup" is always available.
 
 ## Running locally
 
@@ -68,7 +74,7 @@ Per-assignment settings go on the embed URL:
 | `?period=` | Preselects a period by id |
 | `?timer=` | Planning countdown in minutes (off by default) |
 | `?mode=free` | Start on free placement instead of guided |
-| `?board=vertical` | Try the vertical timeline |
+| `?board=horizontal` | Fall back to the old horizontal timeline |
 
 ## Deployment
 
