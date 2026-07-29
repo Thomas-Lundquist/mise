@@ -31,12 +31,24 @@ let _printRenderState = null;
   window.addEventListener("beforeprint", () => {
     if (!_printRenderState) return;
     const { plan, ctx, mount, totalMins, naturalPxPerMin } = _printRenderState;
+    const page = document.querySelector(".board-page");
+    if (!page) return;
     // Letter paper (11") at 96 css-px/in, 0.5in margins → 960px printable
-    // height. Reserve ~80px for the lane-header row; the rest goes to tracks.
+    // height, less a small safety margin for rounding and borders.
     const PRINTABLE_H = 960;
-    const CHROME_H = 80;
-    const availableH = PRINTABLE_H - CHROME_H;
-    if (totalMins * naturalPxPerMin > availableH) {
+    const SAFETY = 24;
+    // The board is more than the timeline tracks: header readouts, lane labels,
+    // warnings and gaps all take vertical space, and that space varies by plan.
+    // Measure it live rather than guessing a constant — derive it as the page
+    // height minus the track pixels, then subtract the .no-print controls that
+    // print CSS removes (they're still laid out now, during beforeprint). What
+    // remains is the chrome that will actually print above/around the tracks.
+    const tracksH = totalMins * naturalPxPerMin;
+    const noPrintH = [...page.querySelectorAll(".no-print")]
+      .reduce((sum, el) => sum + el.offsetHeight, 0);
+    const chromeH = Math.max(0, page.scrollHeight - tracksH - noPrintH);
+    const availableH = PRINTABLE_H - chromeH - SAFETY;
+    if (tracksH > availableH && availableH > 0) {
       const fitPxPerMin = Math.max(3, availableH / totalMins);
       renderBoard(plan, ctx, mount, fitPxPerMin);
     }
