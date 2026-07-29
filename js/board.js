@@ -37,17 +37,28 @@ let _printRenderState = null;
     // height, less a small safety margin for rounding and borders.
     const PRINTABLE_H = 960;
     const SAFETY = 24;
-    // The board is more than the timeline tracks: header readouts, lane labels,
-    // warnings and gaps all take vertical space, and that space varies by plan.
-    // Measure it live rather than guessing a constant — derive it as the page
-    // height minus the track pixels, then subtract the .no-print controls that
-    // print CSS removes (they're still laid out now, during beforeprint). What
-    // remains is the chrome that will actually print above/around the tracks.
+    // The board shares its printed sheet with the "Step 4 · Time" section
+    // heading and a print-only identity line that both sit above .board-page.
+    // If we size the board to the full page it plus that framing overflows,
+    // and .board-page's break-inside:avoid then bumps the whole board onto a
+    // fresh page — leaving the heading orphaned on a near-empty sheet. So the
+    // fit has to reserve for everything on the sheet, not just the board.
     const tracksH = totalMins * naturalPxPerMin;
     const noPrintH = [...page.querySelectorAll(".no-print")]
       .reduce((sum, el) => sum + el.offsetHeight, 0);
+    // Board-internal chrome (readouts, warnings, lane labels, gaps): live page
+    // height minus tracks minus the controls print CSS removes.
     const chromeH = Math.max(0, page.scrollHeight - tracksH - noPrintH);
-    const availableH = PRINTABLE_H - chromeH - SAFETY;
+    // Space above the board within its section — the heading and its margins.
+    // Measured off the board's position so it adapts to heading wrapping etc.
+    const section = document.getElementById("section-time");
+    const aboveBoardH = section
+      ? Math.max(0, page.getBoundingClientRect().top - section.getBoundingClientRect().top)
+      : 0;
+    // .print-identity is display:none until print media applies, so it has no
+    // height to measure here; reserve one mono line plus its margin for it.
+    const IDENTITY_RESERVE = 40;
+    const availableH = PRINTABLE_H - chromeH - aboveBoardH - IDENTITY_RESERVE - SAFETY;
     if (tracksH > availableH && availableH > 0) {
       const fitPxPerMin = Math.max(3, availableH / totalMins);
       renderBoard(plan, ctx, mount, fitPxPerMin);
