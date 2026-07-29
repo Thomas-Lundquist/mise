@@ -11,10 +11,11 @@ import {
   EQUIPMENT_PALETTE,
   DEFAULT_BOWL_COUNT,
   COOKING_WINDOW_MINUTES,
+  MAX_COOKS,
   PERIODS,
 } from "./config.js";
 
-export const PLAN_VERSION = 3;
+export const PLAN_VERSION = 4;
 
 export function newId(prefix) {
   if (crypto.randomUUID) return crypto.randomUUID();
@@ -75,6 +76,18 @@ export function createPlan({ recipe = "", foodUp = "", periodId = null, mode = "
       // Set by ?foodUp= on the embed URL, or by hand on a special day. Wins
       // over the period.
       foodUpOverride: foodUp || "",
+      // Where the finished schedule gets pinned.
+      //   "early" — the plan starts the moment the cooking window opens and
+      //             finishes as soon as it can, leaving the spare time at the
+      //             end for plating up, eating and an unhurried clean.
+      //   "fixed" — the plan ends on the period's plate-up time, which is the
+      //             real service discipline and what a pinned ?foodUp= means.
+      // Either way the schedule is built backward, so every part still lands
+      // together and nothing sits. This only moves the anchor.
+      anchor: foodUp ? "fixed" : "early",
+      // One pair of hands by default. The group toggle raises this; the plan
+      // itself is identical either way, only the scheduler's assumption changes.
+      cooks: 1,
     },
     // Which view of Step 4 is showing. Persisted so resuming after a refresh
     // lands the student back where they were. Not a wizard position — every
@@ -100,13 +113,22 @@ export function createStep({ componentId, name, mins, hands }) {
     noEquipment: false,
     bowlIds: [],
     note: "",
-    // Guided-mode scheduling input: null = sits in its component's own serial
-    // chain; otherwise the id of the unattended step whose window it runs in.
-    par: null,
+    // "Can this be done ahead?" — the student's own call, and the mise en place
+    // judgement the whole app is named for. True pulls the step into the prep
+    // block that runs before any cooking starts. Defaults false so a step stays
+    // where it sits in its part unless the student deliberately says otherwise.
+    ahead: false,
     // Resolved minutes-from-midnight. Derived in guided mode, authoritative in
     // free mode.
     start: 0,
+    // Which pair of hands does this, 0-based. Derived by the scheduler and
+    // meaningless when the plan is solo. Unattended steps keep 0 and ignore it.
+    cook: 0,
   };
+}
+
+export function cookCount(plan) {
+  return Math.max(1, Math.min(MAX_COOKS, plan.schedule.cooks || 1));
 }
 
 // --- Equipment ------------------------------------------------------------
@@ -162,9 +184,6 @@ export function removeStep(plan, stepId) {
   const idx = plan.steps.findIndex((s) => s.id === stepId);
   if (idx === -1) return;
   plan.steps.splice(idx, 1);
-  for (const other of plan.steps) {
-    if (other.par === stepId) other.par = null; // its window no longer exists
-  }
   if (plan.read.hardestStepId === stepId) plan.read.hardestStepId = null;
 }
 
@@ -238,55 +257,155 @@ export function stepsForComponent(plan, componentId) {
   return plan.steps.filter((s) => s.component === componentId);
 }
 
-// Builds one component's serial chain, then shifts it so the component's own
-// end lands exactly on foodUp. Every part of the dish finishing together is
-// true by construction rather than something the app has to compute — this is
-// the best idea in the original build and it stays.
-function scheduleComponent(componentSteps, foodUpMinutes) {
-  const anchors = componentSteps.filter((s) => s.par == null);
-  const local = new Map();
-
-  let t = 0;
-  for (const anchor of anchors) {
-    local.set(anchor.id, t);
-    t += anchor.mins;
-  }
-  const span = t;
-
-  for (const step of componentSteps) {
-    if (step.par == null) continue;
-    const anchorStart = local.get(step.par);
-    if (anchorStart === undefined) continue; // dangling; leave unscheduled
-    local.set(step.id, anchorStart);
-  }
-
-  const offset = foodUpMinutes - span;
+// One cook, scheduled backward from plate-up.
+//
+// Backward is what makes every part of the dish finish together: the part that
+// needs the longest lead simply starts earliest, and nothing has to compute
+// that. Forward/as-soon-as-possible scheduling loses it — parts finish whenever
+// they happen to finish and the food sits. Finishing EARLY is achieved by
+// moving the anchor instead (see applyGuidedSchedule), so quality and getting
+// out on time were never actually in tension.
+//
+// The pair of hands is GLOBAL. Two hands-on steps never overlap, whichever part
+// of the dish they belong to. The previous model scheduled each component
+// independently and pinned all of them to plate-up, so with two or more parts it
+// manufactured the collisions it then flagged — the student did nothing wrong
+// and got warned anyway.
+//
+// With more than one cook the hands stop being scarce and the stations start
+// to be: the oven is still one oven however many people are standing at it.
+// Nothing else about the plan changes — same steps, same durations, same
+// backward pass — which is why group is a toggle rather than a second plan.
+//
+// Returns { starts, cookOf } in the same units as `endAt`.
+function scheduleBackward(steps, plan, endAt) {
+  const byId = equipmentById(plan);
   const starts = new Map();
-  for (const [id, localStart] of local) starts.set(id, offset + localStart);
+  const cookOf = new Map();
+  if (steps.length === 0) return { starts, cookOf };
 
-  // `span` is what the component actually takes with overlapping applied;
-  // `baseline` is what it would take with everything strictly sequential.
-  return { starts, span, baseline: componentSteps.reduce((sum, s) => sum + s.mins, 0) };
+  // One queue per part, walked from its last step toward its first. Keyed off
+  // the steps themselves so a step orphaned from its component still schedules.
+  const queues = new Map();
+  for (const step of steps) {
+    if (!queues.has(step.component)) queues.set(step.component, { steps: [], i: 0, deadline: endAt });
+    queues.get(step.component).steps.push(step);
+  }
+  for (const q of queues.values()) q.i = q.steps.length - 1;
+
+  const cooks = cookCount(plan);
+  const handsFree = new Array(cooks).fill(endAt); // each cook is free at or before this
+  const load = new Array(cooks).fill(0);          // minutes already given to each
+  const stationFree = new Map();                  // exclusive station -> free before this
+  for (const st of EXCLUSIVE_STATIONS) stationFree.set(st, endAt);
+
+  for (let placed = 0; placed < steps.length; placed++) {
+    // Whichever part currently reaches latest is the one still occupying the
+    // end of the plan, so it gets to claim the next slot going backward.
+    let pick = null;
+    for (const q of queues.values()) {
+      if (q.i < 0) continue;
+      if (!pick || q.deadline > pick.deadline) pick = q;
+    }
+    if (!pick) break;
+
+    const step = pick.steps[pick.i];
+    const stations = stationsForStep(step, byId);
+
+    // Whichever cook can take it latest gets it, so the step lands as close to
+    // its deadline as possible. Ties go to whoever has done least — otherwise
+    // one person quietly ends up doing the whole dish, which is a bad plan even
+    // when the arithmetic works out.
+    let chosen = 0;
+    if (step.hands) {
+      let bestEnd = -Infinity;
+      for (let i = 0; i < cooks; i++) {
+        const candidate = Math.min(pick.deadline, handsFree[i]);
+        if (candidate > bestEnd || (candidate === bestEnd && load[i] < load[chosen])) {
+          bestEnd = candidate;
+          chosen = i;
+        }
+      }
+    }
+
+    let end = pick.deadline;
+    if (step.hands) end = Math.min(end, handsFree[chosen]);
+    for (const st of EXCLUSIVE_STATIONS) {
+      if (stations.has(st)) end = Math.min(end, stationFree.get(st));
+    }
+
+    const start = end - step.mins;
+    starts.set(step.id, start);
+    if (step.hands) {
+      handsFree[chosen] = start;
+      load[chosen] += step.mins;
+      cookOf.set(step.id, chosen);
+    }
+    for (const st of EXCLUSIVE_STATIONS) {
+      if (stations.has(st)) stationFree.set(st, start);
+    }
+    pick.deadline = start;
+    pick.i -= 1;
+  }
+
+  return { starts, cookOf };
 }
 
-// Derives every step's start from the guided backward chains and writes it back
-// onto the steps, so switching to free mode inherits the positions rather than
-// starting from nothing.
-export function applyGuidedSchedule(plan) {
-  const foodUpMinutes = clockToMinutes(foodUpFor(plan));
-  const perComponent = [];
+function earliestStart(steps, starts, fallback) {
+  let earliest = fallback;
+  for (const step of steps) {
+    const start = starts.get(step.id);
+    if (start !== undefined) earliest = Math.min(earliest, start);
+  }
+  return earliest;
+}
 
-  for (const component of plan.components) {
-    const componentSteps = stepsForComponent(plan, component.id);
-    const result = scheduleComponent(componentSteps, foodUpMinutes);
-    for (const step of componentSteps) {
-      const start = result.starts.get(step.id);
-      if (start !== undefined) step.start = start;
-    }
-    perComponent.push({ component, span: result.span, baseline: result.baseline });
+// Derives every step's start and writes it back onto the steps, so switching to
+// free mode inherits the positions rather than starting from nothing.
+//
+// Scheduled relative to a plate-up of 0 (so every start is negative), then
+// shifted once at the end to wherever the anchor says plate-up actually is.
+export function applyGuidedSchedule(plan) {
+  const cooking = plan.steps.filter((s) => !s.ahead);
+  const prep = plan.steps.filter((s) => s.ahead);
+
+  const cookPass = scheduleBackward(cooking, plan, 0);
+  const cookStart = earliestStart(cooking, cookPass.starts, 0);
+
+  // Prep front-loads: everything the student marked "can be done ahead" runs
+  // before any cooking starts. It costs elapsed time — you can't fill the
+  // simmer window with prep that's already done — but doing the mise first is
+  // the discipline this app is named for, and the idle window it opens up is
+  // where cleanup actually goes.
+  const prepPass = scheduleBackward(prep, plan, cookStart);
+  const planStart = earliestStart(prep, prepPass.starts, cookStart);
+
+  const target = clockToMinutes(foodUpFor(plan));
+  const span = -planStart;
+  // "early" pins the START to the moment the window opens; "fixed" pins the END
+  // to the period's plate-up. Same schedule, different place on the clock.
+  const offset = plan.schedule.anchor === "fixed"
+    ? target
+    : (target - plan.schedule.windowMins) + span;
+
+  const byStepId = new Map(plan.steps.map((s) => [s.id, s]));
+  for (const pass of [cookPass, prepPass]) {
+    for (const [id, start] of pass.starts) byStepId.get(id).start = start + offset;
+    for (const [id, cook] of pass.cookOf) byStepId.get(id).cook = cook;
   }
 
-  return perComponent;
+  return { span, prepMins: cookStart - planStart, cookMins: -cookStart };
+}
+
+// When the food actually goes up. Under a fixed anchor that's the period's
+// plate-up time; under "early" it's wherever the plan happens to end, which is
+// the number the student needs on the printout.
+export function resolvedFoodUp(plan) {
+  const target = clockToMinutes(foodUpFor(plan));
+  if (plan.schedule.anchor === "fixed" || plan.steps.length === 0) return target;
+  let end = -Infinity;
+  for (const step of plan.steps) end = Math.max(end, step.start + step.mins);
+  return end === -Infinity ? target : end;
 }
 
 // What the board actually draws. In free mode the student's own starts win.
@@ -340,8 +459,17 @@ export function computeConflicts(plan, ranges) {
     .map((step) => ({ id: step.id, step, range: ranges.get(step.id) }))
     .filter((item) => item.range);
 
-  // One pair of hands. Always real, and the main conflict in the app.
-  flagOverlapping(withRange.filter((item) => item.step.hands), conflicts, "hands");
+  // Hands, checked per cook. Two hands-on steps overlapping is only a clash if
+  // it's the same person doing both — with a group that's exactly what the
+  // extra pairs of hands are for, and warning about it would be nonsense.
+  const perCook = new Map();
+  for (const item of withRange) {
+    if (!item.step.hands) continue;
+    const cook = item.step.cook || 0;
+    if (!perCook.has(cook)) perCook.set(cook, []);
+    perCook.get(cook).push(item);
+  }
+  for (const items of perCook.values()) flagOverlapping(items, conflicts, "hands");
 
   // Only stations marked exclusive warn — currently just the oven.
   for (const station of EXCLUSIVE_STATIONS) {
@@ -352,9 +480,13 @@ export function computeConflicts(plan, ranges) {
   return conflicts;
 }
 
-export function describeConflict(reasons) {
+export function describeConflict(reasons, cooks = 1) {
   const parts = [];
-  if (reasons.has("hands")) parts.push("you can only do one of these at a time");
+  if (reasons.has("hands")) {
+    parts.push(cooks > 1
+      ? "the same person can only do one of these at a time"
+      : "you can only do one of these at a time");
+  }
   for (const station of EXCLUSIVE_STATIONS) {
     if (reasons.has(station)) parts.push(`both need the ${station.toLowerCase()}`);
   }

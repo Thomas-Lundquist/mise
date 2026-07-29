@@ -185,8 +185,7 @@ question is who positioned the blocks:
 
 **Deleting equipment or a bowl that steps point at** — the reference clears and
 the step survives. Losing a step because you tidied the equipment list is never
-the right outcome. (The existing `par` unpairing on step deletion already works
-this way and is the right precedent.)
+the right outcome.
 
 ### 4.4 One board, with free placement as a toggle
 
@@ -226,9 +225,35 @@ rather than a warm-up question.
 
 ## 5. Scheduling and conflicts
 
-- Every component's chain is scheduled backward from the same food-up time, so
-  "these finish together" is true by construction. **Keep this** — it's the best
-  idea in the current build.
+- The plan is scheduled **backward from plate-up**, so "these finish together"
+  is true by construction. **Keep this** — it's the best idea in the build, and
+  it's what forward/as-soon-as-possible scheduling would throw away.
+- **One pair of hands, globally.** Hands-on steps never overlap each other,
+  whichever part of the dish they belong to; unattended steps float freely
+  alongside them. Searing while the rice simmers is competence, not a clash.
+  Components are a grouping for *thinking*, not a scheduling unit — scheduling
+  each component independently against the same plate-up time manufactured the
+  very hands conflicts the app then flagged, which is what this replaces.
+- **Prep front-loads.** Any step the student marks "can be done ahead"
+  (`step.ahead`) runs in a prep block before cooking starts. This costs elapsed
+  time — a simmer window can't absorb prep that's already done — and that's the
+  trade the doctrine is worth: the idle gaps it opens are where cleaning down
+  goes.
+- **Group is a toggle, not a second plan.** `schedule.cooks` (1–`MAX_COOKS`)
+  is how many pairs of hands the scheduler may assume. Same steps, same
+  durations, same backward pass — only the hands constraint relaxes, so a
+  student keeps one solo plan and whoever is managing the kitchen flips it up
+  for the day. The scheduler assigns each hands-on step a `cook`, giving it to
+  whoever can take it latest and breaking ties toward whoever has done least;
+  one person quietly doing the whole dish is a bad plan even when the
+  arithmetic works. Hands conflicts are then checked **per cook** — two people
+  working at once is the entire point of a group, not a clash. Stations don't
+  relax: four cooks still share one oven.
+- **The anchor is a shift, not a direction.** `schedule.anchor` is `early`
+  (plan starts when the cooking window opens, spare time lands at the end) or
+  `fixed` (plan ends on the period's plate-up, as in service). The schedule is
+  identical either way; only its position on the clock moves, so finishing
+  early costs nothing in convergence.
 - Conflicts are **flagged, never auto-resolved.** The app does not decide what a
   student is allowed to schedule. Keep this too.
 - Two conflict types:
@@ -329,9 +354,8 @@ Set once per assignment, via URL parameters on the Canvas embed:
 | Param | Purpose | Default |
 |---|---|---|
 | `recipe` | Prefills recipe name, keys the saved plan | — |
-| `foodUp` | Pins plate-up time, overriding the period picker | period's time |
+| `foodUp` | Pins plate-up time, overriding the period picker. Also starts the plan on the `fixed` anchor (§5) | period's time |
 | `period` | Preselects a period by id | nearest by time of day |
-| `board` | `horizontal` to fall back to the old timeline | vertical |
 | `mode` | `guided` or `free` **starting** state — student may change it (§4.4) | `guided` |
 | `timer` | Planning countdown, minutes | **off** |
 

@@ -28,9 +28,6 @@ const recipePrefill = urlParams.get("recipe") || "";
 const foodUpPrefill = timeParam("foodUp") || timeParam("service"); // ?service= kept as an alias
 const periodPrefill = urlParams.get("period") || null;
 const modePrefill = urlParams.get("mode") === "free" || urlParams.get("mode") === "open" ? "free" : "guided";
-// Vertical timeline, off by default while it's being compared against the
-// horizontal board. Remove the flag once one of them wins.
-const orientation = urlParams.get("board") === "horizontal" ? "horizontal" : "vertical";
 
 const timerParam = urlParams.get("timer");
 const timerMinutes = timerParam === null || timerParam === "" ? DEFAULT_TIMER_MINUTES : Number(timerParam);
@@ -451,7 +448,7 @@ function initBowls() {
 // --- Step 4 ---------------------------------------------------------------
 
 function renderPlanner() {
-  initPlanner(plan, persist, document.getElementById("time-planner"), { orientation });
+  initPlanner(plan, persist, document.getElementById("time-planner"));
 }
 
 // --- Chrome ---------------------------------------------------------------

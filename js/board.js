@@ -6,19 +6,18 @@
 // backward chains; free lets the student set starts directly. Same blocks, same
 // lanes, same conflicts, same print path.
 //
-// Layout note: overlapping blocks are packed into sub-rows rather than drawn on
-// top of each other. The previous build absolutely positioned everything on one
+// Layout note: overlapping blocks are packed into sub-columns rather than drawn
+// on top of each other. An earlier build absolutely positioned everything on one
 // track, so two steps at the same minute painted over one another — labels
 // became unreadable on screen and a step vanished entirely from the printout.
 
-import { STATIONS, PERIODS } from "./config.js";
+import { STATIONS, PERIODS, MAX_COOKS } from "./config.js";
 import {
   resolveSchedule, computeConflicts, describeConflict, planSpan,
-  equipmentById, laneForStep, stepsForComponent, foodUpFor,
+  equipmentById, laneForStep, stepsForComponent, foodUpFor, resolvedFoodUp, cookCount,
   clockToMinutes, minutesToClock, formatDuration,
 } from "./plan.js";
 
-const ROW_H = 32;      // px per stacked sub-row within a lane
 const SNAP = 5;        // free-mode nudge, minutes
 
 function el(tag, className, text) {
@@ -28,7 +27,7 @@ function el(tag, className, text) {
   return node;
 }
 
-// Greedy interval packing: each item goes in the first sub-row whose previous
+// Greedy interval packing: each item goes in the first sub-column whose previous
 // block has already finished. This is what stops blocks from overlapping.
 function packRows(items) {
   const sorted = [...items].sort((a, b) => a.range.start - b.range.start || a.range.end - b.range.end);
@@ -47,7 +46,6 @@ function packRows(items) {
 
 export function renderBoard(plan, ctx, mount) {
   const { persist, rerender } = ctx;
-  const vertical = ctx.orientation === "vertical";
   mount.innerHTML = "";
 
   const byId = equipmentById(plan);
@@ -55,25 +53,18 @@ export function renderBoard(plan, ctx, mount) {
   const conflicts = computeConflicts(plan, ranges);
   const span = planSpan(plan, ranges);
 
-  const foodUp = clockToMinutes(foodUpFor(plan));
-  const leftEdge = Math.min(span.start, foodUp) - 2;
-  const rightEdge = Math.max(span.end, foodUp) + 2;
-  const denom = Math.max(rightEdge - leftEdge, 1);
-
-  function place(node, range) {
-    const leftPct = ((range.start - leftEdge) / denom) * 100;
-    const widthPct = Math.max((range.end - range.start) / denom, 0.005) * 100;
-    node.style.left = `${leftPct}%`;
-    node.style.width = `calc(${widthPct}% - 2px)`;
-  }
+  // Where the food actually goes up. Under an "early" anchor that's wherever
+  // the plan ends, not the period's bell — so it has to come from the resolved
+  // schedule rather than the period table. Already in minutes, unlike foodUpFor.
+  const foodUp = resolvedFoodUp(plan);
 
   mount.appendChild(buildHeader());
-  mount.appendChild(vertical ? buildVerticalTimeline() : buildTimeline());
+  mount.appendChild(buildTimeline());
   mount.appendChild(buildPartBreakdown());
   mount.appendChild(buildConflictSummary());
   mount.appendChild(buildBeforeYouStart());
   mount.appendChild(buildNotesSummary());
-  if (plan.schedule.mode === "guided") mount.appendChild(buildOverlapList());
+  if (plan.schedule.mode === "guided") mount.appendChild(buildIdleList());
 
   // ---------- Header: times and readouts ----------
 
@@ -178,15 +169,71 @@ export function renderBoard(plan, ctx, mount) {
       wrap.appendChild(overrideField);
     }
 
+    wrap.appendChild(buildCooksField());
+    wrap.appendChild(buildAnchorToggle());
+
     // Prints, so a separated sheet still says which period it was for.
     const summary = el("div", "when-summary");
     const period = PERIODS.find((p) => p.id === plan.schedule.periodId);
     const periodName = custom ? "Special day" : (period ? period.label : "");
     summary.textContent =
       `${periodName ? periodName + " · " : ""}${formatDuration(plan.schedule.windowMins)} to cook, ` +
-      `food up by ${minutesToClock(foodUp)}`;
+      `food up at ${minutesToClock(foodUp)}`;
     wrap.appendChild(summary);
 
+    return wrap;
+  }
+
+  // How many pairs of hands the scheduler may assume. The plan underneath is
+  // identical either way — same steps, same durations, same backward pass — so
+  // this is a view of one plan, not a second plan. A student keeps the solo
+  // version; whoever is managing the kitchen flips it up for the day.
+  function buildCooksField() {
+    const wrap = el("div", "field field--narrow no-print");
+    const label = el("label", null, "Who's cooking?");
+    label.setAttribute("for", "board-cooks");
+
+    const select = document.createElement("select");
+    select.id = "board-cooks";
+    for (let n = 1; n <= MAX_COOKS; n++) {
+      const opt = document.createElement("option");
+      opt.value = String(n);
+      opt.textContent = n === 1 ? "Just me" : `${n} of us`;
+      opt.selected = n === cookCount(plan);
+      select.appendChild(opt);
+    }
+    select.addEventListener("change", () => {
+      plan.schedule.cooks = Number(select.value);
+      persist();
+      rerender();
+    });
+
+    wrap.append(label, select);
+    return wrap;
+  }
+
+  // Where the finished schedule sits on the clock. It is only ever a shift —
+  // the plan is built backward either way, so every part still lands together
+  // and nothing is left sitting. Getting out early and cooking well were never
+  // actually in tension; only the anchor moves.
+  function buildAnchorToggle() {
+    const wrap = el("div", "anchor-toggle no-print");
+    const early = plan.schedule.anchor !== "fixed";
+
+    wrap.appendChild(el("span", "anchor-toggle__label",
+      early
+        ? "Finishing as early as you can — spare time lands at the end."
+        : "Timed to plate up exactly on the clock, like service."));
+
+    const btn = el("button", "btn btn--small btn--secondary",
+      early ? "Plate up at a set time instead" : "Finish as early as possible instead");
+    btn.type = "button";
+    btn.addEventListener("click", () => {
+      plan.schedule.anchor = early ? "fixed" : "early";
+      persist();
+      rerender();
+    });
+    wrap.appendChild(btn);
     return wrap;
   }
 
@@ -236,64 +283,9 @@ export function renderBoard(plan, ctx, mount) {
     return wrap;
   }
 
-  // ---------- Timeline ----------
+  // ---------- Blocks ----------
 
-  function buildTimeline() {
-    const wrap = el("div", "timeline");
-    if (plan.steps.length === 0) {
-      wrap.appendChild(el("p", "placeholder-note", "Add some steps and your plan will appear here."));
-      return wrap;
-    }
-
-    wrap.appendChild(buildAxis());
-
-    // "You" lane: every hands-on step, from every part of the dish, because
-    // it's the same one student doing all of it.
-    wrap.appendChild(buildLane("You", null, handsItems()));
-
-    // One row per station, not one per step. The previous build gave every
-    // step its own row, so two things fighting over the oven never visually
-    // collided and identical lane labels repeated down the page.
-    for (const station of STATIONS) {
-      const items = stationItems(station);
-      if (items.length === 0) continue;
-      wrap.appendChild(buildLane(station.label, station, items));
-    }
-
-    return wrap;
-  }
-
-  function buildAxis() {
-    const axis = el("div", "timeline__axis");
-    const stops = 4;
-    for (let i = 0; i <= stops; i++) {
-      axis.appendChild(el("span", "timeline__tick", minutesToClock(leftEdge + (denom * i) / stops)));
-    }
-    return axis;
-  }
-
-  function buildLane(labelText, station, items) {
-    const lane = el("div", "lane");
-
-    const label = el("div", "lane__label");
-    label.appendChild(el("span", "lane__name", labelText));
-    if (station && station.exclusive) {
-      label.appendChild(el("span", "lane__flag", "one at a time"));
-    }
-    lane.appendChild(label);
-
-    const track = el("div", "lane__track");
-    const packed = packRows(items);
-    track.style.height = `${packed.rowCount * ROW_H + 4}px`;
-
-    for (const item of packed.items) {
-      track.appendChild(buildBlock(item));
-    }
-    lane.appendChild(track);
-    return lane;
-  }
-
-  function buildBlock({ step, range, row }, opts = {}) {
+  function buildBlock({ step, range }, opts = {}) {
     const isFree = plan.schedule.mode === "free";
     const reasons = conflicts.get(step.id);
     const isHardest = plan.read.hardestStepId === step.id;
@@ -307,15 +299,10 @@ export function renderBoard(plan, ctx, mount) {
       step.hands ? "block--hands" : "block--unattended",
       reasons ? "block--conflict" : "",
       isHardest ? "block--hardest" : "",
-      opts.vertical ? "block--vertical" : "",
       opts.tiny ? "block--tiny" : "",
     ].filter(Boolean).join(" ");
-    // Vertical positions come from the caller, which has the pixels-per-minute
-    // scale; horizontal packs into fixed-height sub-rows.
-    if (!opts.vertical) {
-      node.style.top = `${row * ROW_H + 2}px`;
-      node.style.height = `${ROW_H - 4}px`;
-    }
+    // Position and size come from the caller, which has the pixels-per-minute
+    // scale.
 
     const timeText = `${minutesToClock(range.start)} · ${step.mins}m`;
     node.appendChild(el("span", "block__label", step.name));
@@ -324,7 +311,7 @@ export function renderBoard(plan, ctx, mount) {
     // Labels get clipped on short blocks, so the full story lives in the
     // title and the accessible name too.
     const detail = [step.name, timeText, isHardest ? "you flagged this as the hardest step" : "",
-      reasons ? describeConflict(reasons) : ""].filter(Boolean).join(" — ");
+      reasons ? describeConflict(reasons, cookCount(plan)) : ""].filter(Boolean).join(" — ");
     node.title = detail;
     if (isFree) {
       node.setAttribute("aria-label", `${detail}. Arrow keys move it, shift and arrow keys change its length.`);
@@ -334,7 +321,6 @@ export function renderBoard(plan, ctx, mount) {
       node.setAttribute("aria-label", detail);
     }
 
-    if (!opts.vertical) place(node, range);
     return node;
   }
 
@@ -356,18 +342,15 @@ export function renderBoard(plan, ctx, mount) {
     });
   }
 
-  // ---------- Vertical timeline ----------
+  // ---------- Timeline ----------
   //
-  // Time runs down the page and lanes become columns. Portrait paper is tall
-  // and narrow, which is the wrong shape for a horizontal time axis: a 2-minute
-  // block in a 30-minute span is ~45px wide and its label truncates to "Pl…".
-  // Vertically that same block gets a full column width for its label and its
-  // height carries the duration instead. It also makes narrow screens work
-  // properly rather than as a compromise — unlimited scroll height is exactly
-  // what a long time axis wants.
-  //
-  // The packing algorithm is unchanged; sub-rows simply become sub-columns.
-  function buildVerticalTimeline() {
+  // Time runs down the page and lanes are columns. This used to be a horizontal
+  // board with time as the x-axis, which was the wrong shape for portrait paper
+  // and narrow screens: a 2-minute block in a 30-minute span was ~45px wide and
+  // its label truncated to "Pl…". Vertically that same block gets a full column
+  // width for its label and its height carries the duration instead, and a long
+  // plan simply scrolls — unlimited height is exactly what a time axis wants.
+  function buildTimeline() {
     const wrap = el("div", "vtimeline");
     if (plan.steps.length === 0) {
       wrap.appendChild(el("p", "placeholder-note", "Add some steps and your plan will appear here."));
@@ -377,14 +360,25 @@ export function renderBoard(plan, ctx, mount) {
     // A fixed cooking window means every plan is the same height, so students
     // learn to read the shape instead of re-orienting each time. The window is
     // the floor; a plan that overruns it grows past it, visibly.
-    const windowStart = foodUp - plan.schedule.windowMins;
+    //
+    // Both edges come from the PERIOD, not from the resolved plate-up. Under an
+    // "early" anchor the plan ends before the bell, and measuring the window off
+    // that would slide the whole grid earlier — drawing dead space above the
+    // plan and hiding the spare time below it, which is the thing finishing
+    // early actually buys.
+    const windowEnd = clockToMinutes(foodUpFor(plan));
+    const windowStart = windowEnd - plan.schedule.windowMins;
     const top = Math.min(windowStart, span.start);
-    const bottom = Math.max(foodUp, span.end);
+    const bottom = Math.max(windowEnd, span.end);
     const totalMins = Math.max(bottom - top, 1);
     const PX_PER_MIN = 9;
     const height = totalMins * PX_PER_MIN;
 
-    const lanes = [{ label: "You", station: null, items: handsItems() }];
+    // Hands lanes first — one when the plan is solo, one per cook otherwise.
+    // Then one lane per station, not one per step: an earlier build gave every
+    // step its own lane, so two things fighting over the oven never visually
+    // collided and identical lane labels repeated across the page.
+    const lanes = cookLanes();
     for (const station of STATIONS) {
       const items = stationItems(station);
       if (items.length > 0) lanes.push({ label: station.label, station, items });
@@ -399,7 +393,7 @@ export function renderBoard(plan, ctx, mount) {
       const head = el("div", "vtimeline__head");
       head.appendChild(el("span", "vtimeline__head-name", lane.label));
       if (lane.station && lane.station.exclusive) {
-        head.appendChild(el("span", "lane__flag", "one at a time"));
+        head.appendChild(el("span", "vtimeline__flag", "one at a time"));
       }
       grid.appendChild(head);
     }
@@ -438,7 +432,7 @@ export function renderBoard(plan, ctx, mount) {
       const packed = packRows(lane.items);
       for (const item of packed.items) {
         const blockHeight = Math.max(item.range.end - item.range.start, 1) * PX_PER_MIN - 2;
-        const node = buildBlock(item, { vertical: true, tiny: blockHeight < 30 });
+        const node = buildBlock(item, { tiny: blockHeight < 30 });
         node.style.top = `${(item.range.start - top) * PX_PER_MIN}px`;
         node.style.height = `${blockHeight}px`;
         node.style.left = `${(item.row / packed.rowCount) * 100}%`;
@@ -452,11 +446,22 @@ export function renderBoard(plan, ctx, mount) {
     return wrap;
   }
 
-  function handsItems() {
+  // Solo, this is the one "You" lane. With a group it splits into one lane per
+  // pair of hands, which is the manager's actual output: who is doing what.
+  function handsItems(cook) {
     return plan.steps
-      .filter((s) => s.hands)
+      .filter((s) => s.hands && (s.cook || 0) === cook)
       .map((s) => ({ step: s, range: ranges.get(s.id) }))
       .filter((item) => item.range);
+  }
+
+  function cookLanes() {
+    const cooks = cookCount(plan);
+    if (cooks === 1) return [{ label: "You", station: null, items: handsItems(0) }];
+    // Empty lanes stay in. A cook with nothing to do is real information for
+    // whoever is running the kitchen, not clutter to hide.
+    return Array.from({ length: cooks }, (_, i) =>
+      ({ label: `Cook ${i + 1}`, station: null, items: handsItems(i) }));
   }
 
   function stationItems(station) {
@@ -466,41 +471,48 @@ export function renderBoard(plan, ctx, mount) {
       .filter((item) => item.range);
   }
 
-  // ---------- Which part sets the start time ----------
+  // ---------- Which part costs you the most ----------
   //
-  // Without this, overlapping something inside a part that isn't the longest
-  // changes no visible number at all: the plan still starts when the longest
-  // part says it does. The student does the exact thing the app is built to
-  // teach and gets no feedback. Per-part give always moves, and it teaches the
-  // more useful idea — that one part is deciding your whole start time.
+  // This used to report each part's elapsed span and name the longest as "what
+  // decides when you start" — true only while parts ran concurrently. They no
+  // longer do: there is one cook, so the parts share a single pair of hands and
+  // their spans overlap, which made every part read as nearly the whole plan.
+  //
+  // What's true in a serial plan is the cook's own time. Hands-on minutes add
+  // up — they are the thing you cannot be doing twice — and they total to the
+  // plan minus the waiting, which is the number in the idle list below.
   function buildPartBreakdown() {
     const wrap = el("div", "part-breakdown");
     if (plan.components.length < 2 || plan.steps.length === 0) return wrap;
 
     const parts = [];
     for (const component of plan.components) {
-      const steps = stepsForComponent(plan, component.id)
-        .map((s) => ranges.get(s.id))
-        .filter(Boolean);
+      const steps = stepsForComponent(plan, component.id);
       if (steps.length === 0) continue;
-      const start = Math.min(...steps.map((r) => r.start));
-      const end = Math.max(...steps.map((r) => r.end));
-      parts.push({ component, length: end - start });
+      let handsMins = 0;
+      let alongMins = 0;
+      for (const step of steps) {
+        if (step.hands) handsMins += step.mins;
+        else alongMins += step.mins;
+      }
+      parts.push({ component, handsMins, alongMins });
     }
     if (parts.length < 2) return wrap;
 
-    const longest = Math.max(...parts.map((p) => p.length));
+    const busiest = Math.max(...parts.map((p) => p.handsMins));
     wrap.appendChild(el("h3", null, "Where your time goes"));
 
     const list = el("ul", "part-breakdown__list");
-    for (const part of parts.sort((a, b) => b.length - a.length)) {
-      const give = longest - part.length;
-      const li = el("li", give === 0 ? "part-breakdown__item part-breakdown__item--critical" : "part-breakdown__item");
+    for (const part of parts.sort((a, b) => b.handsMins - a.handsMins)) {
+      const heaviest = part.handsMins === busiest;
+      const li = el("li", heaviest
+        ? "part-breakdown__item part-breakdown__item--critical"
+        : "part-breakdown__item");
       li.appendChild(el("span", "part-breakdown__name", part.component.name));
-      li.appendChild(el("span", "part-breakdown__length", formatDuration(part.length)));
-      li.appendChild(el("span", "part-breakdown__note", give === 0
-        ? "your longest part — this is what decides when you start"
-        : `${formatDuration(give)} of give`));
+      li.appendChild(el("span", "part-breakdown__length", formatDuration(part.handsMins)));
+      li.appendChild(el("span", "part-breakdown__note",
+        (heaviest ? "the most hands-on part" : "of your hands") +
+        (part.alongMins > 0 ? ` · ${formatDuration(part.alongMins)} cooks by itself` : "")));
       list.appendChild(li);
     }
     wrap.appendChild(list);
@@ -528,7 +540,7 @@ export function renderBoard(plan, ctx, mount) {
         const other = plan.steps.find((s) => s.id === otherId);
         if (!other) continue;
         seen.add(`${stepId}|${otherId}`);
-        lines.push(`"${step.name}" and "${other.name}" — ${describeConflict(reasons)}.`);
+        lines.push(`"${step.name}" and "${other.name}" — ${describeConflict(reasons, cookCount(plan))}.`);
       }
     }
     if (lines.length === 0) return wrap;
@@ -592,96 +604,91 @@ export function renderBoard(plan, ctx, mount) {
     return wrap;
   }
 
-  // ---------- Free-hands windows (guided only) ----------
+  // ---------- Idle time ----------
+  //
+  // This replaces the old "free hands" picker, which asked the student to hunt
+  // for overlaps by hand and then parked steps inside each other. The scheduler
+  // does the interleaving now, so the useful thing to surface is the opposite:
+  // the gaps it could NOT fill. Under prep-first those gaps are real — the mise
+  // is already done, so there is nothing to pull forward — and they are exactly
+  // where cleaning down happens.
+  // Measured across the whole plan, not just between a cook's own first and
+  // last job. Bounding it to their own steps made someone with a single 3-minute
+  // task read as "busy throughout" — the exact opposite of what a manager needs
+  // to see, and it hides the person who has been given nothing to do.
+  function gapsFor(cook) {
+    const busy = handsItems(cook)
+      .map((item) => item.range)
+      .sort((a, b) => a.start - b.start);
 
-  function buildOverlapList() {
-    const wrap = el("div", "overlap-list no-print");
-
-    const windows = plan.steps.filter((s) => !s.hands && !plan.steps.some((o) => o.par === s.id));
-    const paired = plan.steps.filter((s) => s.par != null);
-
-    if (windows.length > 0) {
-      wrap.appendChild(el("h3", null, "Free hands"));
-      wrap.appendChild(el("p", "overlap-list__intro",
-        "While these run by themselves your hands are free. Anything you could be doing then?"));
-      const list = el("div", "window-list");
-      for (const anchor of windows) {
-        const range = ranges.get(anchor.id);
-        if (!range) continue;
-        const btn = el("button", "btn btn--small window-list__btn",
-          `${anchor.name} — ${anchor.mins} min free`);
-        btn.type = "button";
-        btn.addEventListener("click", () => openPicker(anchor, range, wrap));
-        list.appendChild(btn);
-      }
-      wrap.appendChild(list);
+    const gaps = [];
+    let cursor = span.start;
+    for (const range of busy) {
+      if (range.start > cursor) gaps.push({ start: cursor, end: range.start });
+      cursor = Math.max(cursor, range.end);
     }
-
-    if (paired.length > 0) {
-      wrap.appendChild(el("h3", null, "Double-check: can each of these genuinely happen at the same time?"));
-      const list = el("ul");
-      for (const step of paired) {
-        const anchor = plan.steps.find((s) => s.id === step.par);
-        const li = el("li");
-        li.appendChild(el("span", null,
-          anchor ? `"${step.name}" runs during "${anchor.name}"` : step.name));
-        const undo = el("button", "btn btn--small btn--secondary", "Undo");
-        undo.type = "button";
-        undo.addEventListener("click", () => {
-          step.par = null;
-          persist();
-          rerender();
-        });
-        li.appendChild(undo);
-        list.appendChild(li);
-      }
-      wrap.appendChild(list);
-    }
-
-    return wrap;
+    if (cursor < span.end) gaps.push({ start: cursor, end: span.end });
+    return gaps;
   }
 
-  function openPicker(anchor, anchorRange, container) {
-    const existing = container.querySelector(".picker");
-    if (existing) existing.remove();
+  function buildIdleList() {
+    const wrap = el("div", "idle-list");
+    if (plan.steps.length === 0) return wrap;
+    const cooks = cookCount(plan);
 
-    const panel = el("div", "picker no-print");
-    panel.appendChild(el("p", "picker__prompt",
-      `"${anchor.name}" runs for ${anchor.mins} minutes without you. What could you be doing?`));
+    const lanes = [];
+    for (let i = 0; i < cooks; i++) {
+      const gaps = gapsFor(i);
+      lanes.push({
+        label: cooks === 1 ? "You" : `Cook ${i + 1}`,
+        gaps,
+        total: gaps.reduce((sum, g) => sum + (g.end - g.start), 0),
+        working: handsItems(i).length > 0,
+      });
+    }
+    if (lanes.length === 0) return wrap;
 
-    const windowMins = anchorRange.end - anchorRange.start;
-    const candidates = plan.steps.filter((s) => {
-      if (!s.hands || s.par != null || s.id === anchor.id) return false;
-      if (s.mins > windowMins) return false;
-      const natural = ranges.get(s.id);
-      return natural && natural.start >= anchorRange.start;
-    });
-
-    if (candidates.length === 0) {
-      panel.appendChild(el("p", "picker__empty", "Nothing later in your plan fits in this window."));
-    } else {
-      const list = el("div", "picker__list");
-      const componentName = new Map(plan.components.map((c) => [c.id, c.name]));
-      for (const candidate of candidates) {
-        const suffix = plan.components.length > 1 ? ` — ${componentName.get(candidate.component) || ""}` : "";
-        const btn = el("button", "btn btn--small", `${candidate.name} (${candidate.mins} min)${suffix}`);
-        btn.type = "button";
-        btn.addEventListener("click", () => {
-          candidate.par = anchor.id;
-          persist();
-          rerender();
-        });
-        list.appendChild(btn);
-      }
-      panel.appendChild(list);
+    const total = lanes.reduce((sum, l) => sum + l.total, 0);
+    if (total === 0) {
+      wrap.appendChild(el("h3", null, cooks === 1
+        ? "Your hands are busy the whole time"
+        : "Nobody has a spare minute"));
+      wrap.appendChild(el("p", "idle-list__intro",
+        "There's no gap in this plan to clean down in. That's worth knowing before " +
+        "you start — you'll be washing up after the bell."));
+      return wrap;
     }
 
-    const close = el("button", "btn btn--small btn--secondary", "Never mind");
-    close.type = "button";
-    close.addEventListener("click", () => panel.remove());
-    panel.appendChild(close);
+    wrap.appendChild(el("h3", null, cooks === 1
+      ? `You're waiting for ${formatDuration(total)}`
+      : `${formatDuration(total)} of waiting between you`));
+    wrap.appendChild(el("p", "idle-list__intro",
+      cooks === 1
+        ? "Your hands are free in these gaps while something else cooks. This is when " +
+          "you wash up, wipe down and get plates ready — not at the end."
+        : "Hands free in these gaps while something else cooks. This is who cleans " +
+          "down, and when — not everyone at the bell."));
 
-    container.appendChild(panel);
+    const list = el("ul", "idle-list__items");
+    for (const lane of lanes) {
+      const prefix = cooks === 1 ? "" : `${lane.label} — `;
+      if (!lane.working) {
+        list.appendChild(el("li", "idle-list__spare",
+          `${prefix}nothing to do — give them something`));
+        continue;
+      }
+      if (lane.gaps.length === 0) {
+        list.appendChild(el("li", null, `${prefix}busy throughout`));
+        continue;
+      }
+      for (const gap of lane.gaps) {
+        list.appendChild(el("li", null,
+          `${prefix}${minutesToClock(gap.start)} – ${minutesToClock(gap.end)} · ` +
+          formatDuration(gap.end - gap.start)));
+      }
+    }
+    wrap.appendChild(list);
+    return wrap;
   }
 }
 

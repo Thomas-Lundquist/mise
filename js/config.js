@@ -78,6 +78,13 @@ export const CUSTOM_EQUIPMENT_STATION = "Prep";
 
 export const DEFAULT_BOWL_COUNT = 3;
 
+// How many people can share one plan. The sheet is always a solo plan first —
+// that's the artifact a student keeps and reuses — and group is a toggle over
+// the same steps, for whoever is managing the kitchen that day. Raising this
+// changes nothing in the plan itself, only how many pairs of hands the
+// scheduler is allowed to assume.
+export const MAX_COOKS = 5;
+
 // A period is 10 minutes of intro, 70 minutes of cooking, 10 minutes of clean.
 // The cooking window is the only number the plan is actually measured against,
 // and it's the same in every period, all year.

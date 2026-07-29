@@ -29,9 +29,23 @@ is what steps can use in Step 4, bowls from Step 3 attach to steps, and Step 1's
    works inside the nested Canvas iframe.
 
 The timeline runs **vertically** — time down the page, lanes as columns, which
-suits portrait paper and narrow screens. The old horizontal board is still
-reachable via `?board=horizontal` and should be deleted once vertical has been
-used in anger.
+suits portrait paper and narrow screens.
+
+The time plan is an **output, not a puzzle**: the student says what the steps
+are, how long each takes, whether their hands are on it, and whether it can be
+done ahead — and the schedule falls out. It's built backward from plate-up with
+**one pair of hands**, so hands-on steps never overlap while unattended ones run
+alongside. Steps marked "can be done ahead" front-load into a prep block. A
+toggle on the board decides where the finished plan sits on the clock: finishing
+**as early as possible** (spare time at the end, for cleaning down and eating)
+or **plating up at a set time**, as in service.
+
+A second toggle sets **how many of you are cooking** (up to five). It's the same
+plan either way — the sheet a student keeps is always the solo one — but raising
+it splits the "You" lane into one lane per cook and shows who does what, which
+is what the day's kitchen manager actually needs. The oven stays shared however
+many people are standing at it, and the board says plainly when someone has been
+given nothing to do.
 
 Work is saved to **sessionStorage, not localStorage** — these are shared
 Chromebooks and a student's plan shouldn't outlive their session on the
@@ -74,7 +88,6 @@ Per-assignment settings go on the embed URL:
 | `?period=` | Preselects a period by id |
 | `?timer=` | Planning countdown in minutes (off by default) |
 | `?mode=free` | Start on free placement instead of guided |
-| `?board=horizontal` | Fall back to the old horizontal timeline |
 
 ## Deployment
 

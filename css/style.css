@@ -29,7 +29,6 @@
   --gap: 1rem;
   /* Width of the lane-label column on the board. The time axis lives in the
      same grid, so it can never drift out of alignment with the lanes. */
-  --lane-label-w: 120px;
 
   --font-display: "Roboto Slab", Georgia, serif;
   --font-body: "Work Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -290,6 +289,34 @@ input[type="time"] {
   font-size: 0.8rem;
   color: var(--steel);
   min-height: 1.1em; /* reserve the line so enabling the button doesn't reflow */
+}
+
+/* "Can be done ahead" — the one judgement call that drives the prep block, so
+   the box and its label are a proper 44px target rather than a stray tickbox. */
+.ahead-field__row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+}
+
+.ahead-field__row input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+  flex: none;
+  margin: 0;
+}
+
+.ahead-field__label {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.ahead-field .form-hint {
+  min-height: 0;
 }
 
 .chip {
@@ -812,62 +839,8 @@ input[type="time"] {
   letter-spacing: 0.03em;
 }
 
-/* The timeline is a two-column grid: lane labels, then tracks. The axis lives
-   in the track column, so it stays aligned with the blocks it labels no matter
-   how wide the labels get. The previous build hard-coded a left margin, which
-   desynced from the lanes as soon as they wrapped at narrow widths. */
-.timeline {
-  display: grid;
-  grid-template-columns: var(--lane-label-w) 1fr;
-  gap: 0.35rem 0.6rem;
-  align-items: center;
-  margin-bottom: 1.25rem;
-}
-
-.timeline__axis {
-  grid-column: 2;
-  display: flex;
-  justify-content: space-between;
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  font-size: 0.68rem;
-  color: var(--steel);
-}
-
-/* Lanes contribute their label and track cells straight to the grid above. */
-.lane {
-  display: contents;
-}
-
-.lane__label {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  font-family: var(--font-mono);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: var(--steel);
-}
-
-.lane__flag {
-  font-family: var(--font-body);
-  font-weight: 400;
-  text-transform: none;
-  letter-spacing: normal;
-  font-size: 0.62rem;
-  color: var(--sear);
-}
-
-.lane__track {
-  position: relative;
-  background: var(--card-bg);
-  min-height: 36px;
-}
-
 /* Blocks are absolutely positioned within their lane, and stacked into
-   sub-rows by board.js when they overlap in time — two steps at the same
+   sub-columns by board.js when they overlap in time — two steps at the same
    minute used to paint over each other, which made labels unreadable and
    silently dropped a step from the printed page. */
 .block {
@@ -885,10 +858,10 @@ input[type="time"] {
   font-family: inherit;
 }
 
+/* Wraps rather than truncates: a block's height carries its duration, so a
+   label has the full column width to use and usually the room to use it. */
 .block__label {
   overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
   font-weight: 600;
 }
 
@@ -945,102 +918,6 @@ button.block:focus-visible {
   right: 2px;
   font-size: 0.7rem;
   line-height: 1.4;
-}
-
-.picker {
-  flex: 1 1 100%;
-  border: 1px solid var(--line);
-  background: var(--paper);
-  padding: 0.75rem;
-  margin-top: 0.25rem;
-}
-
-.picker__prompt {
-  margin: 0 0 0.5rem;
-  font-weight: 600;
-}
-
-.picker__list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.picker__empty {
-  color: var(--steel);
-  font-style: italic;
-  margin: 0 0 0.5rem;
-}
-
-.window-notes {
-  margin-top: 0.75rem;
-  padding-top: 0.75rem;
-  border-top: 1px dashed var(--line);
-}
-
-.window-notes__label {
-  font-size: 0.85rem;
-  font-weight: 600;
-  margin: 0 0 0.4rem;
-}
-
-.window-notes__list {
-  list-style: none;
-  margin: 0 0 0.5rem;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-
-.window-notes__list li {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 0.9rem;
-  border-bottom: 1px dashed var(--line);
-  padding: 0.25rem 0;
-}
-
-.window-notes__remove {
-  border: none;
-  background: transparent;
-  color: var(--steel);
-  font-size: 1rem;
-  line-height: 1;
-  cursor: pointer;
-  padding: 0.15rem 0.35rem;
-  min-width: 28px;
-  min-height: 28px;
-}
-
-.window-notes__remove:hover {
-  background: var(--line);
-  color: var(--ink);
-}
-
-.overlap-list h3 {
-  font-size: 0.85rem;
-}
-
-.overlap-list ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.overlap-list li {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  border-bottom: 1px solid var(--line);
-  padding: 0.3rem 0;
-  font-size: 0.9rem;
 }
 
 .prep-list {
@@ -1333,7 +1210,51 @@ footer code {
   margin: 0;
 }
 
-/* ---------- Vertical timeline (behind ?board=vertical) ---------- */
+/* Where the schedule sits on the clock: finish early, or plate up on time.
+   Same shape as the guided/free toggle because it is the same kind of choice —
+   a switch that reframes the whole board rather than editing one step. */
+.anchor-toggle {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  flex: 1 1 100%;
+  margin-top: 0.5rem;
+}
+
+.anchor-toggle__label {
+  font-size: 0.85rem;
+  color: var(--steel);
+}
+
+/* ---------- Idle time ---------- */
+
+.idle-list:not(:empty) {
+  margin-bottom: 1.25rem;
+}
+
+.idle-list__intro {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  color: var(--steel);
+}
+
+.idle-list__items {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8rem;
+}
+
+/* A cook who has been given nothing at all. Worth more than a grey line —
+   it's the most common thing wrong with a group plan. */
+.idle-list__spare {
+  color: var(--sear);
+  font-weight: 700;
+}
+
+/* ---------- Timeline ---------- */
 
 .vtimeline {
   --vtime-gutter: 3.2rem;
@@ -1361,6 +1282,16 @@ footer code {
   font-size: 0.68rem;
   font-weight: 700;
   color: var(--steel);
+}
+
+/* Sits inside a lane heading, so it opts back out of the heading's mono caps. */
+.vtimeline__flag {
+  font-family: var(--font-body);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 0.62rem;
+  color: var(--sear);
 }
 
 .vtimeline__corner {
@@ -1405,17 +1336,6 @@ footer code {
     rgba(184, 69, 47, 0.09) 0 6px,
     transparent 6px 12px
   );
-}
-
-/* Height carries the duration here, so the label gets the full column width
-   instead of being squeezed into a few pixels of a horizontal axis. */
-.block--vertical {
-  white-space: normal;
-}
-
-.block--vertical .block__label {
-  white-space: normal;
-  overflow: hidden;
 }
 
 /* A 2-minute block is only ~18px tall, which can't hold a stacked name and
@@ -1510,27 +1430,6 @@ footer code {
   color: var(--steel);
 }
 
-/* ---------- Free-hands windows ---------- */
-
-.overlap-list__intro {
-  margin: 0 0 0.5rem;
-  font-size: 0.85rem;
-  color: var(--steel);
-}
-
-.window-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  margin-bottom: 0.75rem;
-}
-
-.window-list__btn {
-  background: rgba(217, 195, 106, 0.25);
-  border-color: var(--ticket);
-  color: var(--ink);
-}
-
 .prep-list__for {
   margin-top: 0.3rem;
   font-size: 0.75rem;
@@ -1552,29 +1451,7 @@ footer code {
 
 /* ---------- Responsive ---------- */
 
-/* Below this the lane label column costs more than it's worth, so labels sit
-   above their track and the axis spans the full width — still aligned, because
-   both live in the same grid. */
 @media (max-width: 620px) {
-  .timeline {
-    grid-template-columns: 1fr;
-    gap: 0.15rem;
-  }
-
-  .timeline__axis {
-    grid-column: 1;
-  }
-
-  .lane__label {
-    flex-direction: row;
-    /* The base rule centres on the column axis; once this is a row that would
-       centre the label horizontally, away from the track it belongs to. */
-    justify-content: flex-start;
-    align-items: baseline;
-    gap: 0.4rem;
-    margin-top: 0.5rem;
-  }
-
   .step-row__controls {
     margin-left: 0;
     width: 100%;
@@ -1684,21 +1561,25 @@ footer code {
     padding-bottom: 0.25rem;
   }
 
-  .timeline__axis {
+  .vtimeline__head,
+  .vtimeline__tick {
     color: #000;
   }
 
-  .lane__label {
+  .vtimeline__flag {
     color: #000;
   }
 
-  .lane__flag {
-    color: #000;
-  }
-
-  .lane__track {
+  .vtimeline__track {
     background: #fff;
     border: 1px solid #000;
+  }
+
+  /* Faint on screen is invisible on paper, and these lines are what lets a
+     block's position be read without tracing back to the clock gutter. */
+  .vtimeline__rule {
+    background: #000;
+    opacity: 0.25;
   }
 
   .block {

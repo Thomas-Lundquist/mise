@@ -26,7 +26,7 @@ function handsLabel(hands) {
   return hands ? "Hands on it" : "Runs by itself";
 }
 
-export function initPlanner(plan, persist, container, options = {}) {
+export function initPlanner(plan, persist, container) {
   // Transient UI state — deliberately not persisted.
   let pendingDeleteComponentId = null;
 
@@ -55,7 +55,7 @@ export function initPlanner(plan, persist, container, options = {}) {
     if (view === "board" && plan.steps.length > 0) {
       const mount = el("div");
       container.appendChild(mount);
-      renderBoard(plan, { persist, rerender, orientation: options.orientation }, mount);
+      renderBoard(plan, { persist, rerender }, mount);
     } else if (view === "steps" && plan.components.length > 0) {
       container.appendChild(buildStepsView());
     } else {
@@ -550,19 +550,13 @@ export function initPlanner(plan, persist, container, options = {}) {
     toggleField.appendChild(el("span", null, "While this happens, are you…"));
     const { group } = buildHandsToggle((value) => {
       step.hands = value;
-      // A step that's no longer unattended can't host a free-hands window,
-      // and one that's no longer hands-on can't sit inside someone else's.
-      if (value) {
-        for (const other of plan.steps) if (other.par === step.id) other.par = null;
-      } else {
-        step.par = null;
-      }
       persist();
       rerender();
     }, step.hands);
     toggleField.appendChild(group);
     wrap.appendChild(toggleField);
 
+    wrap.appendChild(buildAheadField(step));
     wrap.appendChild(buildEquipmentPicker(step));
     wrap.appendChild(buildBowlPicker(step));
 
@@ -581,6 +575,36 @@ export function initPlanner(plan, persist, container, options = {}) {
     noteField.append(noteLabel, noteInput);
     wrap.appendChild(noteField);
 
+    return wrap;
+  }
+
+  // The mise en place judgement itself: what can be ready before you start?
+  // Ticking this pulls the step into the prep block that runs before any
+  // cooking, which is what stops the schedule chopping parsley mid-sauce.
+  function buildAheadField(step) {
+    const wrap = el("div", "field ahead-field");
+    const id = `step-ahead-${step.id}`;
+
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.id = id;
+    box.checked = Boolean(step.ahead);
+    box.addEventListener("change", () => {
+      step.ahead = box.checked;
+      persist();
+      rerender();
+    });
+
+    const label = el("label", "ahead-field__label", "Can be done ahead");
+    label.setAttribute("for", id);
+
+    const row = el("div", "ahead-field__row");
+    row.append(box, label);
+    wrap.appendChild(row);
+    wrap.appendChild(el("p", "form-hint",
+      "Tick this if it can be ready before you start cooking — chopping, measuring, " +
+      "filling bowls. Leave it clear for anything that has to happen at its place in " +
+      "the order, like fluffing rice just before it goes on the plate."));
     return wrap;
   }
 
