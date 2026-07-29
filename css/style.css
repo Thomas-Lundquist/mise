@@ -1486,6 +1486,12 @@ footer code {
 
 /* ---------- Print ---------- */
 
+/* Letter paper (11") at 96 css-px/in, 0.5in margins → 960px printable height.
+   The beforeprint JS handler uses this same value to compute the zoom factor. */
+@page {
+  margin: 0.5in;
+}
+
 @media print {
   .no-print,
   #storage-warning,
@@ -1522,6 +1528,21 @@ footer code {
   /* Sections 01-03 fit together on page one; the time plan is dense enough
      on its own to deserve a page to itself rather than being squeezed to fit. */
   #section-time {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  /* The visual board (header readouts + timeline grid) scales as a unit via
+     the beforeprint zoom handler. break-inside: avoid keeps the browser from
+     splitting it mid-timeline before the zoom has been applied. */
+  .board-page {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Supporting text (breakdown, conflicts, bowls, notes) starts its own page
+     so the scaled board isn't crowded by prose that can breathe on its own. */
+  .board-support {
     break-before: page;
     page-break-before: always;
   }

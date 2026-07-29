@@ -20,6 +20,30 @@ import {
 
 const SNAP = 5;        // free-mode nudge, minutes
 
+// Scale the time-plan section to fit one printed page. Runs once per page
+// load; renderBoard re-enters this file on every rerender so the listener
+// must live outside that function.
+(function () {
+  let prevZoom = "";
+  window.addEventListener("beforeprint", () => {
+    const page = document.querySelector(".board-page");
+    if (!page) return;
+    // Letter paper (11") at 96 css-px/in, minus 0.5in top + 0.5in bottom
+    // margins = 960px printable height. Matches the @page rule in style.css.
+    const PRINTABLE_H = 960;
+    const h = page.scrollHeight;
+    if (h > PRINTABLE_H) {
+      prevZoom = page.style.zoom;
+      page.style.zoom = (PRINTABLE_H / h).toFixed(4);
+    }
+  });
+  window.addEventListener("afterprint", () => {
+    const page = document.querySelector(".board-page");
+    if (page) page.style.zoom = prevZoom;
+    prevZoom = "";
+  });
+}());
+
 function el(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -58,13 +82,18 @@ export function renderBoard(plan, ctx, mount) {
   // schedule rather than the period table. Already in minutes, unlike foodUpFor.
   const foodUp = resolvedFoodUp(plan);
 
-  mount.appendChild(buildHeader());
-  mount.appendChild(buildTimeline());
-  mount.appendChild(buildPartBreakdown());
-  mount.appendChild(buildConflictSummary());
-  mount.appendChild(buildBeforeYouStart());
-  mount.appendChild(buildNotesSummary());
-  if (plan.schedule.mode === "guided") mount.appendChild(buildIdleList());
+  const boardPage = el("div", "board-page");
+  boardPage.appendChild(buildHeader());
+  boardPage.appendChild(buildTimeline());
+  mount.appendChild(boardPage);
+
+  const boardSupport = el("div", "board-support");
+  boardSupport.appendChild(buildPartBreakdown());
+  boardSupport.appendChild(buildConflictSummary());
+  boardSupport.appendChild(buildBeforeYouStart());
+  boardSupport.appendChild(buildNotesSummary());
+  if (plan.schedule.mode === "guided") boardSupport.appendChild(buildIdleList());
+  mount.appendChild(boardSupport);
 
   // ---------- Header: times and readouts ----------
 
@@ -371,7 +400,11 @@ export function renderBoard(plan, ctx, mount) {
     const top = Math.min(windowStart, span.start);
     const bottom = Math.max(windowEnd, span.end);
     const totalMins = Math.max(bottom - top, 1);
-    const PX_PER_MIN = 9;
+    // Ensure the shortest step always gets at least 44px — enough for a stacked
+    // label + time line without clipping. No upper cap: the beforeprint zoom
+    // scales the board down to fit the page, so a tall board is fine on screen.
+    const shortestMins = plan.steps.reduce((min, s) => Math.min(min, s.mins), Infinity);
+    const PX_PER_MIN = Math.max(9, Math.ceil(44 / shortestMins));
     const height = totalMins * PX_PER_MIN;
 
     // Hands lanes first — one when the plan is solo, one per cook otherwise.
