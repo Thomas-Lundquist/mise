@@ -20,27 +20,31 @@ import {
 
 const SNAP = 5;        // free-mode nudge, minutes
 
-// Scale the time-plan section to fit one printed page. Runs once per page
-// load; renderBoard re-enters this file on every rerender so the listener
-// must live outside that function.
+// Fit the time-plan board to one printed page by re-rendering at a compressed
+// PX_PER_MIN rather than scaling the whole element with zoom. Zoom shrinks
+// text along with geometry; a lower px/min keeps fonts at native size and only
+// compresses the row heights. State is stored by renderBoard on every normal
+// render so the handlers here can re-invoke it at print density.
+let _printRenderState = null;
+
 (function () {
-  let prevZoom = "";
   window.addEventListener("beforeprint", () => {
-    const page = document.querySelector(".board-page");
-    if (!page) return;
-    // Letter paper (11") at 96 css-px/in, minus 0.5in top + 0.5in bottom
-    // margins = 960px printable height. Matches the @page rule in style.css.
+    if (!_printRenderState) return;
+    const { plan, ctx, mount, totalMins, naturalPxPerMin } = _printRenderState;
+    // Letter paper (11") at 96 css-px/in, 0.5in margins → 960px printable
+    // height. Reserve ~80px for the lane-header row; the rest goes to tracks.
     const PRINTABLE_H = 960;
-    const h = page.scrollHeight;
-    if (h > PRINTABLE_H) {
-      prevZoom = page.style.zoom;
-      page.style.zoom = (PRINTABLE_H / h).toFixed(4);
+    const CHROME_H = 80;
+    const availableH = PRINTABLE_H - CHROME_H;
+    if (totalMins * naturalPxPerMin > availableH) {
+      const fitPxPerMin = Math.max(3, availableH / totalMins);
+      renderBoard(plan, ctx, mount, fitPxPerMin);
     }
   });
   window.addEventListener("afterprint", () => {
-    const page = document.querySelector(".board-page");
-    if (page) page.style.zoom = prevZoom;
-    prevZoom = "";
+    if (!_printRenderState) return;
+    const { plan, ctx, mount } = _printRenderState;
+    renderBoard(plan, ctx, mount);
   });
 }());
 
@@ -68,7 +72,7 @@ function packRows(items) {
   return { items: sorted, rowCount: Math.max(1, rowEnds.length) };
 }
 
-export function renderBoard(plan, ctx, mount) {
+export function renderBoard(plan, ctx, mount, forcePxPerMin) {
   const { persist, rerender } = ctx;
   mount.innerHTML = "";
 
@@ -400,11 +404,15 @@ export function renderBoard(plan, ctx, mount) {
     const top = Math.min(windowStart, span.start);
     const bottom = Math.max(windowEnd, span.end);
     const totalMins = Math.max(bottom - top, 1);
-    // Ensure the shortest step always gets at least 44px — enough for a stacked
-    // label + time line without clipping. No upper cap: the beforeprint zoom
-    // scales the board down to fit the page, so a tall board is fine on screen.
+    // Ensure the shortest step always gets at least 44px on screen — enough
+    // for a stacked label + time line without clipping. Print uses a separate
+    // compressed density computed in the beforeprint handler.
     const shortestMins = plan.steps.reduce((min, s) => Math.min(min, s.mins), Infinity);
-    const PX_PER_MIN = Math.max(9, Math.ceil(44 / shortestMins));
+    const naturalPxPerMin = Math.max(9, Math.ceil(44 / shortestMins));
+    const PX_PER_MIN = forcePxPerMin != null ? forcePxPerMin : naturalPxPerMin;
+    if (forcePxPerMin == null) {
+      _printRenderState = { plan, ctx, mount, totalMins, naturalPxPerMin };
+    }
     const height = totalMins * PX_PER_MIN;
 
     // Hands lanes first — one when the plan is solo, one per cook otherwise.
