@@ -89,6 +89,60 @@ in silently. It would also shift the golden makespan / cook-minute fixtures in
 tests/scheduler.test.js. Belongs in its own scheduler ticket once the teacher decides.
 Resolved: <teacher fills this in>
 
+## T6 — filler equipment capacity is enforced only for the sink, and filler intervals are invisible to the capacity invariant
+Asked: 2026-07-30 (surfaced during T6 review against 04)
+Context: 04-scheduler-spec.md Stage 4c requires a candidate filler to have "no equipmentId, or
+that equipment has free capacity across [cursor, cursor + durationMin) counting other fillers
+too" — i.e. ANY equipment id, generically. `js/fillers.js:158` (`choose`) only enforces this for
+the sink (`if (c.equipmentId === 'sink' && !sinkFree(...)) continue;`), yet generic filler tasks
+may carry a non-sink `equipmentId` (03-data-model.md line 57; read at js/fillers.js:79). Such a
+filler is placed with NO capacity check, so it can exceed that equipment's capacity — a direct
+divergence from the spec. Cooking steps (js/scheduler.js:182-189) and the sink across cooks
+(js/fillers.js:90-95) are correct; only non-sink filler equipment is unguarded.
+Second, related, blind spot: `fillGaps` returns `{ ...schedule, cooks }` and never adds filler
+intervals to `equipmentUse` (js/fillers.js:128). 09-test-plan.md Part 1 invariant 3 ("equipment
+capacity never exceeded") iterates over the schedule's intervals; if the test reads
+`schedule.equipmentUse`, filler equipment use is not present, so the invariant cannot catch the
+divergence above — it is unguarded by BOTH construction and test.
+Assumption used to keep moving: unchanged for T6. In every current fixture fillers are sink-only
+(derived washables) or equipment-free, so the path is unreached. Two options for a later ticket:
+(a) if fillers are sink-only by design, add that to 04's "Known limitations" and drop the generic
+clause from 4c; (b) otherwise generalize `choose`/`sinkFree` to any equipment id AND have the
+invariant-3 test synthesize filler intervals (not just cooking ones), or it will stay blind.
+Resolved: <teacher fills this in>
+
+## T7 — three under-specified points in the Stage 5 warning table
+Asked: 2026-07-30 (surfaced during T7)
+Context: 04-scheduler-spec.md Stage 5 gives the eight warning codes and messages, but leaves
+three details unstated. `js/warnings.js` (`checkPlan`) resolved each conservatively rather than
+inventing behaviour; none changes an existing test or module.
+1. SOLO_CROWD "fewer than 2 steps ever run at the same time" — the spec never says which window a
+   step occupies for the overlap test. A passive step releases its cook after ~1 min (`endMin`) but
+   keeps cooking until `runsUntilMin`. Assumption used: overlap uses the full elapsed window
+   `[startMin, runsUntilMin)`, so a simmer running while a cook chops counts as two steps running at
+   once — that IS the parallelism the lesson teaches. Using the cook-hold window `[startMin, endMin)`
+   instead would make almost every passive-heavy plan trip SOLO_CROWD, which reads wrong.
+2. Step name in messages (LONG_ACTIVE) — the table writes "on '<step>'" without saying label vs
+   shortLabel. Assumption used: `shortLabel`, the name the student sees in the timeline block.
+3. UNBOWLED offending ids — the Warning schema (03-data-model.md) only has a `stepIds` field, but the
+   offending items here are ingredients, not steps. Assumption used: put the ingredient ids in
+   `stepIds` (the sole id-carrier) so a later UI can highlight them; the alternative is an empty array
+   and no way to point at the problem.
+Resolved: <teacher fills this in>
+
+## T7 — checkPlan must tolerate a missing / non-ok schedule
+Asked: 2026-07-30 (surfaced during T7)
+Context: the signature is `checkPlan(pack, plan, schedule)`, but a schedule is not always available:
+`buildSchedule` THROWS on an untagged step (js/scheduler.js:139) and RETURNS `{ ok:false, warnings:[CYCLE] }`
+on a cycle (js/scheduler.js:125). So the caller may hold no usable schedule exactly when the two
+structural errors it must report are present. Stage 5 does not spell out this coupling.
+Assumption used to keep moving: UNTAGGED and UNBOWLED are derived straight from pack+plan (so they hold
+with `schedule` undefined); CYCLE is read back out of a `{ ok:false }` schedule's `warnings`; LONG_ACTIVE
+is tag-only so it also needs no schedule; and the four makespan-dependent warns (OVER_PERIOD, IDLE_HEAVY,
+FAR_FROM_FLOOR, SOLO_CROWD) run only when `schedule.ok === true`. Output order is all errors then all warns,
+each group in the Stage-5 table order, matching T12's "warnings render in severity order".
+Resolved: <teacher fills this in>
+
 ## Manual test log
 
 (Dated results from `09-test-plan.md` Part 4 go here.)
