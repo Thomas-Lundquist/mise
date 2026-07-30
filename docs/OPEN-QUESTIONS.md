@@ -143,6 +143,24 @@ FAR_FROM_FLOOR, SOLO_CROWD) run only when `schedule.ok === true`. Output order i
 each group in the Stage-5 table order, matching T12's "warnings render in severity order".
 Resolved: <teacher fills this in>
 
+## T9 — student shell handles both #p= and #pf=, and sanitizes the hosted filename
+Asked: 2026-07-30 (surfaced during T9)
+Context: docs/05 frames T9's damaged-link handling around a hash that carries the pack, and the
+T8 entry above establishes that the only realistic pack (the example fixture) encodes to ~11,667
+chars — nearly 2x the 6000 limit — so `#pf=<filename>.json` hosted under /fixtures/ is the
+*primary* load path, not the exception. So `index.html` (`loadPackFromHash`) implements BOTH
+`#p=<encoded>` (via codec.decodePack) and `#pf=<filename>.json` (via a relative `fetch`), which is
+what makes "a pack URL loads" verifiable with the real fixture. Non-relative fetch stays forbidden;
+this fetch is relative.
+Assumption used to keep moving: (1) any of missing hash / unknown key / decode failure / fetch or
+JSON-parse failure / `validatePack` failure collapses to the single "This link is damaged" screen —
+docs/05 only specifies the message for a missing/damaged hash, so an invalid-but-decodable pack is
+folded in since the student can't fix it either. (2) The `#pf=` filename is restricted to
+`^[\w.-]+\.json$` with no `..`, and always resolved as `fixtures/<name>` — the spec names the
+`/fixtures/` directory but not a guard against a crafted filename escaping it. Revisit if a later
+ticket needs invalid packs distinguished from damaged links, or a different hosted-file location.
+Resolved: <teacher fills this in>
+
 ## Manual test log
 
 (Dated results from `09-test-plan.md` Part 4 go here.)

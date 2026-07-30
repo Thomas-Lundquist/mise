@@ -1,6 +1,225 @@
 /* css/app.css — screen styles for Mise Planner.
-   The :root design tokens and the app shell are added in T9 (see docs/02-conventions.md).
-   Kept empty in T1 so the file exists without front-running later tickets. */
+   T9 adds the :root design tokens and the student-flow shell below; the T8 .author block
+   further down is left untouched and now inherits the real palette from these tokens. */
+
+/* ── Design tokens (docs/02-conventions.md) — the only palette and type sources ──────── */
+:root {
+  --ink:      #16181A;  /* text, rules, marker */
+  --paper:    #F6F6F3;  /* page background — cool, not cream */
+  --panel:    #FFFFFF;  /* cards, inputs */
+  --steel:    #B9BFC4;  /* borders, dividers, disabled */
+  --active:   #0E5C54;  /* active step blocks — hands busy */
+  --passive:  #E9D48A;  /* passive step blocks — masking tape */
+  --filler:   #8A9199;  /* side tasks, secondary text */
+  --alert:    #A8321E;  /* warnings only, never decoration */
+
+  --font-ui:   system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-data: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* ── Base ────────────────────────────────────────────────────────────────────────────── */
+* { box-sizing: border-box; }
+
+/* The [hidden] attribute is how screens/shell/footer are toggled; explicit display rules on
+   .app etc. would otherwise beat the UA [hidden] { display:none }, so re-assert it here. */
+[hidden] { display: none !important; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-ui);
+  color: var(--ink);
+  background: var(--paper);
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.eyebrow {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  font-size: 11px;
+  color: var(--filler);
+  margin: 0 0 6px;
+}
+
+/* Every number/clock time uses the data face with aligned figures (docs/02). */
+.recipe-list, .cook-btn, .name-input {
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* ── Damaged link ────────────────────────────────────────────────────────────────────── */
+.damaged {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 40px 16px;
+  font-size: 18px;
+}
+
+/* ── Shell: fixed header, scrolling content, fixed footer ────────────────────────────── */
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.shell-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--steel);
+}
+
+.pack-title {
+  font-weight: 700;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dots {
+  display: flex;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.dots li {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+}
+
+.dots li.on { background: var(--ink); }
+
+.shell-content {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 16px;
+  max-width: 720px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.shell-footer {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: var(--panel);
+  border-top: 1px solid var(--steel);
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────────────────────── */
+.primary, .secondary {
+  font: inherit;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 10px 16px;
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.primary {
+  background: var(--ink);
+  color: var(--paper);
+  font-weight: 700;
+  width: 100%;
+  margin-top: 12px;
+}
+
+.secondary { background: var(--panel); color: var(--ink); }
+.secondary[hidden] { display: none; }
+
+.link {
+  font: inherit;
+  border: none;
+  background: none;
+  padding: 4px;
+  color: var(--ink);
+  text-decoration: underline;
+  cursor: pointer;
+  min-height: 32px;
+}
+
+/* ── Screen 0 ────────────────────────────────────────────────────────────────────────── */
+.screen-title { font-size: 24px; margin: 0 0 16px; }
+
+.recipe-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 20px;
+}
+
+.recipe-list li {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--steel);
+}
+
+.cooks { border: none; padding: 0; margin: 0 0 16px; }
+.cooks legend { padding: 0; }
+
+.cook-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.cook-btn {
+  font: inherit;
+  font-family: var(--font-data);
+  font-size: 18px;
+  min-width: 56px;
+  min-height: 56px;
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.cook-btn[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--paper);
+  font-weight: 700;
+}
+
+.names { margin: 0 0 16px; }
+.names summary { cursor: pointer; padding: 8px 0; min-height: 44px; }
+
+.name-inputs { display: flex; flex-direction: column; gap: 8px; padding-top: 8px; }
+
+.name-input {
+  font: inherit;
+  padding: 10px;
+  min-height: 44px;
+  border: 1px solid var(--steel);
+  border-radius: 2px;
+  background: var(--panel);
+  color: inherit;
+}
+
+.draft-line { margin: 16px 0 0; }
+
+.placeholder { color: var(--filler); }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
 
 /* ── T8 author.html ───────────────────────────────────────────────────────────
    Teacher pack builder. Scoped under .author so nothing here leaks into the
