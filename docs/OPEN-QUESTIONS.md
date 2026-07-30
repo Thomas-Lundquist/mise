@@ -39,6 +39,20 @@ actually used by steps, sorted by id, with `count = capacity` (the only value co
 T8/T12/T13 (which read 05/06) pin the intended meaning.
 Resolved: <teacher fills this in>
 
+## Known limitation — scheduler crashes bare on an unvalidated pack
+Asked: 2026-07-30 (surfaced during T5 verification)
+Context: `js/scheduler.js:187` reads `equipById.get(eid).capacity` while checking equipment
+capacity. If a step names an equipment id that isn't in `pack.equipment` (the `MISSING_EQUIP`
+case), `.get` returns `undefined` and the scheduler throws a raw `TypeError` instead of the
+`02-conventions.md` fail-loud form `throw new Error('scheduler: ...')`. `model.validatePack`
+already reports `MISSING_EQUIP`, and the UI is meant to gate scheduling behind validation, so
+this only bites if `buildSchedule` is ever called on an unvalidated pack.
+Assumption used to keep moving: left as-is for T5 — fixing it edits T5 code outside a ticket,
+and the path is unreachable with validated input. A one-line guard
+(`throw new Error('scheduler: step ' + id + ' needs unknown equipment ' + eid)`) would restore
+the convention if a later ticket wants belt-and-suspenders.
+Resolved: <teacher fills this in>
+
 ## Manual test log
 
 (Dated results from `09-test-plan.md` Part 4 go here.)
