@@ -24,6 +24,21 @@ oversize is length > 6000). No behavior invented. This only affects how T8 prese
 paths — the fallback should probably be the default, and the inline link the special case.
 Resolved: <teacher fills this in>
 
+## T5 — equipmentChecklist `count` semantics are undefined
+Asked: 2026-07-30 (surfaced during T5)
+Context: 03-data-model.md gives the Schedule field `equipmentChecklist: [{ id, name, count }]`
+but never defines `count`, and 04 (Stage 3) — the doc T5 was told to read — does not mention
+the checklist at all. 01 says the checklist is "derived from the steps plus the number of
+bowls", yet 03 also says bowls are counted separately (via `bowlCount`). The only worked
+example is `{ id:"oven", name:"Oven", count:1 }`, and oven has `capacity:1`, so `count` could be
+capacity, the number of steps using it, or something 05/06 defines. No T5 acceptance criterion
+tests it.
+Assumption used to keep moving: buildSchedule emits the deduplicated `checklist:true` equipment
+actually used by steps, sorted by id, with `count = capacity` (the only value consistent with
+03's single example). `bowlCount = plan.bowls.length`, kept separate as 03 directs. Revisit when
+T8/T12/T13 (which read 05/06) pin the intended meaning.
+Resolved: <teacher fills this in>
+
 ## Manual test log
 
 (Dated results from `09-test-plan.md` Part 4 go here.)
