@@ -1,0 +1,206 @@
+{
+  "packVersion": 1,
+  "packId": "p_lab04_pilaf_chicken",
+  "title": "Lab 4 — Rice Pilaf & Pan-Seared Chicken",
+  "labMinutes": 50,
+  "equipment": [
+    { "id": "oven", "name": "Oven", "capacity": 1, "checklist": true },
+    { "id": "burners", "name": "Burners", "capacity": 4, "checklist": true },
+    { "id": "sink", "name": "Sink", "capacity": 1, "checklist": false },
+    { "id": "saucepan", "name": "Saucepan with lid", "capacity": 2, "checklist": true },
+    { "id": "saute_pan", "name": "Saute pan, oven-safe", "capacity": 2, "checklist": true },
+    { "id": "cutting_board", "name": "Cutting board", "capacity": 5, "checklist": true },
+    { "id": "chef_knife", "name": "Chef knife", "capacity": 5, "checklist": true },
+    { "id": "tongs", "name": "Tongs", "capacity": 5, "checklist": true },
+    { "id": "whisk", "name": "Whisk", "capacity": 5, "checklist": true },
+    { "id": "mixing_spoon", "name": "Mixing spoon", "capacity": 5, "checklist": true },
+    { "id": "plate", "name": "Resting plate", "capacity": 5, "checklist": true }
+  ],
+  "fillerTasks": [
+    { "id": "f_wipe", "label": "Wipe down your station", "durationMin": 3, "equipmentId": null, "repeatable": true },
+    { "id": "f_sweep", "label": "Sweep your kitchen floor", "durationMin": 4, "equipmentId": null, "repeatable": false },
+    { "id": "f_sanitizer", "label": "Refill the sanitizer bucket", "durationMin": 2, "equipmentId": null, "repeatable": false },
+    { "id": "f_readnext", "label": "Read the next step out loud to your group", "durationMin": 1, "equipmentId": null, "repeatable": true },
+    { "id": "f_oventemp", "label": "Check the oven temperature", "durationMin": 1, "equipmentId": null, "repeatable": true },
+    { "id": "f_putaway", "label": "Put away tools you are done with", "durationMin": 3, "equipmentId": null, "repeatable": false }
+  ],
+  "recipes": [
+    {
+      "id": "r_pilaf",
+      "name": "Rice Pilaf",
+      "ingredients": [
+        { "id": "i_rice", "recipeId": "r_pilaf", "label": "1 1/2 cups long-grain rice", "shortLabel": "rice" },
+        { "id": "i_butter", "recipeId": "r_pilaf", "label": "2 Tbsp butter", "shortLabel": "butter" },
+        { "id": "i_onion", "recipeId": "r_pilaf", "label": "1/2 onion, small dice", "shortLabel": "onion" },
+        { "id": "i_garlic", "recipeId": "r_pilaf", "label": "1 clove garlic, minced", "shortLabel": "garlic" },
+        { "id": "i_stock", "recipeId": "r_pilaf", "label": "3 cups chicken stock", "shortLabel": "stock" },
+        { "id": "i_bay", "recipeId": "r_pilaf", "label": "1 bay leaf", "shortLabel": "bay leaf" },
+        { "id": "i_parsley", "recipeId": "r_pilaf", "label": "2 Tbsp parsley, chopped", "shortLabel": "parsley" }
+      ],
+      "steps": [
+        {
+          "id": "s_pil_prep", "recipeId": "r_pilaf", "order": 1,
+          "label": "Small-dice the onion and mince the garlic into their bowl.",
+          "shortLabel": "Dice onion & garlic",
+          "suggestedDurationMin": 5, "suggestedHands": "busy",
+          "equipmentIds": ["cutting_board", "chef_knife"],
+          "consumesBowlOf": [], "dependsOnOverride": null,
+          "teachHint": "This is the longest chain in the whole lab. Someone should start it at minute zero."
+        },
+        {
+          "id": "s_pil_melt", "recipeId": "r_pilaf", "order": 2,
+          "label": "Melt the butter in the saucepan over medium heat.",
+          "shortLabel": "Melt butter",
+          "suggestedDurationMin": 2, "suggestedHands": "busy",
+          "equipmentIds": ["burners", "saucepan"],
+          "consumesBowlOf": ["i_butter"], "dependsOnOverride": [], "teachHint": null
+        },
+        {
+          "id": "s_pil_sweat", "recipeId": "r_pilaf", "order": 3,
+          "label": "Sweat the onion and garlic until soft, not browned.",
+          "shortLabel": "Sweat aromatics",
+          "suggestedDurationMin": 5, "suggestedHands": "busy",
+          "equipmentIds": ["burners", "saucepan", "mixing_spoon"],
+          "consumesBowlOf": ["i_onion", "i_garlic"],
+          "dependsOnOverride": ["s_pil_melt", "s_pil_prep"], "teachHint": null
+        },
+        {
+          "id": "s_pil_toast", "recipeId": "r_pilaf", "order": 4,
+          "label": "Toast the rice in the butter until the grains look chalky.",
+          "shortLabel": "Toast rice",
+          "suggestedDurationMin": 3, "suggestedHands": "busy",
+          "equipmentIds": ["burners", "saucepan", "mixing_spoon"],
+          "consumesBowlOf": ["i_rice"], "dependsOnOverride": null, "teachHint": null
+        },
+        {
+          "id": "s_pil_liquid", "recipeId": "r_pilaf", "order": 5,
+          "label": "Add the stock and bay leaf and bring it up to a boil.",
+          "shortLabel": "Add stock, boil",
+          "suggestedDurationMin": 5, "suggestedHands": "busy",
+          "equipmentIds": ["burners", "saucepan"],
+          "consumesBowlOf": ["i_stock", "i_bay"], "dependsOnOverride": null, "teachHint": null
+        },
+        {
+          "id": "s_pil_simmer", "recipeId": "r_pilaf", "order": 6,
+          "label": "Cover and simmer on low without lifting the lid.",
+          "shortLabel": "Simmer covered",
+          "suggestedDurationMin": 20, "suggestedHands": "free",
+          "equipmentIds": ["burners", "saucepan"],
+          "consumesBowlOf": [], "dependsOnOverride": null,
+          "teachHint": "Nobody stands here. Tag this hands free and find something else to do."
+        },
+        {
+          "id": "s_pil_rest", "recipeId": "r_pilaf", "order": 7,
+          "label": "Take it off the heat and let it rest, still covered.",
+          "shortLabel": "Rest off heat",
+          "suggestedDurationMin": 5, "suggestedHands": "free",
+          "equipmentIds": ["saucepan"],
+          "consumesBowlOf": [], "dependsOnOverride": null, "teachHint": null
+        },
+        {
+          "id": "s_pil_fluff", "recipeId": "r_pilaf", "order": 8,
+          "label": "Fluff with a fork and fold in the parsley.",
+          "shortLabel": "Fluff & add parsley",
+          "suggestedDurationMin": 2, "suggestedHands": "busy",
+          "equipmentIds": ["mixing_spoon"],
+          "consumesBowlOf": ["i_parsley"], "dependsOnOverride": null, "teachHint": null
+        }
+      ]
+    },
+    {
+      "id": "r_chicken",
+      "name": "Pan-Seared Chicken with Pan Sauce",
+      "ingredients": [
+        { "id": "i_chicken", "recipeId": "r_chicken", "label": "4 boneless chicken thighs", "shortLabel": "chicken" },
+        { "id": "i_salt", "recipeId": "r_chicken", "label": "1 tsp kosher salt", "shortLabel": "salt" },
+        { "id": "i_pepper", "recipeId": "r_chicken", "label": "1/2 tsp black pepper", "shortLabel": "pepper" },
+        { "id": "i_oil", "recipeId": "r_chicken", "label": "1 Tbsp vegetable oil", "shortLabel": "oil" },
+        { "id": "i_shallot", "recipeId": "r_chicken", "label": "1 shallot, minced", "shortLabel": "shallot" },
+        { "id": "i_wine", "recipeId": "r_chicken", "label": "1/2 cup dry white wine", "shortLabel": "wine" },
+        { "id": "i_stock2", "recipeId": "r_chicken", "label": "1/2 cup chicken stock", "shortLabel": "stock" },
+        { "id": "i_thyme", "recipeId": "r_chicken", "label": "2 sprigs thyme", "shortLabel": "thyme" },
+        { "id": "i_butter2", "recipeId": "r_chicken", "label": "1 Tbsp cold butter, cubed", "shortLabel": "cold butter" }
+      ],
+      "steps": [
+        {
+          "id": "s_ch_preheat", "recipeId": "r_chicken", "order": 1,
+          "label": "Turn the oven on to 400F and let it come up to temperature.",
+          "shortLabel": "Preheat oven",
+          "suggestedDurationMin": 10, "suggestedHands": "free",
+          "equipmentIds": ["oven"],
+          "consumesBowlOf": [], "dependsOnOverride": [],
+          "teachHint": "Costs one minute of your time and saves ten of everybody's."
+        },
+        {
+          "id": "s_ch_trim", "recipeId": "r_chicken", "order": 2,
+          "label": "Trim the thighs and pat them completely dry.",
+          "shortLabel": "Trim & dry chicken",
+          "suggestedDurationMin": 5, "suggestedHands": "busy",
+          "equipmentIds": ["cutting_board", "chef_knife"],
+          "consumesBowlOf": [], "dependsOnOverride": [], "teachHint": null
+        },
+        {
+          "id": "s_ch_season", "recipeId": "r_chicken", "order": 3,
+          "label": "Season both sides with the salt and pepper.",
+          "shortLabel": "Season chicken",
+          "suggestedDurationMin": 2, "suggestedHands": "busy",
+          "equipmentIds": [],
+          "consumesBowlOf": ["i_salt", "i_pepper"], "dependsOnOverride": null, "teachHint": null
+        },
+        {
+          "id": "s_ch_mince", "recipeId": "r_chicken", "order": 4,
+          "label": "Mince the shallot for the sauce.",
+          "shortLabel": "Mince shallot",
+          "suggestedDurationMin": 3, "suggestedHands": "busy",
+          "equipmentIds": ["cutting_board", "chef_knife"],
+          "consumesBowlOf": [], "dependsOnOverride": [], "teachHint": null
+        },
+        {
+          "id": "s_ch_sear", "recipeId": "r_chicken", "order": 5,
+          "label": "Sear the thighs skin-side down in the oil until golden.",
+          "shortLabel": "Sear chicken",
+          "suggestedDurationMin": 10, "suggestedHands": "busy",
+          "equipmentIds": ["burners", "saute_pan", "tongs"],
+          "consumesBowlOf": ["i_oil", "i_chicken"],
+          "dependsOnOverride": ["s_ch_season"], "teachHint": null
+        },
+        {
+          "id": "s_ch_oven", "recipeId": "r_chicken", "order": 6,
+          "label": "Move the whole pan into the oven to finish cooking through.",
+          "shortLabel": "Finish in oven",
+          "suggestedDurationMin": 15, "suggestedHands": "free",
+          "equipmentIds": ["oven", "saute_pan"],
+          "consumesBowlOf": [],
+          "dependsOnOverride": ["s_ch_sear", "s_ch_preheat"],
+          "teachHint": "This one needs two things done first: seared chicken and a hot oven."
+        },
+        {
+          "id": "s_ch_pull", "recipeId": "r_chicken", "order": 7,
+          "label": "Pull the pan out and move the chicken to a plate to rest.",
+          "shortLabel": "Pull & rest",
+          "suggestedDurationMin": 1, "suggestedHands": "busy",
+          "equipmentIds": ["saute_pan", "tongs", "plate"],
+          "consumesBowlOf": [], "dependsOnOverride": null, "teachHint": null
+        },
+        {
+          "id": "s_ch_sauce", "recipeId": "r_chicken", "order": 8,
+          "label": "Sweat the shallot in the same pan, add the wine, and reduce it.",
+          "shortLabel": "Reduce wine",
+          "suggestedDurationMin": 5, "suggestedHands": "busy",
+          "equipmentIds": ["burners", "saute_pan"],
+          "consumesBowlOf": ["i_shallot", "i_wine"],
+          "dependsOnOverride": ["s_ch_pull", "s_ch_mince"], "teachHint": null
+        },
+        {
+          "id": "s_ch_finish", "recipeId": "r_chicken", "order": 9,
+          "label": "Add the stock and thyme, reduce, then swirl in the cold butter off the heat.",
+          "shortLabel": "Finish pan sauce",
+          "suggestedDurationMin": 5, "suggestedHands": "busy",
+          "equipmentIds": ["burners", "saute_pan", "whisk"],
+          "consumesBowlOf": ["i_stock2", "i_thyme", "i_butter2"],
+          "dependsOnOverride": null, "teachHint": null
+        }
+      ]
+    }
+  ]
+}

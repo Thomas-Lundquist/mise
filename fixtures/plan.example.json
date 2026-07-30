@@ -1,0 +1,38 @@
+{
+  "planVersion": 1,
+  "packId": "p_lab04_pilaf_chicken",
+  "bowls": [
+    { "id": "b1", "number": 1, "ingredientIds": ["i_rice"] },
+    { "id": "b2", "number": 2, "ingredientIds": ["i_butter"] },
+    { "id": "b3", "number": 3, "ingredientIds": ["i_onion", "i_garlic"] },
+    { "id": "b4", "number": 4, "ingredientIds": ["i_stock", "i_bay"] },
+    { "id": "b5", "number": 5, "ingredientIds": ["i_parsley"] },
+    { "id": "b6", "number": 6, "ingredientIds": ["i_chicken"] },
+    { "id": "b7", "number": 7, "ingredientIds": ["i_salt", "i_pepper"] },
+    { "id": "b8", "number": 8, "ingredientIds": ["i_oil"] },
+    { "id": "b9", "number": 9, "ingredientIds": ["i_shallot"] },
+    { "id": "b10", "number": 10, "ingredientIds": ["i_wine"] },
+    { "id": "b11", "number": 11, "ingredientIds": ["i_stock2", "i_thyme"] },
+    { "id": "b12", "number": 12, "ingredientIds": ["i_butter2"] }
+  ],
+  "stepTags": {
+    "s_pil_prep":    { "durationMin": 5,  "hands": "busy", "attentionMin": 5 },
+    "s_pil_melt":    { "durationMin": 2,  "hands": "busy", "attentionMin": 2 },
+    "s_pil_sweat":   { "durationMin": 5,  "hands": "busy", "attentionMin": 5 },
+    "s_pil_toast":   { "durationMin": 3,  "hands": "busy", "attentionMin": 3 },
+    "s_pil_liquid":  { "durationMin": 5,  "hands": "busy", "attentionMin": 5 },
+    "s_pil_simmer":  { "durationMin": 20, "hands": "free", "attentionMin": 1 },
+    "s_pil_rest":    { "durationMin": 5,  "hands": "free", "attentionMin": 1 },
+    "s_pil_fluff":   { "durationMin": 2,  "hands": "busy", "attentionMin": 2 },
+    "s_ch_preheat":  { "durationMin": 10, "hands": "free", "attentionMin": 1 },
+    "s_ch_trim":     { "durationMin": 5,  "hands": "busy", "attentionMin": 5 },
+    "s_ch_season":   { "durationMin": 2,  "hands": "busy", "attentionMin": 2 },
+    "s_ch_mince":    { "durationMin": 3,  "hands": "busy", "attentionMin": 3 },
+    "s_ch_sear":     { "durationMin": 10, "hands": "busy", "attentionMin": 10 },
+    "s_ch_oven":     { "durationMin": 15, "hands": "free", "attentionMin": 1 },
+    "s_ch_pull":     { "durationMin": 1,  "hands": "busy", "attentionMin": 1 },
+    "s_ch_sauce":    { "durationMin": 5,  "hands": "busy", "attentionMin": 5 },
+    "s_ch_finish":   { "durationMin": 5,  "hands": "busy", "attentionMin": 5 }
+  },
+  "kitchen": { "cooks": 4, "cookNames": ["", "", "", ""] }
+}
