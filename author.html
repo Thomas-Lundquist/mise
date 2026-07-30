@@ -7,11 +7,11 @@
   <link rel="stylesheet" href="css/app.css" />
 </head>
 <body>
-  <!-- Teacher pack builder is built in T8. -->
+  <!-- The whole teacher builder is rendered into this root by js/ui-author.js (T8). -->
+  <main id="author-root" class="author"></main>
   <script type="module">
     import { mount } from './js/ui-author.js';
-    // wired up in T8 — mount() intentionally not called yet.
-    void mount;
+    mount(document.getElementById('author-root'));
   </script>
 </body>
 </html>

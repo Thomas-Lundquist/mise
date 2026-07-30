@@ -1,3 +1,148 @@
 /* css/app.css — screen styles for Mise Planner.
    The :root design tokens and the app shell are added in T9 (see docs/02-conventions.md).
    Kept empty in T1 so the file exists without front-running later tickets. */
+
+/* ── T8 author.html ───────────────────────────────────────────────────────────
+   Teacher pack builder. Scoped under .author so nothing here leaks into the
+   student shell that T9 will add above. Tokens are referenced with fallbacks
+   (e.g. var(--ink, #16181A)) because the :root token block lands in T9, not here;
+   these styles therefore work standalone now and inherit the real palette later. */
+
+.author {
+  font-family: var(--font-ui, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif);
+  color: var(--ink, #16181A);
+  background: var(--paper, #F6F6F3);
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 16px;
+  line-height: 1.45;
+}
+
+.author h1 { font-size: 22px; margin: 0 0 4px; }
+
+.author .eyebrow {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  font-size: 11px;
+  color: var(--filler, #8A9199);
+}
+
+.author section {
+  background: var(--panel, #FFFFFF);
+  border: 1px solid var(--steel, #B9BFC4);
+  border-radius: 2px;
+  padding: 12px 14px;
+  margin: 12px 0;
+}
+
+.author section > h2 {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  margin: 0 0 10px;
+}
+
+.author label { display: block; font-size: 13px; margin: 8px 0; }
+.author label > span { display: block; font-weight: 700; margin-bottom: 2px; }
+
+.author input[type="text"],
+.author input[type="number"],
+.author textarea,
+.author select {
+  font: inherit;
+  padding: 8px;
+  min-height: 40px;
+  border: 1px solid var(--steel, #B9BFC4);
+  border-radius: 2px;
+  background: var(--panel, #FFFFFF);
+  color: inherit;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.author input[type="number"] { font-family: var(--font-data, ui-monospace, Consolas, monospace); }
+.author textarea { min-height: 96px; resize: vertical; }
+.author select[multiple] { min-height: 96px; }
+
+.author :focus-visible {
+  outline: 2px solid var(--ink, #16181A);
+  outline-offset: 2px;
+}
+
+.author table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.author th, .author td { text-align: left; padding: 4px; vertical-align: top; }
+.author th { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+.author td input[type="text"],
+.author td input[type="number"] { min-height: 40px; }
+
+.author button {
+  font: inherit;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--ink, #16181A);
+  border-radius: 2px;
+  background: var(--panel, #FFFFFF);
+  color: var(--ink, #16181A);
+  cursor: pointer;
+}
+
+.author button.primary { background: var(--ink, #16181A); color: var(--paper, #F6F6F3); }
+.author button.link {
+  border: none;
+  background: none;
+  padding: 4px;
+  text-decoration: underline;
+  min-height: 32px;
+}
+.author button.danger { border-color: var(--alert, #A8321E); color: var(--alert, #A8321E); }
+
+.author .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+.author .row > * { flex: 1 1 auto; }
+
+.author .recipe {
+  border: 1px dashed var(--steel, #B9BFC4);
+  border-radius: 2px;
+  padding: 10px;
+  margin: 10px 0;
+}
+
+.author .step {
+  border-top: 1px solid var(--steel, #B9BFC4);
+  padding: 8px 0;
+}
+
+.author .errors { list-style: none; padding: 0; margin: 8px 0; }
+.author .errors li {
+  color: var(--alert, #A8321E);
+  font-weight: 700;
+  padding: 4px 0;
+}
+
+.author .preview {
+  font-family: var(--font-data, ui-monospace, Consolas, monospace);
+  font-variant-numeric: tabular-nums;
+  font-size: 16px;
+  padding: 10px;
+  border: 1px solid var(--steel, #B9BFC4);
+  border-radius: 2px;
+  background: var(--paper, #F6F6F3);
+}
+
+.author .alert {
+  color: var(--alert, #A8321E);
+  font-weight: 700;
+}
+
+.author .url-field {
+  font-family: var(--font-data, ui-monospace, Consolas, monospace);
+  font-size: 12px;
+}
+
+.author .ok { color: var(--active, #0E5C54); font-weight: 700; }
+
+@media (prefers-reduced-motion: reduce) {
+  .author * { transition: none !important; }
+}
