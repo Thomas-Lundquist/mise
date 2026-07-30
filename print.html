@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mise Planner — Print</title>
+  <link rel="stylesheet" href="css/print.css" />
+</head>
+<body>
+  <!-- Print view is built in T13. -->
+  <script type="module">
+    import { boot } from './js/print.js';
+    // wired up in T13 — boot() intentionally not called yet.
+    void boot;
+  </script>
+</body>
+</html>
