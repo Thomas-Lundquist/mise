@@ -53,6 +53,42 @@ and the path is unreachable with validated input. A one-line guard
 the convention if a later ticket wants belt-and-suspenders.
 Resolved: <teacher fills this in>
 
+## T6 — filler Assignment field shape and post-fill idleMin / utilizationPct
+Asked: 2026-07-30 (surfaced during T6)
+Context: 04-scheduler-spec.md Stage 4c says only "assign at cursor as kind 'filler'", and
+03-data-model.md gives the Assignment schema (`kind, stepId, recipeId, label, startMin, endMin,
+runsUntilMin, hands, isCritical, equipmentIds`) with no filler-specific values. It also defines
+`cook.idleMin` as "minutes with nothing assigned" and `utilizationPct` as busy/makespan, without
+saying whether fillers count once placed.
+Assumption used to keep moving: a filler occupies the cook fully, so `runsUntilMin = endMin`,
+`hands = "busy"`, `isCritical = false`, and `equipmentIds = [equipmentId]` (or `[]`); it belongs to
+no step or recipe, so `stepId = null` and `recipeId = null`. `idleMin` is RECOMPUTED after filling
+so its literal definition stays true (fillers are now "assigned"). `utilizationPct` is left as
+buildSchedule set it — the cooking-load number IDLE_HEAVY (T7) cares about — since recomputing it
+to include busywork is genuinely ambiguous. No makespan is touched (invariant 7 holds). Revisit if
+T12/T13 (which render fillers) or T7 (which reads utilizationPct) need different field values.
+Resolved: <teacher fills this in>
+
+## T5/scheduler — cook continuity vs. interchangeable cooks (spec conflict)
+Asked: 2026-07-30 (raised by the teacher during T6)
+Context: 04-scheduler-spec.md Stage 3c assigns each ready step to "the lowest-index cook with
+cookFreeAt[i] <= t" (js/scheduler.js:177-179), and the spec's "Known limitations" states as a
+deliberate choice: "No cook preferences or skill levels. Cooks are interchangeable by design;
+that is what solves the role-equity problem in the kitchen." The scheduler therefore keeps NO
+state about what a cook was previously doing and has no tie-break rewarding continuity, so a cook
+who started the rice can be handed the chicken sear while another inherits the rice simmer. The
+teacher reports this exact discontinuity was a primary failure of the archived build: jobs felt
+near-random, with no sense of a student staying on the item they started.
+Conflict: role-equity (everyone touches everything) vs. task/recipe continuity (finish what you
+start). The current spec picked equity; the lab experience wants continuity. Passive steps release
+the cook after ~1 minute, so many handoffs are of unattended pots rather than active work, which
+softens but does not remove the symptom.
+Not changed under T6: adding a continuity tie-break rewrites Stage 3c's assignment rule — out of
+T6's scope, and it directly contradicts the "interchangeable cooks" line, so it must not be slipped
+in silently. It would also shift the golden makespan / cook-minute fixtures in
+tests/scheduler.test.js. Belongs in its own scheduler ticket once the teacher decides.
+Resolved: <teacher fills this in>
+
 ## Manual test log
 
 (Dated results from `09-test-plan.md` Part 4 go here.)
