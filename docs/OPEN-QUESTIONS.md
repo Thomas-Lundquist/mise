@@ -217,6 +217,68 @@ scheduler, and the determinism guarantee is preserved. Belongs in its own ticket
 own doc, and must ship as suggestions-for-review, never auto-publish.
 Resolved: <teacher fills this in>
 
+## T11 — "Total hands-on time" is not defined against the data model
+
+Asked: 2026-07-30 (surfaced during T11)
+Context: 05-ui-spec.md Screen 2 requires a sticky running total labelled "Total hands-on time:
+34 min" that "changes as they tag", but never says which minutes it sums. 03-data-model.md gives
+two candidate quantities per step: `durationMin` (the whole step) and `attentionMin` (cook time —
+`durationMin` for a busy step, `Math.min(1, durationMin)` for a free one). So "hands-on time" could
+be (A) the sum of `durationMin` over steps tagged `hands === "busy"` only — passive steps contribute
+0 — or (B) the sum of `attentionMin` over all steps — passive steps contribute their 1 starting
+minute. No T11 acceptance criterion pins the number.
+Assumption used to keep moving (teacher-approved): reading (A). The visible label "hands-**on**"
+mirrors the "Hands **busy**" button, so a student reads the total as "how long am I actually working
+with my hands"; a passive step is the case where they walk away, so it should read 0, not 1. Flipping
+a step busy↔free then moves the total by that step's full duration, which is the loud, legible
+response 05 wants ("the first place they feel the model responding to them"). Note this total is a
+student-facing teaching number only — it is NOT the scheduler's cook-load and feeds nothing
+downstream, so choosing (A) over (B) cannot change any schedule. Revisit if T12/T13 surface a place
+that needs per-cook attention minutes instead.
+Resolved: <teacher fills this in>
+
+## T11 — Screen 2 reused the T10 shell wiring contract, so app.js was edited again
+
+Asked: 2026-07-30 (surfaced during T11)
+Context: like T10 (see the "Screen 1 needed a wiring contract" entry above), T11 ships only
+`js/ui-steps.js` + styles, but the shell never mounts Screen 2 — `#screen-2` held static placeholder
+markup and app.js had no call site. T11's acceptance ("changing a chip or a hands button updates the
+plan and the running total") is only verifiable in the flow if app.js reaches ui-steps, so the same
+minimal wiring edit was applied. Teacher approved the small change + this log.
+Change made (kept minimal, mirroring T10): app.js imports `ui-steps.mount`, calls it when Screen 2 is
+first shown and `.refresh()`es it on return, holding the controller in `stepsCtl`; `stepsCtl` is reset
+to null on resume/start-over alongside `bowlsCtl` so a replaced `plan` re-mounts. The `ctx` shape is
+the existing `{ pack, plan, persist, setNextEnabled }` — Screen 2 never gates Next (05: "enabled
+always"), so it does not call `setNextEnabled`; the shell already leaves Next enabled for screens
+other than Screen 1. `index.html` is UNCHANGED (ui-steps.mount clears the placeholder via textContent).
+Assumption used to keep moving: the existing contract serves Screen 2 as predicted in the T10 entry.
+Revisit if T12 needs a richer ctx.
+Resolved: <teacher fills this in>
+
+## T11 — student `dependsOnOverride` is written into the plan but the scheduler reads the pack
+
+Asked: 2026-07-30 (surfaced during T11)
+Context: 05-ui-spec.md Screen 2 point 5 says the disclosure writes `dependsOnOverride`, but
+03-data-model.md places `dependsOnOverride` on the authored **Step** (in the pack), while the
+student-owned **StepTag** (in the plan) has no dependency field. The pack is "read-only to students"
+and is re-decoded fresh on every load, whereas store.js persists only the **plan** — so writing the
+override onto the in-memory pack step would silently lose it on a draft reload while durations/hands
+survived. Separately, `buildGraph(pack, plan)` resolves dependencies via `model.resolveDeps(pack)`
+(js/scheduler.js:19) — it reads the **pack only** and ignores the plan entirely.
+Assumption used to keep moving: T11 stores the override where it can survive a draft and stay
+student-owned — `plan.stepTags[stepId].dependsOnOverride`, using the pack's exact semantics (an
+array of step ids = "needs exactly these"; the field ABSENT = the default "follow the previous step
+in the recipe"). The student UI intentionally cannot produce `[]` ("explicitly independent"), which
+stays an authoring-only state, because 05 forbids asking a student to build a dependency graph. This
+satisfies T11's acceptance ("writes `dependsOnOverride` correctly and stays collapsed by default").
+BUT it is written and not yet CONSUMED: because `resolveDeps` reads pack-side deps, a student override
+currently has no effect on the schedule. A later ticket (T12, which runs the scheduler) must reconcile
+plan-side overrides into `buildGraph` — e.g. `resolveDeps(pack, plan)` preferring
+`plan.stepTags[id].dependsOnOverride` when present — for the override to change anything. That edit
+touches the pure scheduler/model (done in T4/T5) and its golden fixtures, so it must be its own
+scoped change, not slipped into T11.
+Resolved: <teacher fills this in>
+
 ## Manual test log
 
 (Dated results from `09-test-plan.md` Part 4 go here.)

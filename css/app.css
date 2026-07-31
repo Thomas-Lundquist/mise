@@ -315,6 +315,122 @@ body {
 /* Drop-target hover outline for the drag path (docs/05). */
 .drop-hover { outline: 2px dashed var(--steel); outline-offset: 2px; }
 
+/* ── Screen 2 — steps (T11) ────────────────────────────────────────────────────────────── */
+/* Recipe-name divider between stacked recipes. */
+.steps-recipe {
+  font-weight: 700;
+  font-size: 13px;
+  margin: 16px 0 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--steel);
+}
+
+/* Compact card — the screen aims for ~six visible on a Chromebook (docs/05). */
+.step-card {
+  border: 1px solid var(--steel);
+  border-radius: 2px;
+  background: var(--panel);
+  padding: 10px;
+  margin: 0 0 10px;
+}
+
+.step-head { display: flex; gap: 8px; align-items: baseline; }
+
+.step-num {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--filler);
+}
+
+.step-labels { min-width: 0; } /* let long labels wrap instead of overflowing */
+.step-short { font-weight: 700; margin: 0; }
+.step-label { font-weight: 400; margin: 2px 0 0; }
+
+/* Eyebrow-styled question labels sit tighter than the default .eyebrow bottom margin. */
+.step-q { margin: 10px 0 4px; }
+
+.dur-row { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.dur-chip {
+  font: inherit;
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  min-width: 44px;
+  min-height: 44px; /* Chromebook tap target (docs/02) */
+  padding: 8px 10px;
+  border: 1px solid var(--steel);
+  border-radius: 2px;
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+/* Selected chip: solid --ink, plus weight — never colour alone (docs/02). */
+.dur-chip[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+  font-weight: 700;
+}
+
+.hands-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.hands-btn {
+  font: inherit;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--steel);
+  border-radius: 2px;
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.hands-btn[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+  font-weight: 700;
+}
+
+.hands-help { color: var(--filler); font-size: 13px; margin: 6px 0 0; }
+
+/* Teacher coaching line — quiet --filler italic (docs/05). Italic is reserved for hints/fillers. */
+.teach-hint { color: var(--filler); font-style: italic; font-size: 13px; margin: 8px 0 0; }
+
+/* Rare escape hatch: collapsed by default, quiet until opened. */
+.dep { margin-top: 8px; }
+.dep-summary {
+  cursor: pointer;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  color: var(--filler);
+  text-decoration: underline;
+}
+.dep-list { display: flex; flex-direction: column; gap: 4px; padding: 4px 0 0; }
+.dep-item { display: flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer; }
+.dep-item input { width: 20px; height: 20px; }
+
+/* Sticky running total: pinned to the bottom of the scrolling content, data face (docs/05). */
+.steps-total {
+  position: sticky;
+  bottom: 0;
+  margin: 12px -16px -16px; /* bleed to the padded edges of .shell-content */
+  padding: 10px 16px;
+  background: var(--panel);
+  border-top: 1px solid var(--steel);
+}
+
+.steps-total-text {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  margin: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }

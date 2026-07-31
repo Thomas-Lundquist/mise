@@ -7,6 +7,7 @@ import { decodePack } from './codec.js';
 import { validatePack, blankPlan } from './model.js';
 import { loadDraft, saveDraft, clearDraft } from './store.js';
 import { mount as mountBowls } from './ui-bowls.js';
+import { mount as mountSteps } from './ui-steps.js';
 
 const SCREEN_COUNT = 4;
 const COOK_LETTERS = ['A', 'B', 'C', 'D', 'E'];
@@ -20,6 +21,9 @@ let screenIndex = 0;
 // rather than re-mounting; reset to null whenever `plan` is REPLACED (resume / start over) so the
 // screen re-mounts against the new plan object instead of editing an orphaned one.
 /** @type {{refresh:function():void}|null} */ let bowlsCtl = null;
+// Screen 2's mounted controller (from ui-steps.mount), held for the same reason as bowlsCtl and
+// reset to null on the same events, so a replaced `plan` re-mounts Screen 2 against the new object.
+/** @type {{refresh:function():void}|null} */ let stepsCtl = null;
 
 /** Load the pack referenced by the location hash. Two forms are supported (docs/03):
  *   #p=<encoded>          an inline pack, for packs small enough to ride in the URL
@@ -199,6 +203,7 @@ function renderDraftLine() {
     plan = draft;
     ensureKitchenShape();
     bowlsCtl = null; // plan object replaced — force Screen 1 to re-mount against the draft
+    stepsCtl = null; // same for Screen 2
     // Reflect the restored choices back into the form, then jump into the flow.
     renderCookButtons();
     renderNameInputs();
@@ -210,6 +215,7 @@ function renderDraftLine() {
     plan = blankPlan(pack);
     ensureKitchenShape();
     bowlsCtl = null; // plan object replaced — force Screen 1 to re-mount against the fresh plan
+    stepsCtl = null; // same for Screen 2
     renderCookButtons();
     renderNameInputs();
     line.hidden = true;
@@ -278,5 +284,12 @@ function showScreen(i) {
     const screen1 = document.getElementById('screen-1');
     if (bowlsCtl) bowlsCtl.refresh();
     else bowlsCtl = mountBowls(screen1, { pack, plan, persist, setNextEnabled });
+  }
+  // Screen 2 (steps) never gates Next (docs/05: "enabled always"), so the branch above already left
+  // it enabled; mount on first visit and refresh on return, mirroring Screen 1.
+  if (i === 2) {
+    const screen2 = document.getElementById('screen-2');
+    if (stepsCtl) stepsCtl.refresh();
+    else stepsCtl = mountSteps(screen2, { pack, plan, persist, setNextEnabled });
   }
 }
