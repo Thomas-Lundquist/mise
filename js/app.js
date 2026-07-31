@@ -6,6 +6,7 @@
 import { decodePack } from './codec.js';
 import { validatePack, blankPlan } from './model.js';
 import { loadDraft, saveDraft, clearDraft } from './store.js';
+import { mount as mountBowls } from './ui-bowls.js';
 
 const SCREEN_COUNT = 4;
 const COOK_LETTERS = ['A', 'B', 'C', 'D', 'E'];
@@ -15,6 +16,10 @@ const NAME_MAXLEN = 12;
 /** @type {object|null} */ let pack = null;
 /** @type {object|null} */ let plan = null;
 let screenIndex = 0;
+// Screen 1's mounted controller (from ui-bowls.mount). Held so re-entering Screen 1 refreshes
+// rather than re-mounting; reset to null whenever `plan` is REPLACED (resume / start over) so the
+// screen re-mounts against the new plan object instead of editing an orphaned one.
+/** @type {{refresh:function():void}|null} */ let bowlsCtl = null;
 
 /** Load the pack referenced by the location hash. Two forms are supported (docs/03):
  *   #p=<encoded>          an inline pack, for packs small enough to ride in the URL
@@ -193,6 +198,7 @@ function renderDraftLine() {
   document.getElementById('btn-resume').onclick = () => {
     plan = draft;
     ensureKitchenShape();
+    bowlsCtl = null; // plan object replaced — force Screen 1 to re-mount against the draft
     // Reflect the restored choices back into the form, then jump into the flow.
     renderCookButtons();
     renderNameInputs();
@@ -203,21 +209,42 @@ function renderDraftLine() {
     clearDraft(pack.packId);
     plan = blankPlan(pack);
     ensureKitchenShape();
+    bowlsCtl = null; // plan object replaced — force Screen 1 to re-mount against the fresh plan
     renderCookButtons();
     renderNameInputs();
     line.hidden = true;
   };
 }
 
-/** Wire the shell footer's Back / Next buttons (present on Screens 1-3).
+/** Wire the shell footer's Back / Next buttons and create the "why Next is disabled" slot.
+ * The reason node is built here (not in index.html) so the T9 markup is untouched; screens gate
+ * Next through setNextEnabled(ok, reason) rather than reaching into the footer themselves.
  * @returns {void} */
 function wireFooter() {
+  const next = document.getElementById('btn-next');
+  const reason = document.createElement('span');
+  reason.id = 'next-reason';
+  reason.className = 'next-reason';
+  reason.setAttribute('aria-live', 'polite'); // announce the gating reason to screen readers
+  next.parentNode.insertBefore(reason, next); // sits between Back and Next in the footer
+
   document.getElementById('btn-back').addEventListener('click', () => {
     if (screenIndex > 0) showScreen(screenIndex - 1);
   });
-  document.getElementById('btn-next').addEventListener('click', () => {
+  next.addEventListener('click', () => {
     if (screenIndex < SCREEN_COUNT - 1) showScreen(screenIndex + 1);
   });
+}
+
+/** Enable/disable the footer Next button and show the reason when it is blocked. This is the whole
+ * contract a screen uses to gate forward progress; the shell owns the button, the screen owns the
+ * rule. A disabled <button> emits no click, so this alone prevents advancing.
+ * @param {boolean} ok whether the current screen permits Next
+ * @param {string} reason short sentence shown beside Next when !ok (empty when ok)
+ * @returns {void} */
+function setNextEnabled(ok, reason) {
+  document.getElementById('btn-next').disabled = !ok;
+  document.getElementById('next-reason').textContent = ok ? '' : (reason || '');
 }
 
 /** Swap to screen i: toggle the four sections' hidden attribute, move the dot indicator, and
@@ -242,4 +269,14 @@ function showScreen(i) {
   footer.hidden = i === 0;
   document.getElementById('btn-back').hidden = i === 0;
   document.getElementById('btn-next').hidden = i === SCREEN_COUNT - 1;
+
+  // Every screen leaves Next enabled unless it gates itself. Screen 1 (bowls) does: it mounts on
+  // first visit and refreshes on return, calling setNextEnabled to reflect whether every ingredient
+  // is bowled. Reset to enabled first so leaving Screen 1 clears any stale "needs a bowl" reason.
+  if (i !== 1) setNextEnabled(true, '');
+  if (i === 1) {
+    const screen1 = document.getElementById('screen-1');
+    if (bowlsCtl) bowlsCtl.refresh();
+    else bowlsCtl = mountBowls(screen1, { pack, plan, persist, setNextEnabled });
+  }
 }

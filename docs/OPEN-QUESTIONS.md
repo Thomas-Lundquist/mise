@@ -161,6 +161,62 @@ folded in since the student can't fix it either. (2) The `#pf=` filename is rest
 ticket needs invalid packs distinguished from damaged links, or a different hosted-file location.
 Resolved: <teacher fills this in>
 
+## T10 — Screen 1 needed a wiring contract the T9 shell did not define, so app.js was edited
+Asked: 2026-07-30 (surfaced during T10)
+Context: T10 ships `js/ui-bowls.js` + styles, but the T9 shell (`js/app.js`, `index.html`) never
+imports or calls a Screen-1 mount, and `#screen-1` held static placeholder markup. The stub's
+`mount(root, ctx)` signature existed but no `ctx` shape, no call site, and no way for a screen to
+gate the shell's footer Next (which app.js owns). T10's acceptance ("tap-to-assign works... the
+disabled-Next reason is correct") is only verifiable if app.js reaches ui-bowls, so a minimal
+wiring edit to a prior ticket's file was unavoidable. Teacher approved the minimal edit + this log.
+Change made (kept as small as possible): (1) app.js imports `ui-bowls.mount`, calls it when Screen 1
+is first shown and `.refresh()`es it on return, holding the controller in `bowlsCtl`; (2) app.js adds
+`setNextEnabled(ok, reason)` and creates the reason node in the footer via createElement — `index.html`
+is UNCHANGED; (3) `bowlsCtl` is reset to null on resume/start-over so a replaced `plan` re-mounts.
+The `ctx` contract now is `{ pack, plan, persist, setNextEnabled }`; the same shape should serve
+Screens 2–3 (T11/T12), so this is a one-time shell contract, not a Screen-1 special case.
+Assumption used to keep moving: the contract above. Revisit if T11/T12 need a richer ctx (e.g. a way
+to advance programmatically or read sibling-screen state).
+Resolved: <teacher fills this in>
+
+## T10 — empty-bowl pruning timing and the "different times" note trigger are unspecified
+Asked: 2026-07-30 (surfaced during T10)
+Context: two points 05/03 leave open. (a) blankPlan seeds one bowl per ingredient, so merging leaves
+source bowls empty; 03 only says empty bowls are "dropped at validation and renumbered," not when the
+UI should drop them. (b) 05's optional teacher-answer-key note ("These two go in at different times.
+Sure?") says to show it when `consumesBowlOf` "implies two ingredients are added at different moments"
+but never defines the exact trigger.
+Assumption used to keep moving: (a) a bowl emptied by a MOVE (assign/take-out) is pruned immediately
+and bowls renumber 1..n; a bowl made by "+ New bowl" persists until the next move leaves it empty, and
+carries an explicit "Remove bowl" button meanwhile — so the student never accumulates the ~10 empty
+per-ingredient bowls a literal "drop only at validation" reading would show. (b) the note fires for a
+bowl holding two consumed ingredients whose consuming-step sets are disjoint (no single step empties
+both) — i.e. they enter the pan at different steps. Ingredients consumed by no step give no evidence
+and are ignored. The note is advisory and never blocks, per 05. Revisit if a later ticket pins either.
+Related follow-up the note surfaced (raised by the teacher during T10 testing): for a bowl with 3+
+consumed ingredients the note shows the verbatim two-ingredient copy once, naming no chip, so the
+teacher/student can't tell WHICH ingredients conflict or that there may be several pairs. 05 only
+specifies the two-ingredient wording. A future ticket should decide: keep the vague advisory as-is,
+or make it precise (highlight the specific conflicting chips, reword for N>2) — the latter turns a
+soft nudge into something that reads like a hard rule, so it is a real design choice, not a tweak.
+
+## Future ticket idea — AI-assisted pack authoring (authoring-time only, NOT student runtime)
+Asked: 2026-07-30 (raised by the teacher during T10 testing)
+Context: today the teacher hand-tags every step in author.html — minutes, busy/free, equipment, and
+especially `consumesBowlOf` (the tags that drive Screen 1's "different times" note and the whole
+schedule). docs/01 sizes this as "~20 minutes once per recipe." The teacher asked whether a recipe
+could be uploaded/pasted and the tagging generated for them. Proposal: a Claude skill (or other
+authoring-time AI helper) that ingests a plain recipe and PRE-FILLS the pack draft — ingredient
+shortLabels, suggested minutes/hands, equipment, and `consumesBowlOf` — for the teacher to review and
+correct before publishing.
+Scope boundary that keeps this legal under the specs: docs/01's non-goal forbids "anything that calls
+a language model at RUNTIME" because the student's schedule must be deterministic and comparable. This
+proposal runs only in author.html, before publish; the teacher reviews and edits every field, and the
+published pack is still plain deterministic JSON. So it does not touch the student flow, codec, or
+scheduler, and the determinism guarantee is preserved. Belongs in its own ticket (post-T14), with its
+own doc, and must ship as suggestions-for-review, never auto-publish.
+Resolved: <teacher fills this in>
+
 ## Manual test log
 
 (Dated results from `09-test-plan.md` Part 4 go here.)

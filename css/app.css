@@ -217,6 +217,104 @@ body {
 
 .placeholder { color: var(--filler); }
 
+/* ── Footer Next gating (T10) ──────────────────────────────────────────────────────────── */
+.next-reason {
+  align-self: center;
+  font-size: 13px;
+  color: var(--filler);
+}
+
+.secondary:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+  border-color: var(--steel);
+  color: var(--steel);
+}
+
+/* ── Screen 1 — bowls (T10) ────────────────────────────────────────────────────────────── */
+.bowls-guide { color: var(--filler); margin: 0 0 12px; }
+
+/* Two columns above 640px, stacked below (docs/05 Screen 1). */
+.bowls-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 640px) { .bowls-cols { grid-template-columns: 1fr; } }
+.bowls-left, .bowls-right { min-width: 0; } /* let long chip labels wrap, not overflow */
+
+.bowls-counter {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 18px;
+  margin: 0 0 4px;
+}
+
+.bowls-recipe { font-weight: 700; font-size: 13px; margin: 10px 0 4px; }
+
+.chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.chip {
+  font: inherit;
+  min-height: 44px; /* Chromebook tap target (docs/02) */
+  padding: 8px 12px;
+  border: 1px solid var(--steel);
+  border-radius: 2px;
+  background: var(--panel);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+/* Selected-for-move: heavy --ink outline, no colour-only signal (docs/05). */
+.chip.sel {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+  border-color: var(--ink);
+  font-weight: 700;
+}
+
+.bowl-card {
+  border: 1px solid var(--steel);
+  border-radius: 2px;
+  background: var(--panel);
+  padding: 10px;
+  margin: 0 0 10px;
+}
+.bowl-card .eyebrow { margin-bottom: 8px; }
+
+.bowl-chip { display: inline-flex; align-items: center; gap: 4px; }
+.bowl-chip .take-out { min-height: 32px; }
+
+.bowl-actions { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+
+.bowl-put {
+  font: inherit;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  background: var(--ink);
+  color: var(--paper);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* Quiet advisory note — never the loud --alert, which the tokens reserve for real warnings. */
+.bowl-note { color: var(--filler); font-size: 13px; margin: 8px 0 0; }
+
+.bowl-new {
+  font: inherit;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px;
+  border: 1px dashed var(--steel);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+/* Drop-target hover outline for the drag path (docs/05). */
+.drop-hover { outline: 2px dashed var(--steel); outline-offset: 2px; }
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }
