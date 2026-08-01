@@ -87,7 +87,18 @@ Not changed under T6: adding a continuity tie-break rewrites Stage 3c's assignme
 T6's scope, and it directly contradicts the "interchangeable cooks" line, so it must not be slipped
 in silently. It would also shift the golden makespan / cook-minute fixtures in
 tests/scheduler.test.js. Belongs in its own scheduler ticket once the teacher decides.
-Resolved: <teacher fills this in>
+Resolved: 2026-08-01 (teacher) — superseded by docs/10 (Station Affinity), which landed in T5-amend
+commits b0990a5 / be5a920 AFTER this was filed and exists precisely to fix the "cook pulled off their
+dish" hopping described here. The equity-vs-continuity conflict was a false dilemma: docs/10's Layer 1
+(on-dish cook selection) delivers continuity FOR FREE — it only relabels who does a tied task, so
+role-equity and byte-identical timing both survive; Layer 2 (the tunable affinityWeight) is the only
+part allowed to trade speed for coherence. Default affinityWeight stays 0. Measured on the example
+fixture (scratchpad sweep, 2026-08-01): at every realistic cook count (2–5) Layer 1 at weight 0 already
+yields 0–1 recipe-switches at optimal makespan (makespan = floor = 45); raising the weight buys no
+continuity there and costs +4 min at 1 cook (68→72). The per-pack `affinityWeight` override remains the
+tuning path for a denser pack that hops at weight 0. No code change: docs/10 already shipped the
+mechanism and the default. (See also the "T5/affinity — per-index cook-minute golden" entry below,
+which this consolidates.)
 
 ## T6 — filler equipment capacity is enforced only for the sink, and filler intervals are invisible to the capacity invariant
 Asked: 2026-07-30 (surfaced during T6 review against 04)
