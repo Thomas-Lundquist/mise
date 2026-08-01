@@ -296,7 +296,14 @@ plan-side overrides into `buildGraph` — e.g. `resolveDeps(pack, plan)` preferr
 `plan.stepTags[id].dependsOnOverride` when present — for the override to change anything. That edit
 touches the pure scheduler/model (done in T4/T5) and its golden fixtures, so it must be its own
 scoped change, not slipped into T11.
-Resolved: <teacher fills this in>
+Resolved: 2026-08-01 — DONE as its own scoped change. `model.resolveDeps` now takes an optional
+`plan`; a plan-side `plan.stepTags[id].dependsOnOverride` array wins over the pack (an array — even
+`[]` — is authoritative, matching pack `[]` semantics). `buildGraph` (scheduler.js) and ui-manual now
+pass `plan`. Safe exactly as this entry hoped: `plan.example.json` carries no override, so every golden
+fixture is byte-identical and the full suite passes 107/107 (3 new resolveDeps tests added, incl. the
+"absent override == pack result" invariant that guards the no-movement property). `findCycle` inside
+`validatePack` stays pack-only (authoring time, no student plan); a student-introduced cycle is still
+caught by `buildGraph`'s own topo-sort → CYCLE. See the T12 twin entry below.
 
 ## T12 — Screen 3 reused the T10/T11 shell wiring contract, so app.js was edited again
 
@@ -349,6 +356,10 @@ Assumption used to keep moving: Screen 3 renders whatever schedule the pack-depe
 produces; a student's override currently changes nothing downstream. This remains its own scoped
 scheduler ticket — e.g. `resolveDeps(pack, plan)` preferring the plan override when present, plus
 refreshed golden fixtures — and must not be slipped into a UI ticket.
+Resolved: 2026-08-01 — DONE (see the T11 twin entry above). Implemented exactly as predicted here:
+`resolveDeps(pack, plan)` prefers the plan-side override. No golden fixture needed refreshing — the
+example plan has no override, so nothing moved (107/107 pass). The T14 note #3 came true too: manual
+mode (ui-manual) passes `plan` and now honours student overrides "for free".
 
 ## T12 — on-screen timeline scale raised from 2px/min to 10px/min (spec value changed)
 

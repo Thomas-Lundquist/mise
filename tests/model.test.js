@@ -157,6 +157,25 @@ test('resolveDeps: explicit array is used verbatim', () => {
   eq(resolveDeps(p).s2, ['s1']);
 });
 
+// ── resolveDeps: a student's plan-side override reaches the scheduler ─────────
+test('resolveDeps: plan-side override wins over the pack default', () => {
+  const plan = basePlan();
+  plan.stepTags.s2.dependsOnOverride = []; // student breaks the s1→s2 chain
+  eq(resolveDeps(basePack(), plan).s2, []); // pack default is ['s1']; plan [] wins
+});
+test('resolveDeps: plan-side override wins over a pack explicit override', () => {
+  const p = basePack();
+  p.recipes[0].steps[1].dependsOnOverride = []; // pack says s2 is independent
+  const plan = basePlan();
+  plan.stepTags.s2.dependsOnOverride = ['s1']; // student says it depends on s1
+  eq(resolveDeps(p, plan).s2, ['s1']); // plan wins
+});
+test('resolveDeps: absent plan-side override leaves the pack result unchanged', () => {
+  // basePlan's tags carry no dependsOnOverride, so passing plan must not move anything —
+  // this is the property that keeps every existing plan fixture's schedule byte-identical.
+  eq(resolveDeps(basePack(), basePlan()), resolveDeps(basePack()));
+});
+
 // ── derivedTag: the attentionMin rule ────────────────────────────────────────
 test('derivedTag: active step holds the cook the whole time', () => {
   eq(derivedTag({}, { durationMin: 10, hands: 'busy' }), { durationMin: 10, hands: 'busy', attentionMin: 10 });

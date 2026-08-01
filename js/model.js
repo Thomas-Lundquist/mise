@@ -33,15 +33,27 @@ function allIds(pack) {
 }
 
 /** Resolve each step's effective dependency step ids.
+ * A student-owned `plan.stepTags[id].dependsOnOverride` (when `plan` is given and the field is an
+ * array) WINS over the pack-authored dependency — this is how a Screen-2 override reaches the
+ * scheduler. With no such array, fall back to the pack:
  * `dependsOnOverride === null` → the step with `order - 1` in the same recipe (none if order 1);
  * `[]` → no dependencies; an explicit array → exactly those ids.
- * @param {object} pack @returns {Object<string,string[]>} stepId -> dependency step ids */
-export function resolveDeps(pack) {
+ * The `plan` argument is optional: `resolveDeps(pack)` keeps the pure pack-only semantics for
+ * callers that have no plan (validatePack's cycle check, model tests).
+ * @param {object} pack @param {object} [plan] @returns {Object<string,string[]>} stepId -> dep ids */
+export function resolveDeps(pack, plan) {
   const out = {};
+  const tags = (plan && plan.stepTags) || {};
   for (const recipe of pack.recipes) {
     const byOrder = new Map(recipe.steps.map((s) => [s.order, s]));
     for (const s of recipe.steps) {
-      if (s.dependsOnOverride === null) {
+      const planOverride = tags[s.id] && tags[s.id].dependsOnOverride;
+      if (Array.isArray(planOverride)) {
+        // Student override present. An array (even []) is authoritative: [] honestly means
+        // "no dependencies", matching the pack's own `[]` semantics. The UI cannot emit [];
+        // it only arrives from a hand-edited draft, and honouring it stays consistent.
+        out[s.id] = planOverride.slice();
+      } else if (s.dependsOnOverride === null) {
         if (s.order === 1) {
           out[s.id] = [];
         } else {

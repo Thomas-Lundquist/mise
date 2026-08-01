@@ -22,7 +22,8 @@ export function buildGraph(pack, plan) {
   const stepSet = new Set(stepIds);
 
   // Stage 1.1 — effective dependencies, restricted to real step ids (model.resolveDeps).
-  const resolved = resolveDeps(pack);
+  // Pass `plan` so a student's Screen-2 dependsOnOverride (plan.stepTags[id]) wins over the pack.
+  const resolved = resolveDeps(pack, plan);
   const deps = {};
   const succ = {};
   for (const id of stepIds) {

@@ -87,7 +87,7 @@ export function findViolations(pack, plan, placement) {
   const blocks = computeBlocks(pack, plan, placement);
   const steps = stepIndex(pack);
   const short = (id) => (steps.has(id) ? steps.get(id).shortLabel : id);
-  const deps = resolveDeps(pack);
+  const deps = resolveDeps(pack, plan);
 
   // Rule 1 — dependencies. Walk placed blocks in a stable order (by start, then id) so the message
   // list is deterministic regardless of lane iteration.
