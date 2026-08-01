@@ -205,12 +205,15 @@ function renderPage2(pack, plan, schedule, warns) {
     body.appendChild(grid);
   }
 
-  // Lanes area: one lane per cook, each with absolutely-positioned blocks.
+  // Lanes area: one lane per cook, each with absolutely-positioned blocks. Assignments arrive
+  // sorted by startMin; each block is told where the next one starts so it never overruns it.
   const area = el('div', 'tl-area');
   for (const cook of schedule.cooks) {
     const lane = el('div', 'tl-lane');
-    for (const a of cook.assignments) {
-      for (const node of renderBlock(a, scale, stepRef)) lane.appendChild(node);
+    const as = cook.assignments;
+    for (let i = 0; i < as.length; i += 1) {
+      const nextStartMin = i + 1 < as.length ? as[i + 1].startMin : Infinity;
+      lane.appendChild(renderBlock(as[i], scale, stepRef, nextStartMin));
     }
     area.appendChild(lane);
   }
@@ -250,29 +253,27 @@ function renderPage2(pack, plan, schedule, warns) {
   return sheet;
 }
 
-/** The block(s) for one assignment. An active step or filler is one block. A passive step whose
- * food keeps cooking after the cook is released draws a short solid cook-hold marker (startMin→
- * endMin) then a dashed empty continuation to runsUntilMin labelled "↓ runs to :NN" — the
- * passive-time lesson docs/06 forbids collapsing into one block. Critical steps get a heavy left
- * edge. @param {object} a an Assignment @param {number} scale mm/min @param {Map} stepRef @returns {HTMLElement[]} */
-function renderBlock(a, scale, stepRef) {
-  const nodes = [];
+/** The block for one assignment (docs/03: the cook lane is drawn from startMin to endMin only).
+ * A passive step's food keeps cooking after the cook is released, but per docs/03 (teacher decision,
+ * OPEN-QUESTIONS.md T13) that long cook-time is shown in the EQUIPMENT STRIP (startMin→runsUntilMin),
+ * not in the cook's lane — the cook is free at endMin and the scheduler fills that time with other
+ * tasks, so a lane block to runsUntilMin would sit on top of real work. Active = solid, passive hold
+ * = dashed/gray, filler = dotted italic; critical steps get a heavy left edge.
+ *
+ * The height grows toward MIN_BLOCK_MM for legibility but is clamped so it never reaches the next
+ * block's top — so back-to-back one-minute steps stay separate instead of overlapping.
+ * @param {object} a an Assignment @param {number} scale mm/min @param {Map} stepRef
+ * @param {number} nextStartMin start minute of the next block in this lane, or Infinity @returns {HTMLElement} */
+function renderBlock(a, scale, stepRef, nextStartMin) {
   const kindCls = a.kind === 'filler' ? 'block-filler' : a.hands === 'free' ? 'block-passive' : 'block-active';
   const block = el('div', `block ${kindCls}${a.isCritical ? ' block-critical' : ''}`);
+  const wantMm = Math.max(MIN_BLOCK_MM, (a.endMin - a.startMin) * scale);
+  const roomMm = nextStartMin === Infinity ? wantMm : (nextStartMin - a.startMin) * scale;
   block.style.top = `${a.startMin * scale}mm`;
-  block.style.height = `${Math.max(MIN_BLOCK_MM, (a.endMin - a.startMin) * scale)}mm`;
+  block.style.height = `${Math.min(wantMm, roomMm)}mm`;
   block.appendChild(el('span', 'block-label', a.label));
   if (a.kind === 'step') block.appendChild(el('span', 'block-ref data', stepRef.get(a.stepId)));
-  nodes.push(block);
-
-  if (a.kind === 'step' && a.hands === 'free' && a.runsUntilMin > a.endMin) {
-    const run = el('div', 'block-run');
-    run.style.top = `${a.endMin * scale}mm`;
-    run.style.height = `${(a.runsUntilMin - a.endMin) * scale}mm`;
-    run.appendChild(el('span', 'run-label', `↓ runs to :${a.runsUntilMin}`));
-    nodes.push(run);
-  }
-  return nodes;
+  return block;
 }
 
 /** Show a single centred message (damaged link, or an error-blocked plan) and do NOT print.
@@ -285,9 +286,10 @@ function showMessage(text) {
 }
 
 // ── Boot ───────────────────────────────────────────────────────────────────────────────────────
-/** Boot the print view: read pack + plan from the hash, recompute the schedule, render both pages,
- * then window.print() once (docs/06). @returns {Promise<void>} */
-export async function boot() {
+/** Read pack + plan from the hash, recompute the schedule, render both pages, then window.print()
+ * once (docs/06). The exported boot() wraps this so any unexpected throw is shown on the page rather
+ * than leaving a silent blank tab. @returns {Promise<void>} */
+async function runBoot() {
   const { packPart, planStr } = parseHash(location.hash);
 
   const packResult = await loadPack(packPart);
@@ -335,4 +337,15 @@ export async function boot() {
   document.body.appendChild(main);
 
   window.print();
+}
+
+/** Boot the print view. Any unexpected error is caught and shown on the page (with the message and
+ * a hint) instead of leaving a blank tab, so a failure is diagnosable without opening DevTools.
+ * @returns {Promise<void>} */
+export async function boot() {
+  try {
+    await runBoot();
+  } catch (err) {
+    showMessage(`Print error: ${err && err.message ? err.message : String(err)}`);
+  }
 }

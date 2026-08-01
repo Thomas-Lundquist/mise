@@ -101,12 +101,7 @@ table.bowls td { vertical-align: top; padding: 1.2mm 2mm 1.2mm 0; }
 }
 .block-ref { position: absolute; right: 0.6mm; bottom: 0.3mm; font-size: 7pt; }
 
-/* Passive continuation: a dashed empty box from endMin to runsUntilMin — the passive-time lesson. */
-.block-run {
-  position: absolute; left: 0.5mm; right: 0.5mm; border: 0.5pt dashed #000; background: transparent;
-  padding: 0.4mm 0.8mm;
-}
-.run-label { font-size: 8pt; color: var(--filler-ink); }
+/* A passive step's long cook-time is shown in the equipment strip (docs/03), not the cook lane. */
 
 /* Floor line: a double rule across all lanes at floorMin (docs/06). */
 .tl-floor {

@@ -381,6 +381,36 @@ it never exceeds the next block's top in the same lane (keeps 5mm for genuinely 
 steps); (c) keep 06 as-is and accept the overlap. This needs a teacher call because it trades
 "1-minute steps are 5mm readable" against "blocks never overlap," and 06 asks for both.
 
+## T13 (follow-up) — RESOLVED: docs/03 vs docs/06 conflict on the passive-step continuation
+
+Asked/resolved: 2026-08-01 (surfaced when the teacher printed the first real PDF)
+Context: the two "5mm block minimum" and passive-rendering notes above came to a head in the first
+printed PDF (tests/print.test/): blocks visibly overlapped. Root cause is a direct conflict between
+two source-of-truth docs on where a passive step's long cook-time is drawn:
+  - 03-data-model.md (Assignment note): "The print view draws the cook lane from startMin to endMin
+    and the equipment strip from startMin to runsUntilMin."  → lane = the ~1-min hold only.
+  - 06-print-spec.md (Block rendering): draw a dashed empty box IN THE LANE from endMin to
+    runsUntilMin ("a thin start marker and a long empty box ... is the whole lesson").
+06's in-lane box assumes the cook idles during their own passive step (as in 06's ASCII, where
+Cook B only simmers). But the scheduler (Stage 3, correctly) releases the cook at endMin and fills
+that time with other tasks — so the box lands on top of real work. Measured on the example plan:
+11 overlaps with the 5mm minimum, 4 of them structural (the dashed continuation vs. the cook's next
+task) and unremovable while the continuation lives in the lane.
+Decision (teacher, 2026-08-01): follow docs/03. The cook lane is drawn startMin→endMin only; the
+passive cook-time is shown in the equipment strip (which already draws each equipmentUse interval
+startMin→runsUntilMin, i.e. the full occupancy). 06's in-lane dashed continuation is dropped.
+Changes made in T13 follow-up (js/print.js, css/print.css):
+  1. renderBlock no longer emits the in-lane "↓ runs to :NN" continuation box (and its CSS is gone).
+  2. The hard `Math.max(5mm, span*scale)` minimum is replaced by a clamp: a block grows toward 5mm
+     for legibility but never past the next block's top, so back-to-back 1-min steps never overlap.
+Result: 0 lane overlaps on the example plan (was 11); the equipment strip still shows the passive
+cook-time (12 of 13 bars span >1 min).
+Known limitation of this choice (revisit if it bites): a passive step whose only equipment has
+capacity > 2 (or no equipment) has no bar in the strip AND no continuation in the lane, so its
+cook-time is not visible anywhere. In the example pack this affects "Rest off heat" (rests on a
+capacity-5 plate). If that matters, either widen the strip's inclusion rule or restore a thin in-lane
+"still cooking" left-rail marker (the third option offered to the teacher). Left as docs/03 specifies.
+
 ## Manual test log
 
 (Dated results from `09-test-plan.md` Part 4 go here.)
