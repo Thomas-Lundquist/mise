@@ -379,6 +379,9 @@ So the print URL is `print.html#<pack-part>&plan=<encoded-plan>`. This never re-
 works for both load paths. T13's print.js MUST read this shape: split the hash on `&`, take the
 pack part exactly as index.html's `loadPackFromHash` does (reuse that logic), and `decodePlan` the
 `plan=` part. If T13 prefers a different layout, change it in BOTH places at once.
+Resolved: 2026-08-01 — T13 honored the contract as specified. print.js splits the hash on `&`,
+takes the pack part verbatim (p= or pf=), and decodePlans the plan= segment. No layout change
+was needed; the two-sided contract held.
 
 ## T12 — student `dependsOnOverride` is STILL not consumed by the scheduler (not fixed in T12)
 
@@ -400,7 +403,7 @@ Resolved: 2026-08-01 — DONE (see the T11 twin entry above). Implemented exactl
 example plan has no override, so nothing moved (107/107 pass). The T14 note #3 came true too: manual
 mode (ui-manual) passes `plan` and now honours student overrides "for free".
 
-## T12 — on-screen timeline scale raised from 2px/min to 10px/min (spec value changed)
+## T12 — on-screen timeline scale raised from 2px/min to 20px/min (spec value changed)
 
 Asked: 2026-07-31 (surfaced during T12 visual testing)
 Context: 05-ui-spec.md Screen 3 item 3 specified the on-screen timeline at "2px per minute instead
@@ -408,11 +411,13 @@ of 3mm". At 2px/min the example plan (45 min) was only 90px tall, so blocks were
 compounded by a `min-height: 14px` on each block, short steps (<7 min) were force-grown past their
 true height and OVERLAPPED. The teacher confirmed the rail was "not working at all" visually.
 Resolution (teacher-approved during the T12 session): (1) removed the block `min-height` so height
-is exactly `span * SCALE` and blocks can never overlap; (2) raised the scale to 10px/min. The value
+is exactly `span * SCALE` and blocks can never overlap; (2) raised the scale to 20px/min. The value
 is the single `SCALE` const at the top of `js/ui-review.js`, documented as the knob so the teacher
 can retune it later; everything (blocks, spine ticks, gridlines, floor line, equipment bars) derives
-from it. 05-ui-spec.md item 3 was updated from 2px to 10px to keep the spec and code in sync.
+from it. 05-ui-spec.md item 3 was updated from 2px to 20px to keep the spec and code in sync.
 Note: the PRINT view (06-print-spec.md, 3mm/min) is UNCHANGED — this only affects the screen preview.
+Resolved: 2026-08-01 (teacher) — ratified in-session as noted above. SCALE raised to 20px/min,
+block min-height removed, 05-ui-spec.md updated. Print view unchanged.
 
 ## T13 — 06 resolves the T5 `equipmentChecklist.count` ambiguity: the count is never displayed
 
@@ -429,6 +434,9 @@ names + `Mixing bowls x${schedule.bowlCount}`, sorted alphabetically; `count` is
 print side. This does not require changing the scheduler — `count = capacity` stays as T5 set it,
 it is simply unused by the only consumer that reads 06. The T5 question can be considered resolved
 for display purposes: no view needs a per-equipment count. Revisit only if T14 (manual mode) does.
+Resolved: 2026-08-01 — T14 shipped. Manual mode validates equipment capacity directly from
+pack.equipment and never reads equipmentChecklist.count. The T5 default (count = capacity)
+remains set but unused by all views. No change needed.
 
 ## T13 — the 06 "minimum height 5mm" block rule conflicts with the passive-time pattern (overlaps)
 
@@ -451,6 +459,10 @@ visible start tick, no overlap), matching what T12 did on screen; (b) clamp each
 it never exceeds the next block's top in the same lane (keeps 5mm for genuinely standalone short
 steps); (c) keep 06 as-is and accept the overlap. This needs a teacher call because it trades
 "1-minute steps are 5mm readable" against "blocks never overlap," and 06 asks for both.
+Resolved: 2026-08-01 (teacher) — superseded by the T13 follow-up entry directly below. Root
+cause (in-lane dashed continuation) was removed by following docs/03; hard min-height replaced
+with a clamp (grows toward 5mm but never past the next block's top). 0 lane overlaps on the
+example plan. Option (b) from above.
 
 ## T13 (follow-up) — RESOLVED: docs/03 vs docs/06 conflict on the passive-step continuation
 
@@ -499,6 +511,10 @@ Trade-off: the printed scale is no longer a constant "ruler" across plans, so tw
 may use different mm/min. Mitigated by the labelled minute spine (you read time off the spine, not a
 ruler). Revert to fixed 3mm by returning MM_PER_MIN_NORMAL from pickScale if the teacher prefers the
 constant scale. Left as an enhancement pending the teacher seeing the printed result.
+Resolved: 2026-08-01 (teacher) — dynamic scale ratified. Readability takes priority. For plans
+longer than ~70 min, keep the 3mm floor and let content flow naturally to a second page via CSS
+overflow — no hard minutes-per-page limit for now. A hard page-break scheme (repeat lane headers,
+explicit breaks at e.g. 60 min) is a future ticket if multi-page plans feel chaotic in practice.
 
 ## T14 — the pack "mode flag" has no definition in docs/03
 
@@ -514,6 +530,11 @@ validatePack already ignores fields outside its checklist, so an unknown `mode` 
 validation. app.js reads `pack.mode` to route Screen 3. Revisit if the teacher wants `mode`
 formally validated (add an enum check to validatePack + a model.test case) or wants author.html to
 expose a mode toggle (out of T14's named files — T14 ships ui-manual.js + styles + the flag only).
+Revised direction (2026-08-01, teacher, pending implementation): A static pack-level mode flag is
+the wrong model. The intended UX is: auto-scheduler always runs first and places everything; the
+student can then flip to manual view to tweak. Mode is a student-session choice, not a teacher-
+authored pack property. The pack.mode field and app.js routing need to be redesigned around a
+student-controlled toggle. Formal spec update TBD in a future ticket.
 
 ## T14 — manual mode reused the Screen-3 shell mount, so app.js was edited (same pattern as T10–T12)
 
@@ -530,6 +551,10 @@ placeholder via textContent, exactly as ui-review does). So manual mode occupies
 plan"); the four-dot flow, footer, and Screens 0–2 are untouched.
 Assumption used to keep moving: replacing Screen 3 (not adding a fifth screen) is the right reading of
 "replaces the auto-scheduler." Revisit if the teacher wants BOTH views reachable from one pack.
+Revised direction (2026-08-01, teacher, pending implementation): Both views ARE reachable from
+one pack; the student toggles between auto and manual on Screen 3 rather than the pack dictating
+the mode. The current pack.mode routing in app.js will be replaced when the new toggle UX is
+specced and built. See mode-flag entry above.
 
 ## T14 — manual placement model (serial lane stacks, uniform cards, in-memory) is under-specified
 
@@ -558,6 +583,14 @@ concrete had to be derived. Decisions made (teacher deferred to me), all in js/u
    entry and a mid-plan cook-count change (Screen 0) resets it (lanes are rebuilt to match the new
    count, returning all steps to the tray). Revisit if the teacher wants a manual arrangement to
    persist across reloads — that needs a new plan field in 03 and codec coverage.
+Revised direction (2026-08-01, teacher, pending implementation):
+  2. BLOCKS must be to-scale bars (same visual language as the auto-review/print timeline), not
+     uniform-height cards. The 44px min-touch-target constraint remains but height must also reflect
+     duration, matching what the student sees on the auto side.
+  4. STATE must persist in sessionStorage (survives screen navigation, lost on browser close — that
+     is acceptable). Switching back to auto from manual requires a confirmation dialog before the
+     manual arrangement is discarded. A new plan field in 03 and codec coverage are NOT required
+     for sessionStorage-only persistence.
 
 ## T14 — printing a manual arrangement is deferred (done-when requires the print view unchanged)
 
@@ -572,6 +605,11 @@ validation + makespan-comparison board; the print view is left byte-for-byte unc
 the done-when literally. Making the manual arrangement printable (synthesize a Schedule from the
 lane stacks → the existing print.html/print.js render it) is a real follow-up feature with its own
 decisions (fillers? equipment strip from manual placement?), out of T14's named files.
+Revised direction (2026-08-01, teacher, pending implementation): Manual mode needs a print button.
+Implementation path: synthesize a Schedule-shaped object from the lane stacks and pass it to the
+existing print.html/print.js render path. Open sub-questions for the ticket that builds this:
+whether fillers are included (a manual plan has none), and what appears in the equipment strip
+(only intervals the student explicitly placed). Scoped to that future ticket.
 
 ## T5/affinity — the per-index cook-minute golden table is superseded by docs/10 Layer 1
 
@@ -601,6 +639,31 @@ from the spec, so baking it into the golden reference would invert the "golden v
 spec, not the code" principle. `fixtures/README.md`'s per-cook column is now annotated as the
 pre-affinity baseline (floor + makespans there stay authoritative). No code change; the affinity
 commit b0990a5 already ships assertion (b).
+
+## T16 (follow-up) — manual mode should seed its board from the auto schedule, not start empty
+
+Asked: 2026-08-01 (teacher, post-T16)
+Context: the current manual board opens with every step in the tray and the student must place all
+of them themselves. The teacher's intent is that manual mode gives the student a jumping-off point —
+the auto-scheduler's assignment pre-fills the lanes, and the student rearranges from there. A
+"Clear board" button lets them start from scratch if they want. This is significantly better UX:
+students save time (no bulk dragging), and the pedagogical goal shifts from "place everything" to
+"critique and adjust the algorithm's choices."
+Implementation path for the ticket that builds this:
+1. In ui-manual.js `mount`, call `buildSchedule(pack, plan)` and, if `base.ok`, seed `placement`
+   from `base.cooks[i].assignments` filtered to `kind === 'step'` (skip fillers, which the manual
+   board has no concept of) — each cook's assignments in start-order give the initial lane stack.
+2. Add a "Clear board" secondary button (next to the toggle) that resets `placement = emptyLanes(n)`
+   and re-renders. No confirmation needed — the auto seed is always recoverable by re-entering
+   manual mode (once T17's sessionStorage is in place, a "Reset to auto" variant is also possible).
+3. If `buildSchedule` throws or returns `ok:false`, fall back to an empty board (cycle or untagged
+   step — rare, but the student can still place manually).
+Open sub-questions: (a) should fillers appear on the board as pre-placed (greyed out, not movable)?
+The manual validation model ignores fillers, so probably not — they'd clutter the board with no
+payoff. (b) Does seeding from the auto schedule interact with T17's sessionStorage? If a seeded
+board is persisted, re-entering manual mode should restore the sessionStorage state, not re-seed
+from the auto schedule — so the "initial seed" only fires when there is no stored state.
+Resolved: <teacher fills this in>
 
 ## Manual test log
 
