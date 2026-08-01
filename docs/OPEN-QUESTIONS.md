@@ -128,7 +128,9 @@ inventing behaviour; none changes an existing test or module.
    offending items here are ingredients, not steps. Assumption used: put the ingredient ids in
    `stepIds` (the sole id-carrier) so a later UI can highlight them; the alternative is an empty array
    and no way to point at the problem.
-Resolved: <teacher fills this in>
+Resolved: 2026-08-01 (teacher) — all three conservative reads accepted as shipped: SOLO_CROWD
+overlap uses the full `[startMin, runsUntilMin)` window; LONG_ACTIVE names the step by `shortLabel`;
+UNBOWLED carries the offending ingredient ids in `stepIds`. No code change.
 
 ## T7 — checkPlan must tolerate a missing / non-ok schedule
 Asked: 2026-07-30 (surfaced during T7)
@@ -141,7 +143,9 @@ with `schedule` undefined); CYCLE is read back out of a `{ ok:false }` schedule'
 is tag-only so it also needs no schedule; and the four makespan-dependent warns (OVER_PERIOD, IDLE_HEAVY,
 FAR_FROM_FLOOR, SOLO_CROWD) run only when `schedule.ok === true`. Output order is all errors then all warns,
 each group in the Stage-5 table order, matching T12's "warnings render in severity order".
-Resolved: <teacher fills this in>
+Resolved: 2026-08-01 (teacher) — accepted as shipped. Deriving UNTAGGED/UNBOWLED/LONG_ACTIVE from
+pack+plan, reading CYCLE back out of a `{ ok:false }` schedule, and gating the makespan-dependent
+warns on `schedule.ok === true` is the right coupling. Errors-then-warns ordering stands.
 
 ## T9 — student shell handles both #p= and #pf=, and sanitizes the hosted filename
 Asked: 2026-07-30 (surfaced during T9)
@@ -159,7 +163,8 @@ folded in since the student can't fix it either. (2) The `#pf=` filename is rest
 `^[\w.-]+\.json$` with no `..`, and always resolved as `fixtures/<name>` — the spec names the
 `/fixtures/` directory but not a guard against a crafted filename escaping it. Revisit if a later
 ticket needs invalid packs distinguished from damaged links, or a different hosted-file location.
-Resolved: <teacher fills this in>
+Resolved: 2026-08-01 (teacher) — accepted as shipped. Both load paths, the single "damaged link"
+collapse for every failure a student can't fix, and the `^[\w.-]+\.json$` filename guard stand.
 
 ## T10 — Screen 1 needed a wiring contract the T9 shell did not define, so app.js was edited
 Asked: 2026-07-30 (surfaced during T10)
@@ -177,7 +182,9 @@ The `ctx` contract now is `{ pack, plan, persist, setNextEnabled }`; the same sh
 Screens 2–3 (T11/T12), so this is a one-time shell contract, not a Screen-1 special case.
 Assumption used to keep moving: the contract above. Revisit if T11/T12 need a richer ctx (e.g. a way
 to advance programmatically or read sibling-screen state).
-Resolved: <teacher fills this in>
+Resolved: 2026-08-01 (teacher) — ratified. The `{ pack, plan, persist, setNextEnabled }` shell
+contract and the minimal app.js mount/refresh/reset edit stand as shipped; it served Screens 2–3
+unchanged, confirming the one-time-contract read.
 
 ## T10 — empty-bowl pruning timing and the "different times" note trigger are unspecified
 Asked: 2026-07-30 (surfaced during T10)
@@ -253,7 +260,8 @@ always"), so it does not call `setNextEnabled`; the shell already leaves Next en
 other than Screen 1. `index.html` is UNCHANGED (ui-steps.mount clears the placeholder via textContent).
 Assumption used to keep moving: the existing contract serves Screen 2 as predicted in the T10 entry.
 Revisit if T12 needs a richer ctx.
-Resolved: <teacher fills this in>
+Resolved: 2026-08-01 (teacher) — ratified as shipped, same as the T10 wiring entry above. Screen 2
+never gating Next is correct.
 
 ## T11 — student `dependsOnOverride` is written into the plan but the scheduler reads the pack
 
@@ -295,6 +303,8 @@ The `ctx` shape is the existing `{ pack, plan, persist, setNextEnabled }` — Sc
 screen (the shell hides Next), and it is read-only, so it uses neither `persist` nor `setNextEnabled`.
 `index.html` is UNCHANGED (ui-review.mount clears the placeholder via textContent).
 Assumption used to keep moving: the existing contract serves Screen 3 as the T10 entry predicted.
+Resolved: 2026-08-01 (teacher) — ratified as shipped, same as the T10/T11 wiring entries. The read-only
+last screen using neither `persist` nor `setNextEnabled` is correct.
 
 ## T12 — the print URL hash format is a contract T13 must match
 
