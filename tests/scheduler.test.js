@@ -102,6 +102,18 @@ test('Case F: a candidate blocked on equipment does not delay a free one', () =>
   eq(s.makespanMin, 40);
 });
 
+// ── B4 — fail loud on a step that needs equipment the pack never defines ──────
+test('B4: buildSchedule throws the fail-loud form on unknown step equipment', () => {
+  // The MISSING_EQUIP case. validatePack catches it and the UI gates scheduling behind
+  // validation, but an unvalidated pack must raise the 02-conventions 'scheduler: ...' error,
+  // not a raw TypeError from reading .capacity off undefined. Assert the exact message.
+  const pack = mkPack([step('m1', 1, null, ['ghost'])]); // 'ghost' is not in pack.equipment
+  const plan = mkPlan({ m1: tag(5, 'busy') }, 1);
+  let msg = '';
+  try { buildSchedule(pack, plan); } catch (e) { msg = e.message; }
+  eq(msg, 'scheduler: step m1 needs unknown equipment ghost');
+});
+
 // ── Golden fixture values + invariants across cooks 1–5 ───────────────────────
 const examplePack = await fetch('../fixtures/recipe-pack.example.json').then((r) => r.json());
 const examplePlan = await fetch('../fixtures/plan.example.json').then((r) => r.json());

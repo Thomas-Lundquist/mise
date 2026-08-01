@@ -51,7 +51,11 @@ Assumption used to keep moving: left as-is for T5 — fixing it edits T5 code ou
 and the path is unreachable with validated input. A one-line guard
 (`throw new Error('scheduler: step ' + id + ' needs unknown equipment ' + eid)`) would restore
 the convention if a later ticket wants belt-and-suspenders.
-Resolved: <teacher fills this in>
+Resolved: 2026-08-01 (teacher) — guard added in js/scheduler.js (equipFreeAt): a step naming
+equipment the pack does not define now throws `scheduler: step <id> needs unknown equipment <eid>`
+instead of a raw TypeError, matching the 02-conventions fail-loud form. New scheduler.test case
+asserts the exact message. No behavior change on validated packs (the path is unreachable when
+validatePack has passed) — suite 109/109.
 
 ## T6 — filler Assignment field shape and post-fill idleMin / utilizationPct
 Asked: 2026-07-30 (surfaced during T6)

@@ -172,7 +172,12 @@ export function buildSchedule(pack, plan) {
       for (const busy of equipBusy) {
         if (busy.equipmentId === eid && busy.startMin <= at && busy.endMin > at) count += 1;
       }
-      if (count >= equipById.get(eid).capacity) return false;
+      const equip = equipById.get(eid);
+      // Fail loud (02-conventions) instead of a raw TypeError if a step names equipment the pack
+      // does not define. validatePack reports this as MISSING_EQUIP and the UI gates scheduling
+      // behind validation, so this only fires when buildSchedule runs on an unvalidated pack.
+      if (!equip) throw new Error('scheduler: step ' + step.id + ' needs unknown equipment ' + eid);
+      if (count >= equip.capacity) return false;
     }
     return true;
   };
