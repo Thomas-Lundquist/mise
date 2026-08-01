@@ -279,6 +279,70 @@ touches the pure scheduler/model (done in T4/T5) and its golden fixtures, so it 
 scoped change, not slipped into T11.
 Resolved: <teacher fills this in>
 
+## T12 — Screen 3 reused the T10/T11 shell wiring contract, so app.js was edited again
+
+Asked: 2026-07-31 (surfaced during T12)
+Context: exactly like T10 and T11 (see the two "shell wiring" entries above), T12 ships only
+`js/ui-review.js` + styles, but the shell never mounts Screen 3 — `#screen-3` held static
+placeholder markup and app.js had no call site. T12's acceptance ("the two numbers are right,
+warnings render in severity order, errors disable printing, and the on-screen lanes match the
+printed lanes structurally") is only verifiable in the flow if app.js reaches ui-review, so the
+same minimal wiring edit was applied. Teacher pre-approved (decision ① of the T12 session).
+Change made (kept minimal, mirroring T11): app.js imports `ui-review.mount`, calls it when Screen 3
+is first shown and `.refresh()`es it on return, holding the controller in `reviewCtl`; `reviewCtl`
+is reset to null on resume/start-over alongside `bowlsCtl`/`stepsCtl` so a replaced `plan` re-mounts.
+The `ctx` shape is the existing `{ pack, plan, persist, setNextEnabled }` — Screen 3 is the last
+screen (the shell hides Next), and it is read-only, so it uses neither `persist` nor `setNextEnabled`.
+`index.html` is UNCHANGED (ui-review.mount clears the placeholder via textContent).
+Assumption used to keep moving: the existing contract serves Screen 3 as the T10 entry predicted.
+
+## T12 — the print URL hash format is a contract T13 must match
+
+Asked: 2026-07-31 (surfaced during T12)
+Context: 05-ui-spec.md Screen 3 item 5 says Print "opens print.html in a new tab with the plan in
+the hash", and 06-print-spec.md says print.html "reads the plan and pack from the URL hash", but
+neither pins the hash key names, and print.js is built in T13. ui-review must construct that hash
+now to open the tab. The pack is large (the example fixture encodes to ~11,667 chars — see the T8
+entry), so re-encoding it into the print URL is wrong; the plan is small by design (03: "small
+enough to fit in a Canvas text submission").
+Assumption used to keep moving (teacher-approved, decision ② of the T12 session): ui-review reuses
+the pack portion of the CURRENT address-bar hash verbatim — `p=<encoded>` inline or
+`pf=<filename>.json` hosted, whichever this student loaded — and appends `&plan=<encodePlan(plan)>`.
+So the print URL is `print.html#<pack-part>&plan=<encoded-plan>`. This never re-encodes the pack and
+works for both load paths. T13's print.js MUST read this shape: split the hash on `&`, take the
+pack part exactly as index.html's `loadPackFromHash` does (reuse that logic), and `decodePlan` the
+`plan=` part. If T13 prefers a different layout, change it in BOTH places at once.
+
+## T12 — student `dependsOnOverride` is STILL not consumed by the scheduler (not fixed in T12)
+
+Asked: 2026-07-31 (surfaced during T12)
+Context: the T11 entry "student `dependsOnOverride` is written into the plan but the scheduler reads
+the pack" flagged that `buildGraph`/`resolveDeps` read pack-side dependencies only and ignore
+`plan.stepTags[id].dependsOnOverride`, and named T12 ("which runs the scheduler") as the place that
+might reconcile them. T12 does run the scheduler (in ui-review) but did NOT change it: reconciling
+plan-side overrides edits the pure scheduler/model (built and frozen in T4/T5) and would shift the
+golden fixtures in tests/scheduler.test.js — out of T12's named files (`ui-review.js` + styles) and
+against the working agreement's "no refactors of prior tickets". Teacher confirmed leaving it
+(decision ③ of the T12 session).
+Assumption used to keep moving: Screen 3 renders whatever schedule the pack-dependency scheduler
+produces; a student's override currently changes nothing downstream. This remains its own scoped
+scheduler ticket — e.g. `resolveDeps(pack, plan)` preferring the plan override when present, plus
+refreshed golden fixtures — and must not be slipped into a UI ticket.
+
+## T12 — on-screen timeline scale raised from 2px/min to 10px/min (spec value changed)
+
+Asked: 2026-07-31 (surfaced during T12 visual testing)
+Context: 05-ui-spec.md Screen 3 item 3 specified the on-screen timeline at "2px per minute instead
+of 3mm". At 2px/min the example plan (45 min) was only 90px tall, so blocks were unreadable and,
+compounded by a `min-height: 14px` on each block, short steps (<7 min) were force-grown past their
+true height and OVERLAPPED. The teacher confirmed the rail was "not working at all" visually.
+Resolution (teacher-approved during the T12 session): (1) removed the block `min-height` so height
+is exactly `span * SCALE` and blocks can never overlap; (2) raised the scale to 10px/min. The value
+is the single `SCALE` const at the top of `js/ui-review.js`, documented as the knob so the teacher
+can retune it later; everything (blocks, spine ticks, gridlines, floor line, equipment bars) derives
+from it. 05-ui-spec.md item 3 was updated from 2px to 10px to keep the spec and code in sync.
+Note: the PRINT view (06-print-spec.md, 3mm/min) is UNCHANGED — this only affects the screen preview.
+
 ## Manual test log
 
 (Dated results from `09-test-plan.md` Part 4 go here.)

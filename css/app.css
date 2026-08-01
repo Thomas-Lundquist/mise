@@ -431,6 +431,191 @@ body {
   margin: 0;
 }
 
+/* ── Screen 3 — review (T12) ───────────────────────────────────────────────────────────── */
+/* Two headline numbers side by side; the number in the data face, its label an eyebrow (docs/05). */
+.plan-nums { display: flex; gap: 24px; margin: 0 0 16px; }
+.plan-num-val {
+  display: block;
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1;
+}
+.plan-num .eyebrow { margin: 6px 0 0; }
+
+/* The equal-case single line replaces the two numbers when the plan already hits the floor. */
+.plan-equal {
+  font-family: var(--font-data);
+  font-weight: 700;
+  font-size: 18px;
+  margin: 0 0 16px;
+}
+
+/* Warnings, most severe first. Errors are the only place --alert appears here; warns are a quiet
+   --paper panel and never block (docs/02: --alert is warnings only, never decoration). */
+.warns { margin: 0 0 16px; display: flex; flex-direction: column; gap: 8px; }
+.warn { margin: 0; padding: 8px 10px; border-radius: 2px; font-size: 14px; }
+.warn-error {
+  color: var(--alert);
+  font-weight: 700;
+  border: 1px solid var(--alert);
+  background: var(--panel);
+}
+.warn-note {
+  color: var(--ink);
+  border: 1px solid var(--steel);
+  background: var(--paper);
+}
+
+/* ── The ticket rail (on screen, 2px/min) — same structure as the print view (docs/06) ──── */
+.timeline { margin: 0 0 12px; overflow-x: auto; }
+
+/* Header row: names above the lanes. Spine + equip columns are fixed; cook lanes share the rest. */
+.tl-heads, .tl-body { display: flex; }
+.tl-spine-head, .tl-equip-head, .tl-spine, .tl-equip { flex: 0 0 auto; }
+.tl-spine-head, .tl-spine { width: 40px; }
+.tl-equip-head, .tl-equip { width: 28px; }
+.tl-lane-head, .tl-area { flex: 1 1 0; min-width: 0; }
+
+.tl-spine-head, .tl-lane-head, .tl-equip-head {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-size: 11px;
+  color: var(--filler);
+  padding: 4px 2px;
+  border-bottom: 1px solid var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tl-lane-head { border-left: 1px solid var(--steel); padding-left: 6px; }
+
+/* Spine: right-aligned labelled ticks every 5 minutes, data face (docs/06). */
+.tl-spine { position: relative; }
+.tl-tick {
+  position: absolute;
+  right: 4px;
+  transform: translateY(-50%);
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: var(--filler);
+}
+
+/* Lanes area holds the gridlines (behind) and the flex row of lanes (in front). */
+.tl-area { position: relative; }
+.tl-grid {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px solid var(--steel);
+  pointer-events: none;
+}
+.tl-lanes { display: flex; height: 100%; }
+.tl-lane { flex: 1 1 0; position: relative; min-width: 0; border-left: 1px solid var(--steel); }
+
+/* Blocks: absolutely positioned by minute. Colour carries meaning but never alone (docs/02):
+   active = solid teal + dark border, passive = tape-yellow + dashed border, filler = gray italic. */
+.tl-block {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  /* No min-height: block height is exactly span * SCALE, so blocks can never overlap. Legibility
+     of short blocks comes from SCALE (js/ui-review.js), not from forcing a floor height here. */
+  padding: 1px 3px;
+  border-radius: 2px;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 1.15;
+  cursor: pointer;
+}
+.tl-block-label { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-block-ref {
+  position: absolute;
+  top: 1px;
+  right: 3px;
+  font-family: var(--font-data);
+  font-size: 8px;
+  color: var(--filler);
+}
+.tl-active { background: var(--active); color: var(--paper); border: 1px solid var(--ink); }
+.tl-passive { background: var(--passive); color: var(--ink); border: 1px dashed var(--ink); }
+.tl-filler { background: var(--panel); color: var(--filler); border: 1px dotted var(--ink); font-style: italic; }
+/* Critical steps: a heavy left edge in addition to their kind styling (docs/06). */
+.tl-critical { border-left: 3px solid var(--ink); }
+
+/* Passive continuation: the empty dashed box from endMin to runsUntilMin — the passive-time lesson. */
+.tl-run {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  border: 1px dashed var(--ink);
+  border-top: none;
+  background: transparent;
+  overflow: hidden;
+}
+.tl-run-label {
+  font-family: var(--font-data);
+  font-size: 9px;
+  color: var(--filler);
+  padding: 0 3px;
+  white-space: nowrap;
+}
+
+/* Floor line: a heavy double rule across the lanes at floorMin (docs/06). */
+.tl-floor {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 3px double var(--ink);
+  pointer-events: none;
+}
+.tl-floor-label {
+  position: absolute;
+  left: 4px;
+  top: 2px;
+  font-family: var(--font-data);
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: .06em;
+  background: var(--paper);
+  padding: 0 4px;
+}
+
+/* Equipment strip: unlabelled bars for contended (capacity <= 2) resources (docs/06). */
+.tl-equip { position: relative; border-left: 1px solid var(--steel); }
+.tl-equip-bar {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  background: var(--filler);
+  border-radius: 1px;
+}
+
+/* Tapped-block caption: the full step label appears here (docs/05). */
+.tl-caption {
+  min-height: 20px;
+  font-size: 14px;
+  color: var(--ink);
+  margin: 0 0 16px;
+}
+
+/* Per-cook summary lines, data face so the minute figures align in a column (docs/02). */
+.cook-summary { margin: 0 0 16px; }
+.cook-summary-line {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+  margin: 4px 0;
+}
+
+/* Actions: primary Print, secondary Copy plan code, inline copy status. */
+.plan-actions { margin-top: 8px; }
+.plan-blocked { color: var(--alert); font-size: 13px; margin: 6px 0 0; }
+.copy-status { display: inline-block; margin-left: 8px; font-size: 13px; color: var(--filler); }
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }
