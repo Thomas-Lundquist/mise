@@ -343,6 +343,44 @@ can retune it later; everything (blocks, spine ticks, gridlines, floor line, equ
 from it. 05-ui-spec.md item 3 was updated from 2px to 10px to keep the spec and code in sync.
 Note: the PRINT view (06-print-spec.md, 3mm/min) is UNCHANGED — this only affects the screen preview.
 
+## T13 — 06 resolves the T5 `equipmentChecklist.count` ambiguity: the count is never displayed
+
+Asked: 2026-07-31 (surfaced during T13)
+Context: the T5 entry "equipmentChecklist `count` semantics are undefined" left `count` provisionally
+equal to `capacity`, to be pinned by T8/T12/T13 (the tickets that read 05/06). T13 reads 06, and
+06's EQUIPMENT section shows the checklist as bare names with NO per-item count
+(`[ ] Chef knife  [ ] Oven  [ ] Saucepan`); the ONLY count that appears is on the bowls line,
+`Mixing bowls x<bowlCount>`, and bowls are not equipment (03). So the printed checklist needs the
+equipment `name`s (alphabetical, checklist:true, actually used) plus a synthesized bowls entry —
+and never reads `equipmentChecklist.count` at all.
+Assumption used to keep moving: print.js builds the checklist from `schedule.equipmentChecklist`
+names + `Mixing bowls x${schedule.bowlCount}`, sorted alphabetically; `count` is ignored on the
+print side. This does not require changing the scheduler — `count = capacity` stays as T5 set it,
+it is simply unused by the only consumer that reads 06. The T5 question can be considered resolved
+for display purposes: no view needs a per-equipment count. Revisit only if T14 (manual mode) does.
+
+## T13 — the 06 "minimum height 5mm" block rule conflicts with the passive-time pattern (overlaps)
+
+Asked: 2026-07-31 (surfaced during T13 verification)
+Context: 06-print-spec.md "Block rendering" says `height = (endMin - startMin) * scale`, "minimum
+height 5mm so a 1-minute step is still readable." At the spec's 3mm/min, a passive step's cook-hold
+marker is 1 minute = 3mm, floored to 5mm. But the cook is released at `endMin` and typically picks
+up the NEXT task at that same minute, whose block top is `endMin * 3mm` = only 3mm below the marker
+top — so the 5mm marker overruns the following block by ~2mm. Measured on the example plan
+(fixtures/plan.example.json, 45 min, 4 cooks): 7 such lane overlaps, all from passive cook-hold
+markers immediately followed by another assignment. This is precisely the "start a simmer and move
+on" pattern the whole app exists to teach, so it is common, not a corner case. 05/T12 hit the same
+geometry on screen and REMOVED the on-screen min-height (see the "on-screen timeline scale" entry),
+but 06 still mandates 5mm for print and does not reconcile it with adjacency.
+Assumption used to keep moving: T13 implements 06 literally — `Math.max(5mm, span*scale)` — and does
+NOT invent a fix, per the working agreement ("continue with the spec as written; never invent
+behavior"). The overlap is therefore present in the printed output as shipped. Three options for a
+later ticket / teacher decision: (a) drop the print min-height too (markers become 3mm — still a
+visible start tick, no overlap), matching what T12 did on screen; (b) clamp each block's height so
+it never exceeds the next block's top in the same lane (keeps 5mm for genuinely standalone short
+steps); (c) keep 06 as-is and accept the overlap. This needs a teacher call because it trades
+"1-minute steps are 5mm readable" against "blocks never overlap," and 06 asks for both.
+
 ## Manual test log
 
 (Dated results from `09-test-plan.md` Part 4 go here.)
