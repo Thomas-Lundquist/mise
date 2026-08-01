@@ -108,7 +108,8 @@ table.bowls td { vertical-align: top; padding: 1.2mm 2mm 1.2mm 0; }
   position: absolute; left: 0; right: 0; height: 0; border-top: 3pt double #000; z-index: 2;
 }
 .tl-floor-label {
-  position: absolute; left: 2mm; top: 0.5mm; font-weight: 700; font-size: 9pt;
+  /* Sit just ABOVE the rule so it never lands in the footer when floorMin == makespanMin. */
+  position: absolute; left: 2mm; bottom: 0.5mm; font-weight: 700; font-size: 9pt;
   background: #fff; padding: 0 1mm;
 }
 

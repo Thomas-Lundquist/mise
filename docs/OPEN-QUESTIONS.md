@@ -411,6 +411,24 @@ cook-time is not visible anywhere. In the example pack this affects "Rest off he
 capacity-5 plate). If that matters, either widen the strip's inclusion rule or restore a thin in-lane
 "still cooking" left-rail marker (the third option offered to the teacher). Left as docs/03 specifies.
 
+## T13 (follow-up) — print timeline scale grows to fill the page (deviation from 06's fixed 3mm)
+
+Asked/decided: 2026-08-01 (surfaced from the first printed PDF)
+Context: 06-print-spec.md fixes "1 minute = 3mm" (2mm above 70 min). At 3mm a short plan fills only
+part of the page — the example (45 min) is 135mm on a ~210mm usable area — so 1-minute passive holds
+were only 3mm tall and their 9pt labels were clipped by the block edge (looked struck-through), while
+half the page sat blank. 06's overriding goal is legibility ("read from three feet away").
+Change made (js/print.js pickScale): 3mm is now the FLOOR, not a fixed value. When a plan is short
+enough to leave room, the scale grows to fill the page (AVAIL_TIMELINE_MM = 210mm), capped at 6mm/min
+so a tiny plan isn't absurd; it still drops to 2mm only when 3mm would overflow a page (makespan > 70)
+or lanes would fall below 30mm. For the example this yields 4.67mm/min: timeline 210mm, smallest block
+4.67mm (label fits), 0 overlaps, page-2 content ~235mm (fits one letter page). Also: the FLOOR label
+now sits just above its rule (css) so it no longer overprints the footer when floorMin == makespanMin.
+Trade-off: the printed scale is no longer a constant "ruler" across plans, so two students' sheets
+may use different mm/min. Mitigated by the labelled minute spine (you read time off the spine, not a
+ruler). Revert to fixed 3mm by returning MM_PER_MIN_NORMAL from pickScale if the teacher prefers the
+constant scale. Left as an enhancement pending the teacher seeing the printed result.
+
 ## Manual test log
 
 (Dated results from `09-test-plan.md` Part 4 go here.)

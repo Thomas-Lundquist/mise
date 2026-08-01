@@ -18,10 +18,14 @@ import { fillGaps } from './fillers.js';
 import { checkPlan } from './warnings.js';
 
 // ── Measurements (docs/06). All page geometry is in mm/pt; only the timeline scale is a knob. ──
-const MM_PER_MIN_NORMAL = 3;   // 1 minute = 3mm: a 50-min lab is 150mm and fits one page.
+const MM_PER_MIN_NORMAL = 3;   // 1 minute = 3mm: docs/06's baseline; used as the FLOOR scale.
 const MM_PER_MIN_COMPACT = 2;  // dropped to 2mm/min once a plan is too tall for 3mm.
+const MM_PER_MIN_MAX = 6;      // cap when growing to fill the page, so a tiny plan isn't absurd.
 const COMPACT_OVER_MIN = 70;   // makespanMin > 70 → compact scale (docs/06 measurements).
-const MIN_BLOCK_MM = 5;        // a 1-min step still prints readably (docs/06 block rendering).
+const AVAIL_TIMELINE_MM = 210; // usable vertical room for the lanes on a letter page after the
+                               // header row and footer (matches 06: 70 min * 3mm ≈ a full page).
+const MIN_BLOCK_MM = 5;        // a short step grows toward this for legibility (docs/06), clamped
+                               // so it never overruns the next block in its lane.
 const SPINE_MM = 14;           // time-spine width.
 const EQUIP_MM = 22;           // equipment strip width.
 const MIN_LANE_MM = 30;        // below this, drop to compact rather than narrow lanes further.
@@ -93,12 +97,18 @@ function isDamagedPlan(p) {
 }
 
 // ── Scale ────────────────────────────────────────────────────────────────────────────────────
-/** Choose mm-per-minute: 3mm normally, 2mm once a plan is over 70 min or its lanes would be
- * narrower than 30mm (docs/06). @param {number} makespanMin @param {number} cooksN @returns {number} */
+/** Choose mm-per-minute. docs/06 fixes 3mm/min (2mm above 70 min), but at 3mm a short plan fills
+ * only a fraction of the page, leaving 1-minute steps too cramped to label. So 3mm is treated as a
+ * FLOOR: when a plan is short enough to leave room, the scale grows to fill the page (capped) so
+ * every block is legible — 06's stated goal. It only drops to 2mm when even 3mm would overflow a
+ * page (makespan > 70) or the lanes would fall below 30mm. Deviation logged in OPEN-QUESTIONS (T13).
+ * @param {number} makespanMin @param {number} cooksN @returns {number} */
 function pickScale(makespanMin, cooksN) {
   const laneMm = (CONTENT_MM - SPINE_MM - EQUIP_MM) / cooksN;
-  if (makespanMin > COMPACT_OVER_MIN || laneMm < MIN_LANE_MM) return MM_PER_MIN_COMPACT;
-  return MM_PER_MIN_NORMAL;
+  if (makespanMin <= 0) return MM_PER_MIN_NORMAL;
+  const fit = AVAIL_TIMELINE_MM / makespanMin;
+  if (fit < MM_PER_MIN_NORMAL || laneMm < MIN_LANE_MM) return MM_PER_MIN_COMPACT;
+  return Math.min(fit, MM_PER_MIN_MAX); // grow to fill the page, capped
 }
 
 // ── Page 1: bowls and equipment ────────────────────────────────────────────────────────────────
