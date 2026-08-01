@@ -244,9 +244,13 @@ Encoding, in order: `JSON.stringify` → `TextEncoder` to UTF-8 bytes → base64
 URL-safe substitution (`+`→`-`, `/`→`_`, strip `=`). Decoding reverses it. Export
 `encodePack(pack)`, `decodePack(str)`, `encodePlan(plan)`, `decodePlan(str)`.
 
-- A pack that exceeds **6000 characters encoded** must make `author.html` show:
-  "This day is too big for a link. Download the pack file and host it next to the app
-  instead." Then fall back to `#pf=<filename>.json` loaded from `/fixtures/`.
+- **Sharing a published pack.** `author.html` offers the **hosted path first**: download the pack
+  (saved as `<packId>.json`) and place it in the app's `/fixtures/` folder; students load it via
+  `#pf=<filename>.json` (fetched from `fixtures/`). A realistic two-recipe day encodes well past
+  **6000 characters**, so this is the normal path, not a fallback. Only when the pack encodes to
+  **≤ 6000 characters** does author.html *also* offer a self-contained inline `#p=<encoded>` link
+  that needs no hosting. (Earlier drafts framed inline as primary and hosted as a "too big"
+  fallback; reversed once the example measured ~11,667 chars — see docs/OPEN-QUESTIONS.md, T8.)
 - `decodePack` must never throw on bad input. It returns `{ ok: false, error: "..." }`
   and the app shows: "This link is damaged. Ask your teacher for a new one."
 - Round-trip is a hard test: `decodePack(encodePack(p))` must deep-equal `p`.

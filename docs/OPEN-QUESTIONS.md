@@ -23,7 +23,16 @@ the *primary* path for any realistic pack, not the exception the spec frames it 
 Assumption used to keep moving: T3 codec is correct as specified (encode returns the string,
 oversize is length > 6000). No behavior invented. This only affects how T8 presents the two
 paths — the fallback should probably be the default, and the inline link the special case.
-Resolved: <teacher fills this in>
+Resolved: 2026-08-01 (teacher) — option (a), hosted-first. author.html's publish panel now leads with
+the two-step hosted flow (Download pack JSON → "put <packId>.json in the app's fixtures/ folder" →
+a Copy-able `#pf=<packId>.json` link) and offers the self-contained inline `#p=` link only when the
+pack encodes to ≤ MAX_ENCODED_CHARS. The old behaviour dropped every realistic pack into a red "too
+big" error state with a bare URL and no Copy button; that error framing is gone. Note the download
+already names the file `<packId>.json` (downloadPack) and the student shell fetches `fixtures/<name>`
+(app.js:58), so the two steps line up. docs/03's URL-encoding section was updated to match (hosted =
+primary, inline = the ≤6000 bonus). Files: js/ui-author.js (new `urlField` helper), css/app.css
+(`.publish-lead`/`.hint`/`.url-row`), docs/03. Suite unaffected (114/114; ui-author is DOM-only,
+syntax-checked).
 
 ## T5 — equipmentChecklist `count` semantics are undefined
 Asked: 2026-07-30 (surfaced during T5)

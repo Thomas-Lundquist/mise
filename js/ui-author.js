@@ -481,16 +481,32 @@ function runCheck(container) {
 
   const encoded = encodePack(pack);
   const base = location.href.replace(/author\.html.*$/, 'index.html');
-  if (encoded.length > MAX_ENCODED_CHARS) {
-    container.appendChild(el('p', { class: 'alert', text: 'This day is too big for a link. Download the pack file and host it next to the app instead.' }));
-    container.appendChild(el('div', { class: 'url-field', text: `${base}#pf=${pack.packId}.json` }));
-    return;
+
+  // Hosted file is the PRIMARY share path: a real two-recipe day encodes well past
+  // MAX_ENCODED_CHARS (see docs/OPEN-QUESTIONS.md, T8), so a self-contained inline link is the
+  // exception, not the rule. downloadPack saves the file as <packId>.json — exactly what #pf= loads.
+  container.appendChild(el('p', { class: 'publish-lead', text: 'Publish this day — two steps:' }));
+  container.appendChild(el('button', { class: 'primary', text: 'Download pack JSON', onclick: downloadPack }));
+  container.appendChild(el('p', { class: 'hint', text: `Then put the downloaded ${pack.packId}.json in the app's fixtures/ folder and share this link:` }));
+  container.appendChild(urlField('Assignment link (hosted)', `${base}#pf=${pack.packId}.json`));
+
+  // Inline link is offered ONLY when the whole pack fits in the URL; then no hosting is needed.
+  if (encoded.length <= MAX_ENCODED_CHARS) {
+    container.appendChild(el('p', { class: 'hint', text: 'This day is also small enough to paste directly — a self-contained link that needs no hosted file:' }));
+    container.appendChild(urlField('Assignment link (inline)', `${base}#p=${encoded}`));
+  } else {
+    container.appendChild(el('p', { class: 'hint', text: `(No self-contained inline link: this day is ${encoded.length} characters, over the ${MAX_ENCODED_CHARS} limit — share the hosted link above.)` }));
   }
-  const url = `${base}#p=${encoded}`;
-  const urlInput = el('input', { type: 'text', class: 'url-field', value: url, readonly: true });
-  urlInput.addEventListener('focus', () => urlInput.select());
-  container.appendChild(field('Assignment URL', urlInput));
-  container.appendChild(el('button', { class: 'primary', text: 'Copy link', onclick: () => copyText(url) }));
+}
+
+/** A labelled read-only URL field with a Copy button beside it. @param {string} label @param {string} url */
+function urlField(label, url) {
+  const input = el('input', { type: 'text', class: 'url-field', value: url, readonly: true });
+  input.addEventListener('focus', () => input.select());
+  return el('div', { class: 'url-row' }, [
+    field(label, input),
+    el('button', { class: 'secondary', text: 'Copy link', onclick: () => copyText(url) }),
+  ]);
 }
 
 /** Copy to clipboard where available; the field is selectable as a fallback. */

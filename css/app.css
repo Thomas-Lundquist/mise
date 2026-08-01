@@ -818,6 +818,12 @@ body {
   font-size: 12px;
 }
 
+/* Publish panel: hosted link is the primary path, so it leads; the inline link is a bonus when
+   the pack fits under MAX_ENCODED_CHARS (docs/OPEN-QUESTIONS.md, T8). */
+.author .publish-lead { font-weight: 700; margin: 12px 0 4px; }
+.author .hint { color: var(--filler, #6B7076); font-size: 13px; margin: 8px 0 4px; }
+.author .url-row { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
+
 .author .ok { color: var(--active, #0E5C54); font-weight: 700; }
 
 @media (prefers-reduced-motion: reduce) {
