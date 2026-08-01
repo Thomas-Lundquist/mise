@@ -10,7 +10,8 @@ const WASH_TOOL_MIN = 3;  // duration of a "Wash the <tool>" task (Stage 4a).
 /** Fill each cook's idle gaps with derived washables and generic fillers.
  * Returns a NEW Schedule with `kind: "filler"` assignments added; makespanMin is unchanged,
  * and no filler overlaps a step, overlaps another filler for the same cook, or extends past
- * makespanMin. Honours a `sink` capacity across cooks when the pack defines one. Pure.
+ * makespanMin. Honours equipment capacity (a sink, or any other id a filler needs) across cooks
+ * when the pack defines it; an id with no pack entry is treated as unlimited. Pure.
  * @param {object} schedule a Schedule from buildSchedule (03-data-model.md)
  * @param {object} pack @param {object} plan
  * @returns {object} a new Schedule */
@@ -28,10 +29,11 @@ export function fillGaps(schedule, pack, plan) {
   const steps = [];
   for (const recipe of pack.recipes) for (const s of recipe.steps) steps.push(s);
 
-  // Sink capacity is honoured only if the pack defines a `sink` entry; otherwise the sink
-  // constraint on derived washables is ignored (Stage 4c), modelled here as unlimited.
-  const sinkEntry = pack.equipment.find((e) => e.id === 'sink');
-  const sinkCapacity = sinkEntry ? sinkEntry.capacity : Infinity;
+  // Equipment capacity is honoured for ANY equipment a filler needs, exactly as 04 Stage 4c:
+  // a candidate on equipment E is eligible only if E has free capacity across its window. An
+  // equipment id with no pack entry is treated as unlimited — this is Stage 4c's "if the pack
+  // has no `sink` entry, ignore `equipmentId: sink`" rule, generalised to every id.
+  const capOf = new Map(pack.equipment.map((e) => [e.id, e.capacity]));
 
   // ── 4a + 4b — the candidate pool, built in derivation order (the final tie-break) ─────────
   const candidates = [];
@@ -81,17 +83,21 @@ export function fillGaps(schedule, pack, plan) {
   }
 
   // ── 4c — gap filling, cook by cook in index order ─────────────────────────────────────────
-  // sinkBusy accumulates every placed sink filler ACROSS cooks so two cooks are never sent to
-  // one sink at the same minute. Seed it with any cooking use of the sink (usually none).
-  const sinkBusy = [];
-  for (const u of schedule.equipmentUse) {
-    if (u.equipmentId === 'sink') sinkBusy.push({ startMin: u.startMin, endMin: u.endMin });
-  }
-  const sinkFree = (start, dur) => {
-    if (sinkCapacity === Infinity) return true;
+  // equipBusy accumulates every placed filler's equipment window ACROSS cooks, keyed by
+  // equipment id and seeded with that equipment's cooking use, so two cooks are never sent to
+  // one capacity-limited resource (a sink, a griddle) at the same minute.
+  const equipBusy = new Map();
+  const busyOf = (eid) => {
+    if (!equipBusy.has(eid)) equipBusy.set(eid, []);
+    return equipBusy.get(eid);
+  };
+  for (const u of schedule.equipmentUse) busyOf(u.equipmentId).push({ startMin: u.startMin, endMin: u.endMin });
+  const equipFree = (eid, start, dur) => {
+    const cap = capOf.has(eid) ? capOf.get(eid) : Infinity;
+    if (cap === Infinity) return true;
     let count = 0;
-    for (const b of sinkBusy) if (b.startMin < start + dur && b.endMin > start) count += 1;
-    return count < sinkCapacity;
+    for (const b of busyOf(eid)) if (b.startMin < start + dur && b.endMin > start) count += 1;
+    return count < cap;
   };
 
   const cooks = schedule.cooks.map((cook) => {
@@ -102,7 +108,7 @@ export function fillGaps(schedule, pack, plan) {
       if (gap.end - gap.start < MIN_GAP) continue;
       let cursor = gap.start;
       for (;;) {
-        const pick = choose(candidates, cursor, gap.end, sinkFree);
+        const pick = choose(candidates, cursor, gap.end, equipFree);
         if (!pick) break;
         const endMin = cursor + pick.durationMin;
         if (endMin <= cursor) break; // guard against a zero-duration task looping forever
@@ -111,9 +117,7 @@ export function fillGaps(schedule, pack, plan) {
           startMin: cursor, endMin, runsUntilMin: endMin, hands: 'busy',
           isCritical: false, equipmentIds: pick.equipmentId ? [pick.equipmentId] : [],
         });
-        if (pick.equipmentId === 'sink' && sinkCapacity !== Infinity) {
-          sinkBusy.push({ startMin: cursor, endMin });
-        }
+        if (pick.equipmentId) busyOf(pick.equipmentId).push({ startMin: cursor, endMin });
         if (!pick.repeatable) pick.used = true;
         cursor = endMin;
       }
@@ -144,18 +148,18 @@ function idleIntervals(assignments, makespanMin) {
 }
 
 /** Pick the best still-eligible candidate for a slot at `cursor` inside a gap ending at `gapEnd`.
- * Eligible = unused, available by now, short enough to fit, and (if it needs the sink) the sink
- * has free capacity. Ranked exactly per Stage 4c: washables before generic, then earliest
- * availableAt, then longest durationMin, then derivation order.
+ * Eligible = unused, available by now, short enough to fit, and (if it needs equipment) that
+ * equipment has free capacity across the window. Ranked exactly per Stage 4c: washables before
+ * generic, then earliest availableAt, then longest durationMin, then derivation order.
  * @param {object[]} candidates @param {number} cursor @param {number} gapEnd
- * @param {(start:number,dur:number)=>boolean} sinkFree @returns {object|null} */
-function choose(candidates, cursor, gapEnd, sinkFree) {
+ * @param {(eid:string,start:number,dur:number)=>boolean} equipFree @returns {object|null} */
+function choose(candidates, cursor, gapEnd, equipFree) {
   let best = null;
   for (const c of candidates) {
     if (c.used) continue;
     if (c.availableAt > cursor) continue;
     if (c.durationMin > gapEnd - cursor) continue;
-    if (c.equipmentId === 'sink' && !sinkFree(cursor, c.durationMin)) continue;
+    if (c.equipmentId && !equipFree(c.equipmentId, cursor, c.durationMin)) continue;
     if (best === null || beats(c, best)) best = c;
   }
   return best;

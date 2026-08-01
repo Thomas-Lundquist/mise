@@ -120,7 +120,15 @@ Assumption used to keep moving: unchanged for T6. In every current fixture fille
 (a) if fillers are sink-only by design, add that to 04's "Known limitations" and drop the generic
 clause from 4c; (b) otherwise generalize `choose`/`sinkFree` to any equipment id AND have the
 invariant-3 test synthesize filler intervals (not just cooking ones), or it will stay blind.
-Resolved: <teacher fills this in>
+Resolved: 2026-08-01 (teacher) — option (b), generalize. `js/fillers.js` no longer special-cases the
+sink: `sinkBusy`/`sinkFree` are replaced by a per-equipment `equipBusy` Map keyed by equipment id and
+seeded from `schedule.equipmentUse`, with `equipFree(eid, start, dur)` enforcing that id's capacity
+(an id with no pack entry = unlimited, generalising the old "no sink entry ⇒ ignore sink" rule). The
+`choose` guard now fires for ANY `c.equipmentId`, not just `'sink'`. Output-safe: every current filler
+is equipment-free or a hardcoded-sink washable, so all fixtures stay byte-identical (suite 108/108).
+Test blind spot closed by a new fillers.test case ("a capacity-1 non-sink filler equipment is never
+double-booked across cooks") that exercises the previously-unreached path and would have failed under
+the old sink-only guard. 04 Stage 4c's generic wording is now actually implemented, not narrowed.
 
 ## T7 — three under-specified points in the Stage 5 warning table
 Asked: 2026-07-30 (surfaced during T7)

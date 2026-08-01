@@ -86,6 +86,30 @@ test('a capacity-1 sink is never double-booked across cooks', () => {
   }
 });
 
+// ── Criterion (B3): a NON-sink capacity-1 equipment is never double-booked by fillers ─────────
+test('a capacity-1 non-sink filler equipment is never double-booked across cooks', () => {
+  // Same shape as the sink test, but the contended resource is a generic capacity-1 'griddle'.
+  // Before B3 (sink-only guard) both idle cooks would grab it at once; the generalized 4c check
+  // must serialise them exactly as it does the sink. This exercises the previously-unreached path.
+  const pack = {
+    packVersion: 1, packId: 'p', title: 'T', labMinutes: 50,
+    equipment: [{ id: 'griddle', name: 'Griddle', capacity: 1, checklist: false }],
+    fillerTasks: [{ id: 'f_grid', label: 'Season the griddle', durationMin: 3, equipmentId: 'griddle', repeatable: true }],
+    recipes: [
+      { id: 'r1', name: 'R1', ingredients: [], steps: [{ ...step('x1', 1, []), recipeId: 'r1' }] },
+      { id: 'r2', name: 'R2', ingredients: [], steps: [{ ...step('x2', 1, []), recipeId: 'r2' }] },
+    ],
+  };
+  const plan = mkPlan({ x1: tag(20, 'free'), x2: tag(20, 'free') }, 2);
+  const filled = fillGaps(buildSchedule(pack, plan), pack, plan);
+  const gridFillers = allFillers(filled).filter((f) => f.equipmentIds.includes('griddle'));
+  eq(gridFillers.length >= 1, true); // the griddle did get used
+  for (let m = 0; m < filled.makespanMin; m += 1) {
+    const live = gridFillers.filter((f) => f.startMin <= m && m < f.endMin).length;
+    eq(live <= 1, true); // never two cooks on the one griddle at the same minute
+  }
+});
+
 // ── Derivation: a dirty bowl becomes washable at its consuming step's runsUntilMin ────────────
 test('a bowl washable is available at the consuming step end, and sink is ignored with no sink entry', () => {
   // Step 1 (active 5) empties bowl 1 at minute 5; step 2 (passive 20) leaves the cook idle 6–26.
