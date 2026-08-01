@@ -9,6 +9,7 @@ import { loadDraft, saveDraft, clearDraft } from './store.js';
 import { mount as mountBowls } from './ui-bowls.js';
 import { mount as mountSteps } from './ui-steps.js';
 import { mount as mountReview } from './ui-review.js';
+import { mount as mountManual } from './ui-manual.js';
 
 const SCREEN_COUNT = 4;
 const COOK_LETTERS = ['A', 'B', 'C', 'D', 'E'];
@@ -298,11 +299,17 @@ function showScreen(i) {
     if (stepsCtl) stepsCtl.refresh();
     else stepsCtl = mountSteps(screen2, { pack, plan, persist, setNextEnabled });
   }
-  // Screen 3 (review) is a read-only view: refresh() recomputes the schedule so any Screen 1/2 edit
-  // is reflected on return. It never gates Next (it is the last screen; the shell hides Next here).
+  // Screen 3 is the last screen (the shell hides Next) and refresh() re-reads the current plan on
+  // return, so Screen 1/2 edits are reflected. A pack authored with mode "manual" (docs/07 T14)
+  // swaps the auto "Your plan" review for the manual placement board; any other value (or none)
+  // gets the default auto-scheduler review. Both controllers expose the same refresh() handle, and
+  // reviewCtl is reset to null on resume/start-over so a replaced plan re-mounts either one.
   if (i === 3) {
     const screen3 = document.getElementById('screen-3');
     if (reviewCtl) reviewCtl.refresh();
-    else reviewCtl = mountReview(screen3, { pack, plan, persist, setNextEnabled });
+    else {
+      const mountScreen3 = pack.mode === 'manual' ? mountManual : mountReview;
+      reviewCtl = mountScreen3(screen3, { pack, plan, persist, setNextEnabled });
+    }
   }
 }

@@ -429,6 +429,92 @@ may use different mm/min. Mitigated by the labelled minute spine (you read time 
 ruler). Revert to fixed 3mm by returning MM_PER_MIN_NORMAL from pickScale if the teacher prefers the
 constant scale. Left as an enhancement pending the teacher seeing the printed result.
 
+## T14 — the pack "mode flag" has no definition in docs/03
+
+Asked: 2026-08-01 (surfaced during T14)
+Context: 07-build-plan.md T14 names "a mode flag in the pack" as a deliverable, but 03-data-model.md
+defines the Pack field-by-field and never mentions a mode. So the field name, its allowed values,
+its default, and whether validatePack must check it are all unspecified.
+Assumption used to keep moving (teacher deferred both T14 open questions to me): the flag is an
+OPTIONAL `pack.mode` string — `"manual"` selects manual mode; ABSENT or any other value ⇒ `"auto"`
+(the existing auto-scheduler review). model.js is left UNTOUCHED: it is a frozen T2 pure module,
+editing it for one optional field is the prior-ticket refactor the working agreement forbids, and
+validatePack already ignores fields outside its checklist, so an unknown `mode` never fails
+validation. app.js reads `pack.mode` to route Screen 3. Revisit if the teacher wants `mode`
+formally validated (add an enum check to validatePack + a model.test case) or wants author.html to
+expose a mode toggle (out of T14's named files — T14 ships ui-manual.js + styles + the flag only).
+
+## T14 — manual mode reused the Screen-3 shell mount, so app.js was edited (same pattern as T10–T12)
+
+Asked: 2026-08-01 (surfaced during T14)
+Context: docs/01's deferred section says manual mode "replaces the auto-scheduler," and T14 ships only
+`js/ui-manual.js` + styles + the mode flag — it does not name app.js/index.html. But the shell
+(app.js) hardcodes SCREEN_COUNT = 4 and mounts ui-review on Screen 3; manual mode needs a mount
+point. This is the identical "shell-wiring" situation T10/T11/T12 each hit and logged.
+Change made (kept minimal, mirroring the prior three): app.js imports `ui-manual.mount` and, in the
+Screen-3 branch, picks `mountManual` when `pack.mode === 'manual'` else `mountReview`; both return the
+same `{ refresh }` handle held in `reviewCtl`, which is already reset to null on resume/start-over so
+a replaced plan re-mounts either one. index.html is UNCHANGED (ui-manual clears the Screen-3
+placeholder via textContent, exactly as ui-review does). So manual mode occupies Screen 3 ("Your
+plan"); the four-dot flow, footer, and Screens 0–2 are untouched.
+Assumption used to keep moving: replacing Screen 3 (not adding a fifth screen) is the right reading of
+"replaces the auto-scheduler." Revisit if the teacher wants BOTH views reachable from one pack.
+
+## T14 — manual placement model (serial lane stacks, uniform cards, in-memory) is under-specified
+
+Asked: 2026-08-01 (surfaced during T14)
+Context: docs/01's manual-mode spec is one paragraph ("drag blocks into lanes; validate dependencies
+and equipment; show the student's makespan beside the algorithm's; no auto-placement"). Everything
+concrete had to be derived. Decisions made (teacher deferred to me), all in js/ui-manual.js:
+1. PLACEMENT: each cook lane is an ordered stack; a block starts when the previous block in that lane
+   ends, so its window is [start, start + StepTag.durationMin]. A cook does one block at a time. A
+   block's end therefore equals the step's runsUntilMin, which is exactly when dependencies clear
+   (04 Stage 3a) — so dependency timing stays consistent with the scheduler with no endMin split.
+   Known simplification: this omits within-cook passive release (the auto-scheduler frees a cook ~1
+   min into a passive step; here the cook holds the full duration). Parallelism is therefore ACROSS
+   cooks only, so a student's makespan is a naive upper bound they beat by distributing work — which
+   is the lesson. A richer model (release the cook on passive steps, leaving an in-lane gap) is a
+   future enhancement; it would change makespan arithmetic and the board's geometry.
+2. BLOCKS are uniform-height tap-target CARDS with the duration printed on them, NOT to-scale bars
+   like the review/print rail — a Chromebook needs a 44px target (docs/02) more than pixel-accurate
+   height, and the makespan number carries the time. Deliberate visual difference from Screen 3-auto.
+3. DEPENDENCIES are resolved with model.resolveDeps(pack) — pack-side, the same map the scheduler
+   uses. This inherits the still-open T11/T12 issue that student-authored plan.stepTags[id].
+   dependsOnOverride is not consumed anywhere; if that is ever wired into resolveDeps, manual mode
+   picks it up for free. Cross-recipe and transitive chains are enforced (verified on the example).
+4. STATE is in-memory in the mount closure; it is NOT written to the plan or the localStorage draft,
+   because 03 defines no field for a manual arrangement. Consequences: the board is empty on every
+   entry and a mid-plan cook-count change (Screen 0) resets it (lanes are rebuilt to match the new
+   count, returning all steps to the tray). Revisit if the teacher wants a manual arrangement to
+   persist across reloads — that needs a new plan field in 03 and codec coverage.
+
+## T14 — printing a manual arrangement is deferred (done-when requires the print view unchanged)
+
+Asked: 2026-08-01 (surfaced during T14)
+Context: docs/01 says manual mode uses the "same print view," but T14's done-when is "the print view
+is unchanged," and print.js recomputes a Schedule from the plan via buildSchedule — i.e. it prints
+the ALGORITHM's arrangement, not the student's manual placement. Printing the manual board through
+the unchanged print view would require synthesizing a Schedule object from the placement and feeding
+it in, which changes the print path.
+Assumption used to keep moving: manual mode ships WITHOUT a print button in v1. It is a placement +
+validation + makespan-comparison board; the print view is left byte-for-byte unchanged, satisfying
+the done-when literally. Making the manual arrangement printable (synthesize a Schedule from the
+lane stacks → the existing print.html/print.js render it) is a real follow-up feature with its own
+decisions (fillers? equipment strip from manual placement?), out of T14's named files.
+
 ## Manual test log
 
 (Dated results from `09-test-plan.md` Part 4 go here.)
+
+### 2026-08-01 — T14 manual-mode validation (isolated Node ESM harness)
+Ran the exported pure helpers of js/ui-manual.js (findViolations/computeBlocks/studentMakespan)
+against fixtures/recipe-pack.example.json + plan.example.json. 7/7 checks passed:
+- unmet dependency flagged ("Place X before Y — Y needs it done first");
+- out-of-order dependency flagged ("Y starts before X finishes");
+- correctly-ordered pair raises no flag for that pair (transitive upstream deps still flagged — correct);
+- blocks stack serially with correct start/end; student makespan = last block end;
+- equipment over-capacity flagged by name (Oven, capacity 1, used by "Preheat oven" + "Finish in oven");
+- algorithm makespan computes for comparison (45 min on the example plan).
+Not verifiable here: the drag/tap DOM interactions and the CSS board layout (need a browser on a
+Chromebook); the app.js Screen-3 routing was code-reviewed, not run (no manual-mode fixture exists —
+the example pack has no `mode` field, so it correctly routes to the auto review).
