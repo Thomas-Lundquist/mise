@@ -1,6 +1,12 @@
 // js/scheduler.js — critical-path list scheduler. Pure, deterministic, no DOM, integer minutes.
-// See docs/04-scheduler-spec.md. buildGraph lands in T4, buildSchedule in T5.
+// See docs/04-scheduler-spec.md, amended by docs/10-affinity-amendment.md (Stages 3b–3c).
+// buildGraph lands in T4, buildSchedule in T5.
 import { resolveDeps } from './model.js';
+
+// Station-coherence knob, in minutes of tail-slack (docs/10). 0 = affinity only breaks genuine
+// ties, so the makespan is byte-identical to the no-affinity baseline (the safe default). A
+// pack may override this with an integer >= 0; higher = stickier stations at a possible time cost.
+export const AFFINITY_WEIGHT = 0;
 
 /** Build the dependency graph, tails, and floor for a pack and plan.
  * Stages 1–2 of docs/04-scheduler-spec.md: resolve deps, topologically sort, then walk that
@@ -144,55 +150,94 @@ export function buildSchedule(pack, plan) {
   const equipById = new Map(pack.equipment.map((e) => [e.id, e]));
   const total = Object.keys(stepById).length;
 
+  // Effective affinity weight (docs/10): a pack integer overrides the constant; a negative value
+  // clamps to 0; anything else (absent, float, non-number) falls back to the constant.
+  const w = Number.isInteger(pack.affinityWeight) ? Math.max(0, pack.affinityWeight) : AFFINITY_WEIGHT;
+
   const cooksN = plan.kitchen.cooks;
   let t = 0;
   const cookFreeAt = new Array(cooksN).fill(0);
+  const lastRecipeId = new Array(cooksN).fill(null); // recipeId of each cook's last STEP (docs/10)
   const stepEnd = {};                 // stepId -> runsUntilMin, once scheduled
   const scheduled = new Set();
   const assigned = [];                // { cook, record }
   const equipBusy = [];               // { equipmentId, startMin, endMin, stepId }
 
+  // Equipment is free for a step at t if every id it needs has a live-interval count below capacity.
+  // Same instantaneous check as 04 Stage 3c — a freshly-pushed interval (endMin > t) already counts.
+  const equipFreeAt = (step, at) => {
+    for (const eid of step.equipmentIds || []) {
+      let count = 0;
+      for (const busy of equipBusy) {
+        if (busy.equipmentId === eid && busy.startMin <= at && busy.endMin > at) count += 1;
+      }
+      if (count >= equipById.get(eid).capacity) return false;
+    }
+    return true;
+  };
+
   while (scheduled.size < total) {
     if (t > 600) throw new Error('scheduler: exceeded 600 minutes at ' + t);
 
-    // 3a — ready set: unscheduled steps whose every dependency has finished by t.
-    const ready = [];
-    for (const id in stepById) {
-      if (scheduled.has(id)) continue;
-      if (deps[id].every((d) => scheduled.has(d) && stepEnd[d] <= t)) ready.push(id);
-    }
-
-    // 3b — sort: tail desc, then hands-free first, then dur desc, then stepId asc.
-    ready.sort((a, b) => {
-      if (tail[b] !== tail[a]) return tail[b] - tail[a];
-      const freeA = hands[a] === 'free' ? 0 : 1;
-      const freeB = hands[b] === 'free' ? 0 : 1;
-      if (freeA !== freeB) return freeA - freeB;
-      if (dur[b] !== dur[a]) return dur[b] - dur[a];
-      return a < b ? -1 : a > b ? 1 : 0;
-    });
-
-    // 3c — assign greedily; a candidate blocked on equipment is skipped, not stalled on.
-    for (const id of ready) {
-      let cook = -1;
-      for (let i = 0; i < cooksN; i += 1) if (cookFreeAt[i] <= t) { cook = i; break; }
-      if (cook === -1) break; // no free cook this minute
-      const step = stepById[id];
-      let blocked = false;
-      for (const eid of step.equipmentIds || []) {
-        let count = 0;
-        for (const busy of equipBusy) {
-          if (busy.equipmentId === eid && busy.startMin <= t && busy.endMin > t) count += 1;
-        }
-        if (count >= equipById.get(eid).capacity) { blocked = true; break; }
+    // Stages 3b–3c per docs/10: assign one (cook, step) pair at a time, re-evaluating after each,
+    // until no free cook or no feasible ready step remains this minute. cookHold >= 1 already
+    // excludes a just-assigned cook from the next pass; assignedCooks makes that explicit and exact.
+    const assignedCooks = new Set();
+    for (;;) {
+      // 1 — free cooks: available by t and not already assigned this minute.
+      const freeCooks = [];
+      for (let i = 0; i < cooksN; i += 1) {
+        if (cookFreeAt[i] <= t && !assignedCooks.has(i)) freeCooks.push(i);
       }
-      if (blocked) continue;
+      if (freeCooks.length === 0) break;
+
+      // 2 — feasible ready steps: deps cleared by t AND equipment free at t. A step blocked only
+      // by equipment simply isn't ready this pass; it reappears when the equipment frees (Case F).
+      const ready = [];
+      for (const id in stepById) {
+        if (scheduled.has(id)) continue;
+        if (!deps[id].every((d) => scheduled.has(d) && stepEnd[d] <= t)) continue;
+        if (!equipFreeAt(stepById[id], t)) continue;
+        ready.push(id);
+      }
+      if (ready.length === 0) break;
+
+      // 3 — the band: steps whose tail is within w of the best. At w = 0 this is exactly the
+      // steps tied for the highest tail, so affinity can only relabel a tie, never change timing.
+      let bestTail = -Infinity;
+      for (const id of ready) if (tail[id] > bestTail) bestTail = tail[id];
+      const band = ready.filter((id) => tail[id] >= bestTail - w);
+
+      // 4 — choose the single best (cook, step) pair by the ordered key (docs/10). On-dish is a
+      // property of the PAIR, so we score pairs, not steps: a lower-tail on-dish band step can beat
+      // a higher-tail off-dish one. Keys, all ascending: on-dish, -tail, passive, -dur, cook, stepId.
+      let best = null;
+      for (const c of freeCooks) {
+        for (const id of band) {
+          const cand = {
+            cook: c,
+            id,
+            onDish: lastRecipeId[c] === stepById[id].recipeId ? 0 : 1,
+            tail: tail[id],
+            passive: hands[id] === 'free' ? 0 : 1,
+            dur: dur[id],
+          };
+          if (best === null || betterPair(cand, best)) best = cand;
+        }
+      }
+
+      // 5 — assign it exactly as 04 Stage 3c, then record the cook's dish for the next pass.
+      const id = best.id;
+      const cook = best.cook;
+      const step = stepById[id];
       const startMin = t;
       const runsUntilMin = t + dur[id];
       const endMin = t + cookHold[id];
       cookFreeAt[cook] = endMin;
       stepEnd[id] = runsUntilMin;
       scheduled.add(id);
+      lastRecipeId[cook] = step.recipeId;
+      assignedCooks.add(cook);
       for (const eid of step.equipmentIds || []) {
         equipBusy.push({ equipmentId: eid, startMin, endMin: runsUntilMin, stepId: id });
       }
@@ -268,8 +313,27 @@ export function buildSchedule(pack, plan) {
     criticalStepIds,
     bowlCount: (plan.bowls || []).length,
     equipmentChecklist,
+    // docs/10 — surface the tuning so it's observable without reading the timeline. costOverFloorMin
+    // is the number to watch while raising the weight: how many minutes coherence is costing.
+    affinityWeightUsed: w,
+    costOverFloorMin: makespanMin - floorMin,
     warnings: [],
   };
+}
+
+/** True if pair a sorts strictly before pair b under docs/10's ordered key (all keys ascending):
+ * on-dish first, then higher tail, then passive first, then longer dur, then lower cook, then
+ * lower stepId. Keys 5–6 are a total order, so no two distinct pairs ever tie — determinism holds.
+ * @param {{onDish:number,tail:number,passive:number,dur:number,cook:number,id:string}} a
+ * @param {{onDish:number,tail:number,passive:number,dur:number,cook:number,id:string}} b
+ * @returns {boolean} */
+function betterPair(a, b) {
+  if (a.onDish !== b.onDish) return a.onDish < b.onDish;   // 1. on-dish (0) beats off-dish (1)
+  if (a.tail !== b.tail) return a.tail > b.tail;           // 2. -tail asc → higher tail first
+  if (a.passive !== b.passive) return a.passive < b.passive; // 3. passive (free) first
+  if (a.dur !== b.dur) return a.dur > b.dur;               // 4. -dur asc → longer step first
+  if (a.cook !== b.cook) return a.cook < b.cook;           // 5. cook index ascending
+  return a.id < b.id;                                      // 6. stepId ascending, string compare
 }
 
 /** A cook's display name: the plan's name if set, else "Cook A".."Cook E".

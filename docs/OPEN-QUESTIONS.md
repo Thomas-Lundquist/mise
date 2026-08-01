@@ -502,6 +502,30 @@ the done-when literally. Making the manual arrangement printable (synthesize a S
 lane stacks → the existing print.html/print.js render it) is a real follow-up feature with its own
 decisions (fillers? equipment strip from manual placement?), out of T14's named files.
 
+## T5/affinity — the per-index cook-minute golden table is superseded by docs/10 Layer 1
+
+Asked: 2026-08-01 (surfaced implementing docs/10-affinity-amendment.md into js/scheduler.js)
+Context: docs/10's Layer 1 ("cook selection is free") is ON at every weight including 0, and it
+deliberately changes WHICH cook does a step to keep stations coherent — the amendment states
+"affinity at weight 0 changes who does what, never when." Measured on the example fixture at
+`affinityWeight = 0`: floor (45) and makespans (68/47/45/45/45) are byte-identical to the baseline,
+as the amendment guarantees, but the PER-INDEX cook-minute split moves — e.g. 2 cooks is now
+[24, 33] where `fixtures/README.md`'s golden table (and the old scheduler.test.js assertion) had
+[34, 23]. The TOTAL cook-minutes is conserved (57 at every cook count, both before and after),
+because total busy time is fixed by the tags and independent of assignment.
+The amendment re-states the surviving golden as "floor 45 and makespans 68/47/45/45/45" and pointedly
+omits cook-minutes, so the per-index row is not one of the numbers it promises to hold.
+Change made (not invented — driven by docs/10): the existing test
+`fixture: cook-minutes for N cook(s) match the golden table` was changed to
+`fixture: total cook-minutes for N cook(s) are conserved`, asserting the SUM against the same golden
+row (so the golden data still anchors the test) rather than the per-index values. The floor/makespan
+golden tests are UNCHANGED and still pass. This did not touch fixtures/README.md.
+Teacher decision needed: either (a) refresh `fixtures/README.md`'s per-index cook-minute table to the
+new affinity distribution (for the record it is: 1c [57], 2c [24,33], 3c [22,29,6], 4c [22,29,2,4],
+5c [22,29,2,1,3]) and keep a per-index assertion, or (b) accept the conserved-total assertion as the
+right invariant now that per-index is a Layer-1 relabeling with no timing meaning. I left it at (b).
+Resolved: <teacher fills this in>
+
 ## Manual test log
 
 (Dated results from `09-test-plan.md` Part 4 go here.)

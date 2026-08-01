@@ -117,9 +117,13 @@ for (let n = 1; n <= 5; n += 1) {
   test(`fixture: makespan for ${n} cook(s) is ${GOLD_MAKESPAN[n]}`, () => {
     eq(buildSchedule(examplePack, withCooks(n)).makespanMin, GOLD_MAKESPAN[n]);
   });
-  test(`fixture: cook-minutes for ${n} cook(s) match the golden table`, () => {
+  // docs/10 (Layer 1) deliberately changes WHICH cook does what to keep stations coherent, so the
+  // per-index cook-minute split is no longer a golden invariant. What IS conserved is the TOTAL
+  // cook-minutes (fixed by the tags, independent of assignment) — assert that against the old row.
+  test(`fixture: total cook-minutes for ${n} cook(s) are conserved`, () => {
     const s = buildSchedule(examplePack, withCooks(n));
-    eq(s.cooks.map((c) => c.assignments.reduce((sum, a) => sum + (a.endMin - a.startMin), 0)), GOLD_COOKMIN[n]);
+    const total = s.cooks.reduce((sum, c) => sum + c.assignments.reduce((a, r) => a + (r.endMin - r.startMin), 0), 0);
+    eq(total, GOLD_COOKMIN[n].reduce((a, b) => a + b, 0));
   });
 }
 
@@ -181,4 +185,106 @@ test('invariant 6: byte-identical output after shuffling recipes, steps, and equ
     recipes: rev(examplePack.recipes).map((r) => ({ ...r, steps: rev(r.steps), ingredients: rev(r.ingredients) })),
   };
   eq(JSON.stringify(buildSchedule(shuffled, examplePlan)), JSON.stringify(buildSchedule(examplePack, examplePlan)));
+});
+
+// ── Station affinity (docs/10-affinity-amendment.md) ──────────────────────────
+// Two-recipe builder: each recipe a chain; caller supplies steps per recipe.
+const mkTwoRecipe = (r1Steps, r2Steps, equipment = [], affinityWeight) => {
+  const pack = {
+    packVersion: 1, packId: 'p', title: 'T', labMinutes: 50, equipment, fillerTasks: [],
+    recipes: [
+      { id: 'r1', name: 'R1', ingredients: [], steps: r1Steps },
+      { id: 'r2', name: 'R2', ingredients: [], steps: r2Steps },
+    ],
+  };
+  if (affinityWeight !== undefined) pack.affinityWeight = affinityWeight;
+  return pack;
+};
+const rStep = (id, recipeId, order, dur, hands, override = null, equipmentIds = []) =>
+  ({ id, recipeId, order, dependsOnOverride: override, equipmentIds, shortLabel: id, consumesBowlOf: [], _t: tag(dur, hands) });
+const planFor = (steps, cooks, affinityless) => {
+  const stepTags = {};
+  for (const s of steps) stepTags[s.id] = s._t;
+  return { planVersion: 1, packId: 'p', bowls: [], stepTags, kitchen: { cooks, cookNames: [] } };
+};
+
+// ── Case G — cook affinity is free. 2 cooks, two parallel 2-step active chains. ──
+// makespan 10 (baseline-identical) AND each recipe's two steps land on the SAME cook (Layer 1).
+test('Case G: affinity clusters each recipe on one cook at zero timing cost', () => {
+  const r1 = [rStep('r1s1', 'r1', 1, 5, 'busy'), rStep('r1s2', 'r1', 2, 5, 'busy')];
+  const r2 = [rStep('r2s1', 'r2', 1, 5, 'busy'), rStep('r2s2', 'r2', 2, 5, 'busy')];
+  const pack = mkTwoRecipe(r1, r2, [], 0);
+  const s = buildSchedule(pack, planFor([...r1, ...r2], 2));
+  eq(s.makespanMin, 10);
+  eq(s.affinityWeightUsed, 0);
+  // find each step's cook
+  const cookOf = {};
+  for (const c of s.cooks) for (const a of c.assignments) cookOf[a.stepId] = c.index;
+  eq(cookOf.r1s1, cookOf.r1s2); // R1 stays on one cook
+  eq(cookOf.r2s1, cookOf.r2s2); // R2 stays on the other
+});
+
+// ── Case H — the band trades urgency for coherence. 2 cooks. ──────────────────
+// At t=4 the only free cook just finished an R1 step; the higher-tail ready step is R2 (c1, tail 8)
+// and an on-dish R1 step (a2, tail 5) sits `gap`=3 below. station (cap 1) blocks c1 until a1 frees
+// it at t=4, and b_long keeps the other cook busy — so the two steps compete for the one free cook.
+const caseHPack = (w) => mkTwoRecipe(
+  [rStep('a1', 'r1', 1, 4, 'busy', null, ['station']), rStep('a2', 'r1', 2, 5, 'busy')],
+  [rStep('b_long', 'r2', 1, 10, 'busy', []), rStep('c1', 'r2', 2, 8, 'busy', [], ['station'])],
+  [{ id: 'station', name: 'Station', capacity: 1, checklist: true }], w,
+);
+const caseHSteps = [
+  rStep('a1', 'r1', 1, 4, 'busy'), rStep('a2', 'r1', 2, 5, 'busy'),
+  rStep('b_long', 'r2', 1, 10, 'busy'), rStep('c1', 'r2', 2, 8, 'busy'),
+];
+const caseHAt = (w) => {
+  const s = buildSchedule(caseHPack(w), planFor(caseHSteps, 2));
+  const m = {};
+  for (const c of s.cooks) for (const a of c.assignments) m[a.stepId] = a.startMin;
+  return m;
+};
+test('Case H at weight 0: the higher-tail R2 step is taken over the on-dish R1 step', () => {
+  const at = caseHAt(0);
+  eq(at.c1, 4);        // urgent R2 step starts at the decision minute
+  eq(at.a2 > 4, true); // the on-dish R1 step is deferred
+});
+test('Case H at weight 3 (the tail gap): the on-dish R1 step is promoted instead', () => {
+  const at = caseHAt(3);
+  eq(at.a2, 4);        // on-dish R1 step promoted at the decision minute
+  eq(at.c1 > 4, true); // the urgent R2 step is deferred — the bounded cost of coherence
+});
+
+// ── Case I — determinism at a nonzero weight, and independent of input order. ──
+test('Case I: byte-identical output on a repeat call at affinityWeight 3', () => {
+  const p = { ...examplePack, affinityWeight: 3 };
+  eq(JSON.stringify(buildSchedule(p, examplePlan)), JSON.stringify(buildSchedule(p, examplePlan)));
+});
+test('Case I: output is unchanged after shuffling recipes, steps, and equipment at weight 3', () => {
+  const rev = (arr) => arr.slice().reverse();
+  const p = { ...examplePack, affinityWeight: 3 };
+  const shuffled = {
+    ...p,
+    equipment: rev(p.equipment),
+    recipes: rev(p.recipes).map((r) => ({ ...r, steps: rev(r.steps), ingredients: rev(r.ingredients) })),
+  };
+  eq(JSON.stringify(buildSchedule(shuffled, examplePlan)), JSON.stringify(buildSchedule(p, examplePlan)));
+});
+
+// ── Weight-0 output fields, and the invariant-8 REPORT at weight 3 (never fails). ──
+test('fixture: affinity output fields at weight 0 (used=0, cost = makespan - floor)', () => {
+  const s = buildSchedule(examplePack, examplePlan);
+  eq(s.affinityWeightUsed, 0);
+  eq(s.costOverFloorMin, s.makespanMin - s.floorMin);
+});
+// docs/10: above weight 0, invariant 8 (adding a cook never lengthens the plan) is a REPORTED
+// observation, not an assert. Print the makespan-by-cook row at weight 3 so a tuning regression is
+// visible; assert only invariant 4 (makespan >= floor), which holds at every weight.
+test('report: makespan by cook count at affinityWeight 3 (invariant 8 not asserted here)', () => {
+  const p = { ...examplePack, affinityWeight: 3 };
+  const row = [1, 2, 3, 4, 5].map((n) => buildSchedule(p, withCooks(n)).makespanMin);
+  console.log('affinityWeight=3 makespan by cooks [1..5]:', row.join(' '));
+  for (const n of [1, 2, 3, 4, 5]) {
+    const s = buildSchedule(p, withCooks(n));
+    eq(s.makespanMin >= s.floorMin, true);
+  }
 });

@@ -130,6 +130,13 @@ export function validatePack(pack) {
     errors.push({ code: 'CYCLE', message: 'These steps depend on each other in a loop.', ids: cycle });
   }
 
+  // BAD_AFFINITY — optional station-coherence tuning knob (docs/10). Absent is valid (the
+  // scheduler falls back to its constant); present-but-not-an-integer-≥0 is a teacher error.
+  if (pack.affinityWeight !== undefined &&
+      !(Number.isInteger(pack.affinityWeight) && pack.affinityWeight >= 0)) {
+    errors.push({ code: 'BAD_AFFINITY', message: 'affinityWeight must be an integer >= 0.', ids: [] });
+  }
+
   return { ok: errors.length === 0, errors };
 }
 

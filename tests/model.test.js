@@ -89,6 +89,24 @@ test('IMPOSSIBLE_EQUIP triggers on capacity 0', () => {
 });
 test('IMPOSSIBLE_EQUIP does not trigger when capacity >= 1', () => eq(hasCode(validatePack(basePack()), 'IMPOSSIBLE_EQUIP'), false));
 
+// BAD_AFFINITY — optional tuning knob (docs/10): absent is fine, integer >= 0 is fine.
+test('BAD_AFFINITY triggers on a negative weight', () => {
+  const p = basePack();
+  p.affinityWeight = -1;
+  eq(hasCode(validatePack(p), 'BAD_AFFINITY'), true);
+});
+test('BAD_AFFINITY triggers on a non-integer weight', () => {
+  const p = basePack();
+  p.affinityWeight = 2.5;
+  eq(hasCode(validatePack(p), 'BAD_AFFINITY'), true);
+});
+test('BAD_AFFINITY does not trigger on a valid integer weight', () => {
+  const p = basePack();
+  p.affinityWeight = 3;
+  eq(hasCode(validatePack(p), 'BAD_AFFINITY'), false);
+});
+test('BAD_AFFINITY does not trigger when the field is absent', () => eq(hasCode(validatePack(basePack()), 'BAD_AFFINITY'), false));
+
 // ── validatePlan ─────────────────────────────────────────────────────────────
 test('validatePlan: base plan is ok', () => eq(validatePlan(basePlan(), basePack()).ok, true));
 
