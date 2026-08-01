@@ -658,11 +658,10 @@ Implementation path for the ticket that builds this:
    manual mode (once T17's sessionStorage is in place, a "Reset to auto" variant is also possible).
 3. If `buildSchedule` throws or returns `ok:false`, fall back to an empty board (cycle or untagged
    step — rare, but the student can still place manually).
-Open sub-questions: (a) should fillers appear on the board as pre-placed (greyed out, not movable)?
-The manual validation model ignores fillers, so probably not — they'd clutter the board with no
-payoff. (b) Does seeding from the auto schedule interact with T17's sessionStorage? If a seeded
-board is persisted, re-entering manual mode should restore the sessionStorage state, not re-seed
-from the auto schedule — so the "initial seed" only fires when there is no stored state.
+Sub-questions resolved by teacher (2026-08-01): (a) fillers do NOT appear on the board — the
+manual validation model ignores them and they'd clutter the board with no payoff. (b) sessionStorage
+(T17) always wins: auto-seed fires ONLY when there is no stored state for this pack+session. On
+re-entry, if sessionStorage has a board, restore it; never re-seed over the student's edits.
 Resolved: <teacher fills this in>
 
 ## Manual test log
