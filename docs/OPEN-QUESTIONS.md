@@ -7,7 +7,8 @@ Anything a spec leaves genuinely ambiguous goes here instead of being guessed at
 Asked: 2026-07-29
 Context: 04-scheduler-spec.md Stage 3b rules 2 and 3 both tie.
 Assumption used to keep moving: fell through to rule 4 (stepId ascending).
-Resolved: <teacher fills this in>
+Resolved: 2026-08-01 (teacher) — ratified. Falling through to rule 4 (stepId ascending) on a
+rules-2/3 tie is the spec's own deterministic tie-break; nothing invented, no test affected.
 ```
 
 Do not delete resolved entries. They are the changelog for design decisions.
@@ -37,7 +38,9 @@ Assumption used to keep moving: buildSchedule emits the deduplicated `checklist:
 actually used by steps, sorted by id, with `count = capacity` (the only value consistent with
 03's single example). `bowlCount = plan.bowls.length`, kept separate as 03 directs. Revisit when
 T8/T12/T13 (which read 05/06) pin the intended meaning.
-Resolved: <teacher fills this in>
+Resolved: 2026-08-01 (teacher) — closed by the T13 entry below ("06 resolves the count ambiguity"):
+no view displays a per-equipment count, so `count = capacity` stays as T5 set it and is simply unused.
+Nothing to change.
 
 ## Known limitation — scheduler crashes bare on an unvalidated pack
 Asked: 2026-07-30 (surfaced during T5 verification)
@@ -71,7 +74,10 @@ so its literal definition stays true (fillers are now "assigned"). `utilizationP
 buildSchedule set it — the cooking-load number IDLE_HEAVY (T7) cares about — since recomputing it
 to include busywork is genuinely ambiguous. No makespan is touched (invariant 7 holds). Revisit if
 T12/T13 (which render fillers) or T7 (which reads utilizationPct) need different field values.
-Resolved: <teacher fills this in>
+Resolved: 2026-08-01 (teacher) — ratified as shipped. Filler Assignment fields (stepId/recipeId null,
+hands "busy", isCritical false, equipmentIds [equipmentId] or [], runsUntilMin = endMin), idleMin
+recomputed after filling, and utilizationPct left as buildSchedule set it. T7/T12/T13 consumed these
+without needing different values, confirming the choice.
 
 ## T5/scheduler — cook continuity vs. interchangeable cooks (spec conflict)
 Asked: 2026-07-30 (raised by the teacher during T6)
@@ -275,7 +281,9 @@ response 05 wants ("the first place they feel the model responding to them"). No
 student-facing teaching number only — it is NOT the scheduler's cook-load and feeds nothing
 downstream, so choosing (A) over (B) cannot change any schedule. Revisit if T12/T13 surface a place
 that needs per-cook attention minutes instead.
-Resolved: <teacher fills this in>
+Resolved: 2026-08-01 (teacher) — ratified reading (A): "Total hands-on time" = sum of `durationMin`
+over steps tagged `hands === "busy"` (passive steps contribute 0). It is a student-facing teaching
+number only and feeds nothing downstream, so it cannot move any schedule.
 
 ## T11 — Screen 2 reused the T10 shell wiring contract, so app.js was edited again
 
