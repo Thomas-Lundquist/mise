@@ -40,7 +40,7 @@ function el(tag, cls, text) {
  * @param {{ pack: object, plan: object }} ctx shared app context
  * @returns {{ refresh: function():void }} */
 export function mount(root, ctx) {
-  const { pack, plan } = ctx;
+  const { pack, plan, switchToManual } = ctx;
 
   // ── Read-only lookups from the pack ─────────────────────────────────────────────────────────
   // stepId -> full label (tap-to-reveal) and "R<recipe>·<order>" reference key (docs/06 corner ref).
@@ -267,6 +267,13 @@ export function mount(root, ctx) {
     copy.addEventListener('click', () => copyPlanCode(status));
     wrap.appendChild(copy);
     wrap.appendChild(status);
+
+    if (switchToManual) {
+      const toggle = el('button', 'link mode-toggle', 'Place it yourself →');
+      toggle.type = 'button';
+      toggle.addEventListener('click', switchToManual);
+      wrap.appendChild(toggle);
+    }
 
     return wrap;
   }

@@ -829,3 +829,62 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .author * { transition: none !important; }
 }
+
+/* ── T16: auto/manual view toggle ──────────────────────────────────────────────────────── */
+
+/* Secondary text button that switches between auto-review and manual placement (T16).
+   Sits below the action row (review) or above the numbers (manual). Styled quieter than the
+   primary actions — colour borrows --filler so it reads as a navigation affordance, not a task. */
+.mode-toggle {
+  display: block;
+  margin-top: 16px;
+  padding: 4px 0;
+  background: none;
+  border: none;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--filler);
+  text-decoration: underline;
+  cursor: pointer;
+  min-height: 44px; /* touch target (docs/02) */
+  display: flex;
+  align-items: center;
+}
+.mode-toggle:hover { color: var(--ink); }
+.mode-toggle:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+/* Confirmation overlay: position:fixed so it covers the full iframe viewport including the
+   shell header and footer. The overlay dims the screen (55% ink), the box centres inside it.
+   No click-outside-to-dismiss — Chromebook trackpad produces accidental taps (docs/01). */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(22, 24, 26, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.confirm-box {
+  background: var(--panel);
+  border: 1px solid var(--steel);
+  border-radius: 2px;
+  padding: 24px;
+  max-width: 320px;
+  width: 90%;
+  text-align: center;
+}
+
+.confirm-msg {
+  margin: 0 0 20px;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.confirm-btns {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}

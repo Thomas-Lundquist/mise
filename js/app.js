@@ -26,9 +26,12 @@ let screenIndex = 0;
 // Screen 2's mounted controller (from ui-steps.mount), held for the same reason as bowlsCtl and
 // reset to null on the same events, so a replaced `plan` re-mounts Screen 2 against the new object.
 /** @type {{refresh:function():void}|null} */ let stepsCtl = null;
-// Screen 3's mounted controller (from ui-review.mount), held and reset on the same events; its
-// refresh() recomputes the schedule from the current plan, so re-entry reflects Screen 1/2 edits.
+// Screen 3's mounted controller (from ui-review.mount or ui-manual.mount), held and reset on the
+// same events; refresh() re-reads the current plan so Screen 1/2 edits are reflected.
 /** @type {{refresh:function():void}|null} */ let reviewCtl = null;
+// Whether Screen 3 shows the auto-scheduler review ('auto') or the manual placement board
+// ('manual'). Student-controlled via the toggle on Screen 3; reset to 'auto' on plan replace.
+let viewMode = 'auto';
 
 /** Load the pack referenced by the location hash. Two forms are supported (docs/03):
  *   #p=<encoded>          an inline pack, for packs small enough to ride in the URL
@@ -210,6 +213,7 @@ function renderDraftLine() {
     bowlsCtl = null; // plan object replaced — force Screen 1 to re-mount against the draft
     stepsCtl = null; // same for Screen 2
     reviewCtl = null; // same for Screen 3
+    viewMode = 'auto'; // resumed student starts from the auto result, not a stale manual board
     // Reflect the restored choices back into the form, then jump into the flow.
     renderCookButtons();
     renderNameInputs();
@@ -223,6 +227,7 @@ function renderDraftLine() {
     bowlsCtl = null; // plan object replaced — force Screen 1 to re-mount against the fresh plan
     stepsCtl = null; // same for Screen 2
     reviewCtl = null; // same for Screen 3
+    viewMode = 'auto'; // start-over returns to the auto-scheduler result
     renderCookButtons();
     renderNameInputs();
     line.hidden = true;
@@ -258,6 +263,24 @@ function wireFooter() {
 function setNextEnabled(ok, reason) {
   document.getElementById('btn-next').disabled = !ok;
   document.getElementById('next-reason').textContent = ok ? '' : (reason || '');
+}
+
+/** Switch Screen 3 to the manual placement board. Called by ui-review's toggle button.
+ * Abandons the auto mount so mountManual is called fresh on the next showScreen(3).
+ * @returns {void} */
+function switchToManual() {
+  viewMode = 'manual';
+  reviewCtl = null;
+  showScreen(3);
+}
+
+/** Switch Screen 3 back to the auto-scheduler review. Called by ui-manual's confirmation dialog
+ * after the student confirms; the manual placement is discarded (old closure is abandoned).
+ * @returns {void} */
+function switchToAuto() {
+  viewMode = 'auto';
+  reviewCtl = null;
+  showScreen(3);
 }
 
 /** Swap to screen i: toggle the four sections' hidden attribute, move the dot indicator, and
@@ -300,16 +323,15 @@ function showScreen(i) {
     else stepsCtl = mountSteps(screen2, { pack, plan, persist, setNextEnabled });
   }
   // Screen 3 is the last screen (the shell hides Next) and refresh() re-reads the current plan on
-  // return, so Screen 1/2 edits are reflected. A pack authored with mode "manual" (docs/07 T14)
-  // swaps the auto "Your plan" review for the manual placement board; any other value (or none)
-  // gets the default auto-scheduler review. Both controllers expose the same refresh() handle, and
-  // reviewCtl is reset to null on resume/start-over so a replaced plan re-mounts either one.
+  // return, so Screen 1/2 edits are reflected. The student toggles between the auto-scheduler
+  // review and the manual placement board using the control on Screen 3; viewMode tracks their
+  // choice. switchToManual / switchToAuto are passed so each view can drive the switch itself.
   if (i === 3) {
     const screen3 = document.getElementById('screen-3');
     if (reviewCtl) reviewCtl.refresh();
     else {
-      const mountScreen3 = pack.mode === 'manual' ? mountManual : mountReview;
-      reviewCtl = mountScreen3(screen3, { pack, plan, persist, setNextEnabled });
+      const mountFn = viewMode === 'manual' ? mountManual : mountReview;
+      reviewCtl = mountFn(screen3, { pack, plan, persist, setNextEnabled, switchToManual, switchToAuto });
     }
   }
 }

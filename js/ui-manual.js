@@ -6,8 +6,8 @@
 // it flags dependency violations and equipment over-capacity with the specific rule broken, and
 // shows the student's makespan next to the algorithm's. No auto-placement; same data model.
 //
-// This screen replaces Screen 3 (the auto "Your plan") when pack.mode === "manual"; app.js routes
-// to it. It reuses model.resolveDeps so dependency semantics match the scheduler exactly, and runs
+// This screen occupies Screen 3 when the student flips the toggle on Screen 3 (T16); app.js tracks
+// viewMode and mounts this instead of ui-review. It reuses model.resolveDeps so dependency semantics match the scheduler exactly, and runs
 // the real buildSchedule/fillGaps once to get the algorithm's makespan to compare against.
 //
 // Placement model (recorded in OPEN-QUESTIONS.md, T14): each cook lane is an ordered stack of
@@ -143,7 +143,7 @@ function el(tag, cls, text) {
  * @param {{ pack: object, plan: object }} ctx shared app context
  * @returns {{ refresh: function():void }} */
 export function mount(root, ctx) {
-  const { pack, plan } = ctx;
+  const { pack, plan, switchToAuto } = ctx;
   const steps = stepIndex(pack);
   const allStepIds = [...steps.keys()];
 
@@ -339,6 +339,30 @@ export function mount(root, ctx) {
     return block;
   }
 
+  /** Show an inline confirmation before discarding the manual arrangement and returning to auto.
+   * No window.confirm() — forbidden by docs/02. Appends a fixed overlay to root; clicking outside
+   * is not a confirm (students on Chromebooks tap things accidentally), so explicit buttons only.
+   * @returns {void} */
+  function showConfirm() {
+    if (root.querySelector('.confirm-overlay')) return; // already showing — no stacking
+    const overlay = el('div', 'confirm-overlay');
+    const box = el('div', 'confirm-box');
+    box.appendChild(el('p', 'confirm-msg',
+      'Your manual arrangement will be discarded. Switch to the auto plan?'));
+    const row = el('div', 'confirm-btns');
+    const yes = el('button', 'primary', 'Yes, switch to auto');
+    yes.type = 'button';
+    yes.addEventListener('click', () => { overlay.remove(); if (switchToAuto) switchToAuto(); });
+    const no = el('button', 'link', 'Keep editing');
+    no.type = 'button';
+    no.addEventListener('click', () => overlay.remove());
+    row.appendChild(yes);
+    row.appendChild(no);
+    box.appendChild(row);
+    overlay.appendChild(box);
+    root.appendChild(overlay);
+  }
+
   /** Recompute and rebuild the whole screen from the current placement. @returns {void} */
   function render() {
     // Keep lanes in sync if the student changed the cook count on Screen 0 since the last visit.
@@ -351,6 +375,13 @@ export function mount(root, ctx) {
     wrap.appendChild(el('p', 'man-intro',
       'Drag each step into a cook’s lane — or tap a step, then tap a lane. ' +
       'The app checks your order and equipment; it will not fix them for you.'));
+
+    if (switchToAuto) {
+      const toggle = el('button', 'link mode-toggle', '← Back to auto plan');
+      toggle.type = 'button';
+      toggle.addEventListener('click', showConfirm);
+      wrap.appendChild(toggle);
+    }
 
     const blocks = computeBlocks(pack, plan, placement);
     const violations = findViolations(pack, plan, placement);
