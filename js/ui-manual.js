@@ -147,16 +147,39 @@ export function mount(root, ctx) {
   const steps = stepIndex(pack);
   const allStepIds = [...steps.keys()];
 
-  // Lane index -> ordered step ids. Rebuilt when the cook count changes so lanes always match the
-  // kitchen; any placed steps then return to the tray (a cook-count change is rare and destructive
-  // by nature). Starts empty: the student places everything themselves (docs/07: no auto-placement).
-  let placement = emptyLanes(plan.kitchen.cooks);
+  // Lane index -> ordered step ids. Rebuilt when the cook count changes so lanes match the kitchen.
+  // Seeded from the auto-schedule on mount so the student rearranges rather than places from scratch.
+  // "Clear board" in the UI resets to emptyLanes; T17 sessionStorage will take priority over the
+  // seed when a stored board exists (auto-seed fires only on first entry in a session).
+  let placement = seedPlacement(plan.kitchen.cooks);
   // The step selected for tap-to-move (docs/02: every drag has a tap equivalent), or null.
   let selected = null;
 
   /** @param {number} n @returns {string[][]} n empty lanes */
   function emptyLanes(n) {
     return Array.from({ length: n }, () => []);
+  }
+
+  /** Seed lane stacks from the auto-scheduler's step assignments so the student has a starting point.
+   * Fillers are excluded — the manual board has no concept of them (teacher decision, 2026-08-01).
+   * Falls back to empty lanes if the schedule can't be computed (cycle, untagged step, etc.).
+   * @param {number} n number of cook lanes @returns {string[][]} */
+  function seedPlacement(n) {
+    try {
+      const base = buildSchedule(pack, plan);
+      if (!base.ok) return emptyLanes(n);
+      const lanes = emptyLanes(n);
+      base.cooks.forEach((cook, i) => {
+        if (i >= n) return;
+        lanes[i] = cook.assignments
+          .filter((a) => a.kind === 'step')
+          .sort((a, b) => a.startMin - b.startMin)
+          .map((a) => a.stepId);
+      });
+      return lanes;
+    } catch (err) {
+      return emptyLanes(n);
+    }
   }
 
   /** Cook display name: the typed name, or "Cook A".."Cook E". @param {number} i @returns {string} */
@@ -365,8 +388,9 @@ export function mount(root, ctx) {
 
   /** Recompute and rebuild the whole screen from the current placement. @returns {void} */
   function render() {
-    // Keep lanes in sync if the student changed the cook count on Screen 0 since the last visit.
-    if (placement.length !== plan.kitchen.cooks) placement = emptyLanes(plan.kitchen.cooks);
+    // Re-seed from the auto plan when the cook count changes — a different N produces a different
+    // schedule, so the old lane arrangement is invalid anyway.
+    if (placement.length !== plan.kitchen.cooks) placement = seedPlacement(plan.kitchen.cooks);
 
     root.textContent = '';
     const wrap = el('div', 'review manual');
@@ -376,12 +400,18 @@ export function mount(root, ctx) {
       'Drag each step into a cook’s lane — or tap a step, then tap a lane. ' +
       'The app checks your order and equipment; it will not fix them for you.'));
 
+    const toolRow = el('div', 'man-toolrow');
     if (switchToAuto) {
       const toggle = el('button', 'link mode-toggle', '← Back to auto plan');
       toggle.type = 'button';
       toggle.addEventListener('click', showConfirm);
-      wrap.appendChild(toggle);
+      toolRow.appendChild(toggle);
     }
+    const clear = el('button', 'link man-clear', 'Clear board');
+    clear.type = 'button';
+    clear.addEventListener('click', () => { placement = emptyLanes(plan.kitchen.cooks); selected = null; render(); });
+    toolRow.appendChild(clear);
+    wrap.appendChild(toolRow);
 
     const blocks = computeBlocks(pack, plan, placement);
     const violations = findViolations(pack, plan, placement);

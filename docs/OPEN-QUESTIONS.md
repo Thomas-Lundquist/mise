@@ -662,7 +662,9 @@ Sub-questions resolved by teacher (2026-08-01): (a) fillers do NOT appear on the
 manual validation model ignores them and they'd clutter the board with no payoff. (b) sessionStorage
 (T17) always wins: auto-seed fires ONLY when there is no stored state for this pack+session. On
 re-entry, if sessionStorage has a board, restore it; never re-seed over the student's edits.
-Resolved: <teacher fills this in>
+Resolved: 2026-08-01 (teacher) — implemented. seedPlacement seeds lanes from buildSchedule step
+assignments (fillers excluded); "Clear board" resets to emptyLanes. Cook-count change re-seeds.
+T17 sessionStorage will guard the seed with an "only if no stored state" check.
 
 ## Manual test log
 

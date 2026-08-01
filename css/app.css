@@ -888,3 +888,21 @@ body {
   justify-content: center;
   flex-wrap: wrap;
 }
+
+/* Tool row holding the Back-to-auto toggle and Clear board button side by side (T16 follow-up). */
+.man-toolrow {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+/* "Clear board" sits beside the view toggle; --alert colour signals the action is destructive. */
+.man-clear {
+  font-size: 13px;
+  color: var(--alert);
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
