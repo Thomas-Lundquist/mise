@@ -229,6 +229,16 @@ teacher/student can't tell WHICH ingredients conflict or that there may be sever
 specifies the two-ingredient wording. A future ticket should decide: keep the vague advisory as-is,
 or make it precise (highlight the specific conflicting chips, reword for N>2) — the latter turns a
 soft nudge into something that reads like a hard rule, so it is a real design choice, not a tweak.
+Resolved: 2026-08-01 (teacher) — (a) empty-bowl pruning timing + note trigger ratified as shipped: a
+MOVE-emptied bowl is pruned immediately and bowls renumber 1..n; a "+ New bowl" persists with a
+"Remove bowl" button until a move empties it; the note fires when a bowl's consumed ingredients have
+disjoint consuming-step sets. (b) N>2 follow-up DONE — teacher: "name the conflicting chips; making
+them guess is bad design." The note now NAMES the ingredients ("Onion and garlic go in at different
+times. Sure?", or "A, B and C …" for more) and marks those exact chips with a dashed underline,
+replacing the vague "These two". Kept advisory on purpose — quiet --filler colour, "Sure?" phrasing,
+dashed (not the solid selection) mark — so naming does NOT make it read as a hard rule. Logic lifted
+to the exported pure `bowlTimingConflicts` (js/ui-bowls.js) with 5 unit tests in tests/ui-bowls.test.js
+(new file, wired into test.html); suite 114/114.
 
 ## Future ticket idea — AI-assisted pack authoring (authoring-time only, NOT student runtime)
 Asked: 2026-07-30 (raised by the teacher during T10 testing)

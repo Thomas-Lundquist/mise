@@ -271,6 +271,13 @@ body {
   font-weight: 700;
 }
 
+/* Timing-conflict chip: a dashed underline (shape, not colour-only) echoes the advisory note that
+   names this ingredient. Composes with .sel's outline, so a selected conflicting chip shows both. */
+.chip.conflict {
+  text-decoration: underline dashed var(--filler);
+  text-underline-offset: 3px;
+}
+
 .bowl-card {
   border: 1px solid var(--steel);
   border-radius: 2px;

@@ -24,6 +24,26 @@ function disjoint(a, b) {
   return true;
 }
 
+/** The consumed ingredients in a bowl that enter the pan at a different moment from at least one
+ * other in the same bowl — i.e. some pair is emptied by non-overlapping steps. Returned in the
+ * given ingredient order (empty ⇒ no conflict). Pure and exported so the UI can NAME these exact
+ * ingredients (not a vague "these two") and a test can pin the behaviour. Advisory only.
+ * @param {Map<string,Set<string>>} consumers ingredientId -> step ids that empty its bowl
+ * @param {string[]} ingredientIds the bowl's ingredient ids @returns {string[]} conflicting ids */
+export function bowlTimingConflicts(consumers, ingredientIds) {
+  const consumed = ingredientIds.filter((id) => (consumers.get(id) || EMPTY).size > 0);
+  const conflicting = new Set();
+  for (let i = 0; i < consumed.length; i++) {
+    for (let j = i + 1; j < consumed.length; j++) {
+      if (disjoint(consumers.get(consumed[i]), consumers.get(consumed[j]))) {
+        conflicting.add(consumed[i]);
+        conflicting.add(consumed[j]);
+      }
+    }
+  }
+  return ingredientIds.filter((id) => conflicting.has(id)); // stable, given order
+}
+
 /** Mount Screen 1 (bowls) into a container and wire both interaction paths.
  * The returned handle's refresh() re-renders from the current plan and re-gates Next; app.js calls
  * it when re-entering the screen. All edits mutate ctx.plan.bowls in place, persist, and re-gate.
@@ -145,16 +165,11 @@ export function mount(root, ctx) {
     return out;
   }
 
-  /** True when two consumed ingredients in this bowl are emptied by non-overlapping steps, i.e.
-   * they go into the pan at different moments. Advisory only — never blocks. @param {object} bowl */
-  function bowlDifferentTimes(bowl) {
-    const consumed = bowl.ingredientIds.filter((id) => (consumers.get(id) || EMPTY).size > 0);
-    for (let i = 0; i < consumed.length; i++) {
-      for (let j = i + 1; j < consumed.length; j++) {
-        if (disjoint(consumers.get(consumed[i]), consumers.get(consumed[j]))) return true;
-      }
-    }
-    return false;
+  /** Join ingredient labels for the note as "A", "A and B", or "A, B and C". @param {string[]} ids */
+  function nameList(ids) {
+    const labels = ids.map((id) => (ingInfo.get(id) || { label: id }).label);
+    if (labels.length <= 2) return labels.join(' and ');
+    return labels.slice(0, -1).join(', ') + ' and ' + labels[labels.length - 1];
   }
 
   // ── Drag-and-drop helper ────────────────────────────────────────────────────────────────────
@@ -225,10 +240,18 @@ export function mount(root, ctx) {
     const card = el('div', 'bowl-card');
     card.appendChild(el('p', 'eyebrow', `Bowl ${bowl.number}`));
 
+    // Ingredients that go into the pan at different times (advisory). Computed once so the chips
+    // can be marked AND the note can name them — see bowlTimingConflicts.
+    const conflicts = bowl.ingredientIds.length >= 2
+      ? bowlTimingConflicts(consumers, bowl.ingredientIds) : [];
+    const conflictSet = new Set(conflicts);
+
     const row = el('div', 'chip-row');
     for (const id of bowl.ingredientIds) {
       const holder = el('span', 'bowl-chip');
-      holder.appendChild(makeChip(id));
+      const chip = makeChip(id);
+      if (conflictSet.has(id)) chip.classList.add('conflict'); // dashed underline; also named below
+      holder.appendChild(chip);
       const out = el('button', 'link take-out', 'Take out');
       out.type = 'button';
       out.addEventListener('click', (e) => { e.stopPropagation(); takeOut(id); });
@@ -253,8 +276,8 @@ export function mount(root, ctx) {
     }
     card.appendChild(actions);
 
-    if (bowl.ingredientIds.length >= 2 && bowlDifferentTimes(bowl)) {
-      card.appendChild(el('p', 'bowl-note', 'These two go in at different times. Sure?'));
+    if (conflicts.length >= 2) {
+      card.appendChild(el('p', 'bowl-note', `${nameList(conflicts)} go in at different times. Sure?`));
     }
 
     // Tap anywhere on the card (except a button) to drop the current selection here.
