@@ -21,13 +21,22 @@ with any of these, the implementation is wrong.
 | `floorMin` | **45** |
 | Critical path | `s_pil_prep → s_pil_sweat → s_pil_toast → s_pil_liquid → s_pil_simmer → s_pil_rest → s_pil_fluff` |
 
-| Cooks | `makespanMin` | Cook-minutes per cook (steps only, before fillers) |
+| Cooks | `makespanMin` | Cook-minutes per cook — **pre-affinity baseline** (steps only, before fillers) |
 |---|---|---|
 | 1 | 68 | 57 |
 | 2 | 47 | 34, 23 |
 | 3 | 45 | 28, 23, 6 |
 | 4 | 45 | 28, 23, 2, 4 |
 | 5 | 45 | 28, 23, 2, 1, 3 |
+
+**`floorMin` and every `makespanMin` above are authoritative and hand-derivable from the spec —
+verify against them.** The **per-cook** column, however, is the *pre-affinity* split. Station
+affinity (`10-affinity-amendment.md`, Layer 1) is on at every weight and deliberately changes
+*which* cook does *what* to keep dishes coherent, so at `affinityWeight = 0` the per-cook load
+redistributes (e.g. 2 cooks becomes `24, 33`) while the **total** cook-minutes (57 at every cook
+count) and the makespan are unchanged. Do **not** treat the per-cook numbers as expected output
+once affinity is in; assert the conserved total and the makespan instead
+(`tests/scheduler.test.js`). See the resolved note in `docs/OPEN-QUESTIONS.md`.
 
 Three things to notice, because they are the app working correctly:
 

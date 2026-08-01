@@ -524,7 +524,12 @@ Teacher decision needed: either (a) refresh `fixtures/README.md`'s per-index coo
 new affinity distribution (for the record it is: 1c [57], 2c [24,33], 3c [22,29,6], 4c [22,29,2,4],
 5c [22,29,2,1,3]) and keep a per-index assertion, or (b) accept the conserved-total assertion as the
 right invariant now that per-index is a Layer-1 relabeling with no timing meaning. I left it at (b).
-Resolved: <teacher fills this in>
+Resolved: 2026-08-01 (teacher) — option (b). Keep the conserved-total assertion; the per-index split
+is a Layer-1 relabeling with no timing meaning and, unlike the total/makespan, is NOT hand-derivable
+from the spec, so baking it into the golden reference would invert the "golden values come from the
+spec, not the code" principle. `fixtures/README.md`'s per-cook column is now annotated as the
+pre-affinity baseline (floor + makespans there stay authoritative). No code change; the affinity
+commit b0990a5 already ships assertion (b).
 
 ## Manual test log
 
