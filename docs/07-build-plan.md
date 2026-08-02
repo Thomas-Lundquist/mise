@@ -123,6 +123,35 @@ beside the algorithm's. No auto-placement.
 **Done when:** an invalid placement is flagged with the specific rule broken, and the print
 view is unchanged.
 
+### T16 — Auto/manual toggle
+**Read:** 05 (Screen 3), OPEN-QUESTIONS.md (T14 mode flag + shell mount entries)
+**Produce:** updated `js/app.js`, updated `js/ui-review.js`, updated `js/ui-manual.js`, styles
+Remove the `pack.mode` routing. Both views are always available; a toggle control on Screen 3
+lets the student switch between auto-review and manual placement at will. Switching FROM manual
+TO auto requires a confirmation dialog (the manual arrangement will be discarded). The auto-review
+view continues to show the scheduler's result; the manual view is the placement board.
+**Done when:** a student can switch between views freely; switching back to auto from manual
+triggers a confirmation; no pack.mode check remains in app.js.
+
+### T17 — Manual mode to-scale timeline + sessionStorage
+**Read:** 05 (Screen 3), 06 (timeline geometry), 02 (touch targets), OPEN-QUESTIONS.md (T14 placement model entry)
+**Produce:** updated `js/ui-manual.js`, updated `css/app.css`
+Replace the uniform-height block cards with to-scale bars that match the auto-review visual
+language (height = duration × SCALE). The 44px minimum touch target constraint still applies.
+Persist the board state in sessionStorage keyed to the pack id so the arrangement survives
+screen navigation; lost on browser close is acceptable.
+**Done when:** a 10-minute block is visually twice as tall as a 5-minute block; the board
+survives a Screen 0 → Screen 3 round-trip; closing and reopening the browser clears the board.
+
+### T18 — Manual mode print
+**Read:** 06, OPEN-QUESTIONS.md (T14 printing entry)
+**Produce:** updated `js/ui-manual.js`
+Add a print button to the manual placement board. Synthesize a Schedule-shaped object from the
+current lane stacks (no fillers — a manual plan has none; equipment strip from placed intervals
+only) and open `print.html` with it in the same hash format T13 established.
+**Done when:** clicking Print from a valid manual arrangement opens print.html and renders a
+legible lane timeline; the auto print path (from ui-review) is unchanged.
+
 ---
 
 ## Session discipline

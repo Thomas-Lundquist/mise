@@ -111,7 +111,7 @@ Order on the page:
    render in `--alert` with printing disabled; warnings render in `--ink` on a `--paper`
    panel and do not block.
 3. The timeline, on screen, using the same lane structure as the print view (see
-   `06-print-spec.md`) at 10px per minute instead of 3mm (revised from 2px during T12 — 2px was
+   `06-print-spec.md`) at 20px per minute instead of 3mm (revised from 2px during T12 — 2px was
    illegible on screen; the value is the `SCALE` const in `js/ui-review.js`). Tapping a block shows the full
    step label. Nothing else is interactive.
 4. Per-cook summary line: `Cook A — 41 min working, 6 min on side tasks`.
