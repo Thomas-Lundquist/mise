@@ -23,6 +23,10 @@ import { fillGaps } from './fillers.js';
 
 const COOK_LETTERS = ['A', 'B', 'C', 'D', 'E'];
 
+// On-screen scale in pixels per minute — matches ui-review.js SCALE so the manual board and the
+// auto-review rail use the same visual language (T17). Block height = max(44, dur * SCALE).
+const SCALE = 20;
+
 // ── Pure logic (no DOM) — exported for Node verification ─────────────────────────────────────
 
 /** Index every step in the pack by id. @param {object} pack @returns {Map<string,object>} */
@@ -147,11 +151,36 @@ export function mount(root, ctx) {
   const steps = stepIndex(pack);
   const allStepIds = [...steps.keys()];
 
+  // sessionStorage key unique per pack so different lab days don't collide.
+  // localStorage is confined to store.js by docs/02; sessionStorage is the compliant option here —
+  // it survives screen navigation but is cleared on browser close, exactly what T17 specifies.
+  const ssKey = `mise:manual:${pack.packId}`;
+
+  /** Load the saved lane stacks for n cooks. Returns null if nothing is stored, the cook count has
+   * changed, or the stored JSON is malformed. @param {number} n @returns {string[][]|null} */
+  function loadBoard(n) {
+    try {
+      const raw = sessionStorage.getItem(ssKey);
+      if (!raw) return null;
+      const saved = JSON.parse(raw);
+      if (!Array.isArray(saved) || saved.length !== n) return null;
+      if (!saved.every((lane) => Array.isArray(lane) && lane.every((id) => typeof id === 'string'))) return null;
+      return saved;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /** Persist the current placement. Silent on failure — sessionStorage may be unavailable.
+   * @param {string[][]} p @returns {void} */
+  function saveBoard(p) {
+    try { sessionStorage.setItem(ssKey, JSON.stringify(p)); } catch (e) {}
+  }
+
   // Lane index -> ordered step ids. Rebuilt when the cook count changes so lanes match the kitchen.
-  // Seeded from the auto-schedule on mount so the student rearranges rather than places from scratch.
-  // "Clear board" in the UI resets to emptyLanes; T17 sessionStorage will take priority over the
-  // seed when a stored board exists (auto-seed fires only on first entry in a session).
-  let placement = seedPlacement(plan.kitchen.cooks);
+  // sessionStorage wins on re-entry (T17): auto-seed fires only when no stored state exists.
+  // "Clear board" in the UI resets to emptyLanes and saves the empty state over the stored board.
+  let placement = loadBoard(plan.kitchen.cooks) || seedPlacement(plan.kitchen.cooks);
   // The step selected for tap-to-move (docs/02: every drag has a tap equivalent), or null.
   let selected = null;
 
@@ -336,14 +365,17 @@ export function mount(root, ctx) {
     return lane;
   }
 
-  /** A placed step as a block card: short label + "N min · busy/free", styled active/passive so the
-   * kind survives grayscale (docs/02). Tapping selects it for a move; a Take out button returns it
-   * to the tray. Draggable to another lane or the tray. @param {string} id @returns {HTMLElement} */
+  /** A placed step as a to-scale bar (T17): height = max(44, durationMin × SCALE) so the block
+   * height reflects the step's duration while staying touchable. Styled active/passive so the kind
+   * survives grayscale (docs/02). Tapping selects it for a move; a Take out button returns it to the
+   * tray. Draggable to another lane or the tray. @param {string} id @returns {HTMLElement} */
   function renderBlock(id) {
     const step = steps.get(id);
     const tag = plan.stepTags[id];
+    const dur = tag ? tag.durationMin : 1;
     const kind = tag && tag.hands === 'free' ? 'man-passive' : 'man-active';
     const block = el('div', `man-block ${kind}${selected === id ? ' sel' : ''}`);
+    block.style.height = `${Math.max(44, dur * SCALE)}px`;
     block.draggable = true;
     block.addEventListener('dragstart', (e) => { e.stopPropagation(); e.dataTransfer.setData('text/plain', id); });
 
@@ -388,9 +420,11 @@ export function mount(root, ctx) {
 
   /** Recompute and rebuild the whole screen from the current placement. @returns {void} */
   function render() {
-    // Re-seed from the auto plan when the cook count changes — a different N produces a different
-    // schedule, so the old lane arrangement is invalid anyway.
+    // Re-seed when the cook count changes (a different N produces a different schedule, so the
+    // old lane arrangement is invalid). Save to sessionStorage after any adjustment so the new
+    // state survives navigation back from an earlier screen.
     if (placement.length !== plan.kitchen.cooks) placement = seedPlacement(plan.kitchen.cooks);
+    saveBoard(placement);
 
     root.textContent = '';
     const wrap = el('div', 'review manual');

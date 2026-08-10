@@ -152,6 +152,22 @@ only) and open `print.html` with it in the same hash format T13 established.
 **Done when:** clicking Print from a valid manual arrangement opens print.html and renders a
 legible lane timeline; the auto print path (from ui-review) is unchanged.
 
+### T19 — Manual mode board reset
+**Read:** 05 (Screen 3), OPEN-QUESTIONS.md (T14 placement model, T16 follow-up, T17 sessionStorage entries)
+**Produce:** updated `js/ui-manual.js`
+Two related changes, both to the same closure:
+1. **Auto-reset on navigation.** When the student confirms switching from manual to auto (the "Yes,
+   switch to auto" button in the confirmation dialog), clear the sessionStorage board for this pack
+   before calling `switchToAuto()`. On re-entry to manual mode, `loadBoard()` finds nothing and falls
+   back to `seedPlacement()`, so the board always re-seeds from the current auto layout.
+2. **"Reset to auto layout" button.** Add a secondary button beside "Clear board" that calls
+   `seedPlacement(plan.kitchen.cooks)`, saves the result, and re-renders. This lets the student
+   recover the auto starting point without navigating away. Label: **Reset to auto layout**.
+**Done when:** (a) switching manual → auto (confirmed) → back to manual always shows the auto-seeded
+board, not the previous manual state; (b) the "Reset to auto layout" button re-seeds from the current
+auto schedule; (c) "Clear board" still empties the board completely (unchanged); (d) the existing
+confirmation dialog is still shown before switching to auto.
+
 ---
 
 ## Session discipline

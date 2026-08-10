@@ -666,6 +666,237 @@ Resolved: 2026-08-01 (teacher) — implemented. seedPlacement seeds lanes from b
 assignments (fillers excluded); "Clear board" resets to emptyLanes. Cook-count change re-seeds.
 T17 sessionStorage will guard the seed with an "only if no stored state" check.
 
+## T18 — print.js must be modified to render a manually synthesized Schedule
+
+Asked: 2026-08-01 (surfaced during T18 pre-code read)
+Context: T18 says "Synthesize a Schedule-shaped object from the current lane stacks and open
+print.html with it in the same hash format T13 established." But T13's hash format encodes a
+**Plan** (`plan=<encodePlan(plan)>`), and print.js's `runBoot()` always calls `buildSchedule(pack,
+plan)` — there is no path for a pre-computed Schedule to enter the render pipeline. The manual
+Schedule differs from the algorithm's Schedule, so passing the student Plan through buildSchedule
+would print the wrong arrangement.
+The URL hash is the only viable cross-tab channel (sessionStorage is per-tab; localStorage is
+restricted to store.js by docs/02). So print.js must be extended with a second hash key — e.g.
+`sched=<base64-encoded-JSON>` — that, when present, skips buildSchedule and uses the supplied
+Schedule directly. The auto print path (ui-review uses `plan=`) would be completely unchanged.
+Question: Is `js/print.js` also a named target file for T18, or should T18 be re-scoped to
+name both `js/ui-manual.js` AND `js/print.js`?
+Resolved: <teacher fills this in>
+
+## UX review — Screen 1 opens "already done", so a student can skip the merging lesson
+
+Asked: 2026-08-09 (surfaced during a student-flow UX walkthrough, no ticket)
+Context: `blankPlan` seeds one bowl per ingredient (ratified in the T10 pruning entry above), so a
+student arriving on Screen 1 sees every ingredient already in its own numbered bowl, the left column
+reads "0 left / Everything is in a bowl", and Next is enabled immediately (js/ui-bowls.js:318-324).
+The screen's actual teaching goal is the opposite of "fill" — it is MERGING ingredients that enter
+the pan together (the guide line, js/ui-bowls.js:307-309). But nothing pushes the student to merge:
+the fastest path is to tap Next and skip the lesson entirely, and a student who does want to combine
+has to discover that they merge by selecting a chip already inside a bowl and tapping another bowl,
+which the copy never explains. The always-valid default is engineering-correct (Next never wrongly
+blocks) but makes the pedagogy opt-in.
+This is not a spec ambiguity — the seed-one-bowl-per-ingredient behavior is ratified. It is a design
+question the walkthrough raised: should Screen 1 nudge toward merging (e.g. a worked example, a "most
+labs use 3–5 bowls" hint, or starting from fewer/zero bowls so combining is the obvious action)?
+Any such change trades the always-valid default (and the T10 pruning model) for a stronger lesson, so
+it is a teacher call, not a tweak — flagged here rather than acted on.
+Resolved: <teacher fills this in>
+
+## UX review — the Screen 3 equipment strip is unidentifiable on a touch Chromebook
+
+Asked: 2026-08-09 (surfaced during a student-flow UX walkthrough, no ticket)
+Context: the on-screen ticket rail's rightmost "EQUIP" column draws unlabelled gray bars whose only
+identification is a native hover tooltip (`bar.title = use.equipmentId`, js/ui-review.js:217). The
+target device is a touch/trackpad Chromebook (docs/00), where there is no hover — so a tapping student
+sees a column of anonymous gray blocks they can never resolve to "oven" or "burners". docs/06 does
+specify the strip as unlabelled bars, so the rendering is spec-faithful; the gap is that the one
+affordance that would name them (the tooltip) silently degrades to nothing on the actual hardware.
+Question for the teacher: is the strip meant to be a purely at-a-glance "something is tied up here"
+signal (in which case it is working as intended and this entry just records the touch limitation), or
+should the bars be tap-to-identify like the timeline blocks already are (js/ui-review.js:191-192)?
+The latter is a small, spec-safe addition (reuse the caption line); the former needs no change.
+Resolved: <teacher fills this in>
+
+## UX review — timeline blocks hide their full label behind an undiscoverable tap
+
+Asked: 2026-08-09 (surfaced during a student-flow UX walkthrough, no ticket)
+Context: a timeline block shows a truncated label and reveals its full step label only when tapped,
+into a caption line that is empty until the first tap (js/ui-review.js:191-192, 346-347). docs/05
+specifies "tapping a block shows the full step label", so the behavior is spec-faithful — but there is
+no affordance signalling that blocks are tappable, and the empty caption gives no starting hint, so a
+student is unlikely to discover it and just sees clipped labels. Question: add a quiet discovery cue
+(e.g. seed the caption with "Tap a block to see the full step", or a subtle affordance on the blocks)?
+Small and spec-safe if wanted; recorded here rather than invented.
+Resolved: <teacher fills this in>
+
+## UX review — the "needs something else first" disclosure is a silent footgun on Screen 2
+
+Asked: 2026-08-09 (surfaced during a student-flow UX walkthrough, no ticket)
+Context: the collapsed "This needs something else first" disclosure (js/ui-steps.js:157-178) lists
+every OTHER step in every recipe as a checkbox. It is correctly hidden as a rare escape hatch (docs/05,
+and the T11 dependency-override entries above), and defaults to collapsed. The concern the walkthrough
+raised: a curious student who opens it and checks a couple of boxes gets ZERO feedback on Screen 2 —
+Screen 2 never re-derives or warns — so the consequence (a slower schedule, or a CYCLE error that
+disables printing) only surfaces later on Screen 3, far from the cause, with nothing pointing back to
+the checkboxes as the source. Dependency semantics themselves are correct (resolveDeps now consumes
+the plan-side override, per the T11/T12 entries); this is purely about the missing feedback loop
+between the cause (Screen 2) and the effect (Screen 3). Question for the teacher: leave as-is (the
+disclosure is rarely opened by design), add a light in-place confirmation on Screen 2 when an override
+is set, or have Screen 3's CYCLE/slower-plan warning name the overridden step so the student can trace
+it back? Recorded rather than acted on — it touches the Screen 2/3 contract.
+Resolved: <teacher fills this in>
+
+## Visual review (Playwright walkthrough, 2026-08-09) — rendered-page design issues
+
+Drove the real app in headless Chromium against `fixtures/recipe-pack.example.json` at two widths
+(1000px "Chromebook" and 360px "narrow Canvas iframe"), plus author.html and print.html. Zero console
+or page errors on any screen. Screens 0/2 and author.html render cleanly. The issues below are visual,
+observed in the screenshots; logged for a teacher/design call rather than fixed, per the working
+agreement. Several are downstream symptoms of the Screen-1 bowls entry above; cross-referenced where so.
+
+### V1 — Screen 3 review: the equipment strip is clipped at 1000px (header shows "E...")
+At the 1000px width the ticket-rail timeline is wider than the centered content column, so the
+rightmost "EQUIP" column is cut off at the column edge — its header renders as "E..." and the gray
+capacity bars are sliced. Paradoxically it fits at 360px (lanes shrink) but clips at 1000px (lanes
+don't). So on the primary Chromebook width a student loses the equipment strip entirely. Likely a
+container max-width / overflow interaction (js/ui-review.js renders the timeline at SCALE=20px/min with
+fixed lane widths; the content column caps width). Question: should the timeline scroll horizontally
+within its own region, or should lane widths flex so cooks + EQUIP always fit the column? This looks
+more like a layout bug than a spec choice — flagged for confirmation.
+Resolved: <teacher fills this in>
+
+### V2 — Manual board: to-scale passive bars become huge empty blocks
+The T14 "revised direction" made manual blocks to-scale (height = max(44, durationMin × 20px),
+js/ui-manual.js:378). On the example plan this turns a 20-min "Simmer covered" or 15-min "Finish in
+oven" into a ~300–400px-tall empty tape-yellow rectangle carrying only a label and a "Take out" link,
+so the board scrolls for many screens of mostly-empty color. The auto-review rail has the same geometry
+but reads as a timeline (time spine, gridlines) that justifies the height; the manual board has no spine,
+so the tall bars read as wasted space rather than duration. Question: keep to-scale (accept the long
+scroll), add a time spine/gridlines to the manual board so height reads as time (matching the auto rail),
+or cap passive-bar height with an inline "20 min" label? This is a direct consequence of the to-scale
+decision meeting a touch board with no ruler.
+Resolved: <teacher fills this in>
+
+### V3 — Screen 1 bowls: lopsided layout and a 16-card scroll (visual side of the bowls entry)
+Confirms the "UX review — Screen 1 opens already done" entry above from the rendered page: with the
+example pack the student sees 16 single-ingredient bowl cards stacked in one narrow right-hand column
+(a long scroll), while the entire left "Not in a bowl yet" column is empty whitespace (~half the 1000px
+width). Beyond the pedagogy point already logged, this is a pure space problem: bowls stack vertically
+and never use the horizontal room, and the two-column split is empty-on-the-left whenever nothing is
+unbowled (i.e. the default and the finished state). A wrap/grid of bowl cards, or collapsing the empty
+left column, would cut the scroll dramatically. Tied to the bowls entry above — resolve together.
+Resolved: <teacher fills this in>
+
+### V4 — Print + review checklist reads "Mixing bowls x16" (downstream of unmerged bowls)
+Because the default plan never merges, the printed EQUIPMENT checklist shows "Mixing bowls x16" and the
+bowls list runs 1–16 — i.e. the sheet a student tapes up tells them to bring sixteen mixing bowls for a
+two-recipe lab. This is the concrete real-world cost of the Screen-1 bowls entry: the always-valid
+one-bowl-per-ingredient default propagates all the way to the printed artifact. Whatever is decided for
+Screen 1 should be judged partly on this output. No separate fix — record as the strongest argument in
+the bowls-merging decision above.
+Resolved: <teacher fills this in>
+
+### V5 — Idle lanes are a monotone wall of repeated filler (low-contrast, repetitive)
+On the example plan with 4 cooks, Cooks C and D are near-idle, so their lanes are ~10 repetitions of
+"Wipe down your station" in light-italic --filler gray, both on screen and in the grayscale print. Two
+small design notes: (a) the repetition reads as filler-spam rather than a plan; (b) --filler (#8A9199)
+italic on --paper/white is faint, which fights docs/06's "read from three feet" grayscale goal. Not a
+bug — the idle-heavy warning already fires (docs/04 Stage 5) — but the visual density of identical
+fillers and their contrast are worth a look. Question: vary/[de-duplicate] filler labels, or lighten the
+lane's visual weight so idle time reads as idle without a wall of text? Minor; recorded for completeness.
+Resolved: <teacher fills this in>
+
+## Design direction — timeline: widen the vertical rail (do NOT reorient to landscape)
+
+Decided: 2026-08-09 (this session, teacher). Formal spec/ticket: TBD.
+Context: the Screen-3 timeline (and the V1/V3 visual entries above) reads as squished on a Chromebook —
+cook lanes truncate step labels to "Dice oni…", "Trim & d…". Root cause found in css/app.css: lanes are
+`.tl-lane { flex: 1 1 0 }` (so N cooks split a fixed width → each lane is width/N → narrow), and
+`.tl-block-label { white-space: nowrap; text-overflow: ellipsis }` hard-truncates. Two directions were
+weighed: (a) reorient the rail to landscape (time left→right, cooks as rows), or (b) keep it vertical
+and just widen the lanes.
+Prototyped both in Playwright against the real components (scratchpad, 2026-08-09):
+- Landscape helps only the LONG active steps (block width = duration, so they get room) but makes SHORT
+  steps and the many 1-min fillers WORSE (a 2-min task is ~30px wide, nothing fits), and it moves the
+  time-scroll to horizontal on a 360px iframe. Net: not worth reorienting the docs/02 signature element.
+- Widening the vertical lanes (fixed ~160px, wrap the label) fixed EVERY label at both 1000px and 360px.
+  It is strictly better than landscape for text because vertical blocks are TALL (height = duration →
+  free vertical room to wrap) AND every block gets full lane width regardless of its duration, so even
+  a 1-min "Wipe down your station" fits on one line. It keeps the vertical ticket-rail identity and the
+  portrait print.
+Decision: option (b). Change is small — `.tl-lane`/`.tl-lane-head` fixed width instead of `flex: 1 1 0`;
+`.tl-block-label` wraps instead of nowrap/ellipsis; the timeline scrolls horizontally (`overflow-x:auto`)
+when N × lane-width exceeds the viewport.
+Tradeoff accepted (teacher): at narrow widths (360px Canvas iframe) the rail scrolls horizontally / can be
+moved to its own page, and the print may go landscape — the same width cost landscape would have had, but
+here we keep vertical time-reading and portrait as the default. ~2 cooks are visible at 360px.
+Still open (own fixes): (1) the equipment strip is a 28px column whose "EQUIP" head still truncates to
+"E…" — widening lanes did not touch it (see V1); it needs its own treatment. (2) The exact lane-width
+number (160px felt right at 3 cooks) should be tuned against 4–5 cooks and the real Canvas iframe width.
+Evidence: scratchpad mock widened the real ui-review timeline via injected CSS; screenshots retained
+for the ticket. No app files changed yet.
+Refinement (2026-08-09, teacher): the widened rail should also BREAK OUT of the centered content column
+and use LARGER type. Cause found: `.shell-content { max-width: 720px; margin: 0 auto }` (css/app.css:111)
+caps the whole flow to a centered 720px band — ~53% of a 1366px Chromebook, the "middle third" the
+teacher flagged. That column is correct for the FORM screens (Start/Bowls/Steps want a ~65-char readable
+line length) but wrong for the timeline, which is a wide data view. Decision: Screen 3 (review/timeline)
+breaks out to full page width (with side padding) and bumps the type scale on blocks/labels/numbers —
+docs/02's own goal is "read at arm's length with wet hands", and the small-text/narrow-column choices
+were driven by the tiny Canvas iframe, which no longer applies once the timeline is on its own page.
+Bonus: at full width ~200px lanes fit 5 cooks in ~1070px, so 4–5-cook plans need NO horizontal scroll on
+a real Chromebook — the scroll cost shrinks back to only the small in-Canvas iframe. So the ticket is:
+(1) fixed wider lanes + wrapping labels, (2) review screen escapes the 720px `.shell-content` cap to full
+width, (3) larger timeline type. Forms keep the 720px column.
+Landscape-print + fullscreen refinement (2026-08-09, teacher): prototyped fitting the whole rail on ONE
+landscape Letter sheet (scratchpad landscape.html). Target envelope = usable area of landscape Letter
+(11×8.5in minus margins) ≈ 10×7.5in = 4:3 (1.33:1). There is NO single fixed ratio that fits every plan
+(cooks 2–5 drive width, minutes 45–70 drive height), so it is fit-to-page scaling toward that 4:3
+envelope with a legibility floor, which print.js's pickScale already does — this is a re-target, not new
+machinery. Measured fit for the example (4 cooks, 45 min) at 0.31in margins: lanes 234px (~2.4in), time
+14.3px/min (~3.8mm/min), rail 642px tall — full step descriptions render legibly and the whole plan lands
+on one page. Decisions: (a) LOWER print margins from 0.5in toward ~0.3in to fit more; (b) offer a
+LANDSCAPE print for the timeline (portrait stays the default; landscape trades time-height, which we have
+to spare at ≤70 min, for lane-width, which labels need); (c) add a FULLSCREEN / hide-chrome toggle on the
+on-screen review that hides the shell header + footer (~130px) to reclaim vertical space for short blocks.
+Carry-over rule made non-negotiable by the smaller landscape scale: a 1-min PASSIVE cook-hold clips its
+label at ~14px/min, so — exactly as the T13 follow-up already resolved — the hold stays a thin marker in
+the lane and the passive cook-time is shown in the equipment strip, never a full wrapped label in a 14px
+block. Minor bug to carry the T13 fix for: the FLOOR line label collides with the last block when
+floorMin == makespanMin; nudge it above the rule.
+
+## Design direction — cookNeed: moldable "gang" tasks (up to 2 cooks), greedy, ~0.75× speedup
+
+Decided: 2026-08-09 (this session, teacher). Formal spec/ticket: TBD — belongs in its own docs/04
+amendment + scheduler ticket, mirroring how docs/10 (affinity) was added; NOT a UI change.
+Context: real kitchens have tasks two people can share (chopping a big pile, lifting a stockpot). The
+teacher wants a step to be able to use MORE than one cook. Key modelling decisions made this session:
+1. MOLDABLE, not rigid: a task uses UP TO 2 cooks (minimum 1). Because the minimum is always 1, a task is
+   NEVER infeasible — this removes the "cookNeed > kitchen.cooks ⇒ error" case an earlier note raised.
+2. GREEDY, never wait: when a task becomes ready, it grabs `min(maxCooks, cooksFreeNow)` and starts
+   immediately — it does not hold cooks idle or reserve them. This is what makes the greedy list-scheduler
+   stay clean: no deliberate-idle, no starvation/reservation policy (the hard part of rigid gang
+   scheduling is avoided by making the task moldable + non-waiting).
+3. SPEEDUP: with 2 cooks a task runs ~25% faster — `durationMin(2 cooks) = ceil(baseDurationMin × 0.75)`.
+   Conservative/sub-linear on purpose (two people rarely halve a kitchen task; coordination overhead).
+   Integer minutes are a hard rule (docs/02), so the result is `ceil`-rounded and deterministic; note this
+   means short tasks round to NO gain (base 1→1, 2→2, 4→3, 5→4, 20→15) — realistic, since you'd only
+   gang-tag a long task. Cap at 2 cooks for v1; a general k-cook speedup curve is deferred.
+4. RENDERING: draw the SAME block duplicated into each assigned cook's lane — NOT a block spanning columns.
+   This lets non-adjacent cooks (A + C) pair with no visual weirdness and keeps the renderer dumb (it just
+   draws whichever cook-ids the scheduler tagged on the assignment, one copy per lane). Validated in the
+   widened-vertical mock (a "2 cooks" badge on the same block in Cook A and Cook C).
+5. FLOOR vs MAKESPAN: the critical-path floor assumes max cooks (fastest), so it uses the 0.75× duration;
+   makespan uses whatever cooks were actually free at runtime. The floor↔makespan gap therefore now also
+   teaches "you didn't have enough free cooks to speed up the big task" — a new, good lesson.
+6. COOK-MINUTES rise while wall-clock drops: 2 cooks × 0.75·base = 1.5·base cook-minutes for 0.75·base of
+   time. Surface this — it is the parallelism lesson (throwing people at a task costs labor to save time).
+Scope when built: docs/03 (Step gains a `maxCooks`/`cookNeed` field; ABSENT ⇒ 1, so every current fixture
+stays byte-identical, exactly like affinityWeight defaulting to 0); docs/04 amendment (Stage 3 resource
+test = count free cooks, duration selection by assigned count); model.js/scheduler.js + all golden
+fixtures in docs/09 re-derived; Screen 2 gains a per-step "how many cooks?" control; the timeline's
+duplicate-draw. Open sub-question for the ticket: is 0.75 a global constant or an authored per-task value?
+(Global constant recommended to start, minimal authoring burden.)
+
 ## Manual test log
 
 (Dated results from `09-test-plan.md` Part 4 go here.)

@@ -623,12 +623,12 @@ body {
 .plan-blocked { color: var(--alert); font-size: 13px; margin: 6px 0 0; }
 .copy-status { display: inline-block; margin-left: 8px; font-size: 13px; color: var(--filler); }
 
-/* ── Screen 3 — manual mode (T14) ──────────────────────────────────────────────────────────
-   Replaces the auto "Your plan" when pack.mode === "manual". A touch board: the student stacks
-   step cards into cook lanes and the app only validates. Blocks are uniform tap-target cards with
-   the duration printed on them (NOT to-scale bars like the review/print rail) — a Chromebook needs
-   a 44px target more than pixel-accurate height. Reuses the .plan-nums, .chip, .warn, .bowl-put
-   and .drop-hover idioms so manual mode reads as the same app. */
+/* ── Screen 3 — manual mode (T14, T17) ─────────────────────────────────────────────────────
+   A touch board: the student stacks step bars into cook lanes and the app only validates. Blocks
+   are to-scale bars (height = max(44, durationMin × SCALE) set inline, matching the auto-review
+   visual language) — the 44px minimum keeps the Chromebook tap target (docs/02) while the height
+   also carries time information. Reuses .plan-nums, .chip, .warn, .bowl-put and .drop-hover so
+   manual mode reads as the same app. Board state persists in sessionStorage (T17). */
 .man-intro { color: var(--filler); margin: 0 0 16px; }
 
 /* Not-placed-yet tray: also a drop target for taking a block back off the board. */
@@ -651,14 +651,17 @@ body {
   padding: 8px;
 }
 .man-lane .eyebrow { margin-bottom: 6px; }
-.man-stack { display: flex; flex-direction: column; gap: 6px; min-height: 44px; }
+/* gap: 0 so bars are flush — consecutive steps are time-contiguous (T17 to-scale requirement). */
+.man-stack { display: flex; flex-direction: column; gap: 0; min-height: 44px; }
 
-/* Block card: label + "N min · hands …", coloured by kind but never colour-only (docs/02) —
-   active is solid teal with a dark border, passive is tape-yellow with a dashed border. */
+/* To-scale bar (T17): height is set inline as max(44px, durationMin × SCALE) — the inline value
+   beats any CSS height, so there is no min-height here. Content clips gracefully on short steps via
+   overflow:hidden. Colour carries kind but never alone (docs/02): active = solid teal + dark border,
+   passive = tape-yellow + dashed border. */
 .man-block {
   border-radius: 2px;
   padding: 6px 8px;
-  min-height: 44px; /* Chromebook tap target (docs/02) */
+  overflow: hidden;
   cursor: grab;
 }
 .man-active { background: var(--active); color: var(--paper); border: 1px solid var(--ink); }
