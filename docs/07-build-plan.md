@@ -144,13 +144,19 @@ screen navigation; lost on browser close is acceptable.
 survives a Screen 0 → Screen 3 round-trip; closing and reopening the browser clears the board.
 
 ### T18 — Manual mode print
-**Read:** 06, OPEN-QUESTIONS.md (T14 printing entry)
-**Produce:** updated `js/ui-manual.js`
-Add a print button to the manual placement board. Synthesize a Schedule-shaped object from the
-current lane stacks (no fillers — a manual plan has none; equipment strip from placed intervals
-only) and open `print.html` with it in the same hash format T13 established.
+**Read:** 06, OPEN-QUESTIONS.md (T14 printing entry, T18 print.js scope entry)
+**Produce:** updated `js/ui-manual.js` AND `js/print.js`
+Add a print button to the manual placement board. Two sides:
+1. **ui-manual.js** — synthesize a Schedule-shaped object from the current lane stacks (no fillers —
+   a manual plan has none; equipment strip from placed intervals only) and open
+   `print.html#<pack-part>&sched=<encoded-JSON>`, reusing the current address-bar pack part verbatim
+   (`p=`/`pf=`) exactly as ui-review does for `plan=`.
+2. **print.js** — `parseHash` learns a `sched=` key; when present, `runBoot` decodes it and uses that
+   Schedule directly (skip `buildSchedule`/`fillGaps`, plugs in at the js/print.js:320-326 block),
+   feeding it to the existing `renderPage1`/`renderPage2`. When `sched=` is absent the `plan=` path is
+   byte-for-byte unchanged.
 **Done when:** clicking Print from a valid manual arrangement opens print.html and renders a
-legible lane timeline; the auto print path (from ui-review) is unchanged.
+legible lane timeline; the auto print path (from ui-review, via `plan=`) is byte-for-byte unchanged.
 
 ### T19 — Manual mode board reset
 **Read:** 05 (Screen 3), OPEN-QUESTIONS.md (T14 placement model, T16 follow-up, T17 sessionStorage entries)
@@ -167,6 +173,36 @@ Two related changes, both to the same closure:
 board, not the previous manual state; (b) the "Reset to auto layout" button re-seeds from the current
 auto schedule; (c) "Clear board" still empties the board completely (unchanged); (d) the existing
 confirmation dialog is still shown before switching to auto.
+
+### T20 — Screen 1 zero-bowl start + card layout
+**Read:** 05 (Screen 1), 03 (Plan / blankPlan / bowl model), 02, OPEN-QUESTIONS.md ("UX review —
+Screen 1 opens already done", V3, V4, and the T10 pruning entry)
+**Produce:** updated `js/model.js` (blankPlan), `js/ui-bowls.js`, `css/app.css`,
+`tests/model.test.js`, and doc updates to `docs/03-data-model.md` + `docs/05-ui-spec.md`
+Overturns the ratified one-bowl-per-ingredient seed (teacher decision 2026-08-10) so the merging
+lesson is active, not opt-in.
+1. **`blankPlan` seeds zero bowls** (`bowls: []`); tags and cook count unchanged. This is a
+   deliberate edit to the frozen T2 pure module, driven by the spec change — not a slip.
+2. **Screen 1 opens empty:** every ingredient starts in "Not in a bowl yet"; the existing Next gate
+   (js/ui-bowls.js:318, blocks while `unbowled.length > 0`, reason `${unbowled.length} left`) now
+   fires — no gate-logic change.
+3. **First-placement affordance (decide in-ticket):** with zero bowls there is no card to drop the
+   first chip onto. Pick one — auto-provide a single empty starter bowl, or make "+ New bowl" the
+   obvious first action / let a selected chip + "+ New bowl" create-and-fill. Keep the spec's
+   existing select-chip-then-"Put here" merge gesture.
+4. **Layout (V3):** render bowl cards as a wrap/grid instead of one vertical stack; collapse or
+   de-emphasize the empty left column when nothing is unbowled.
+5. **Tests:** update `model.test.js` "blankPlan: one bowl per ingredient" and "blankPlan produces a
+   plan that validates clean" to the new contract — a zero-bowl blank plan is intentionally
+   incomplete (UNBOWLED) until the student bowls. Confirm `validatePlan`'s UNBOWLED handling while
+   rewriting. These flip because the spec changed (not fixing a test to match code).
+**Blast radius:** golden scheduler fixtures are unaffected — `fixtures/plan.example.json` is an
+authored student plan that already carries its bowls; only fresh blank plans start empty. codec must
+round-trip `bowls: []` (verify; expected trivial).
+**Done when:** a fresh plan opens with 0 bowls and Next disabled; bowling every ingredient enables
+Next; the merge gesture still works; bowl cards no longer force a long single-column scroll; the
+printed checklist reflects the real bowl count (closes V4); docs/03 and docs/05 match the new
+behavior; the browser suite is green with the two rewritten model tests.
 
 ---
 

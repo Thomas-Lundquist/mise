@@ -254,6 +254,9 @@ replacing the vague "These two". Kept advisory on purpose — quiet --filler col
 dashed (not the solid selection) mark — so naming does NOT make it read as a hard rule. Logic lifted
 to the exported pure `bowlTimingConflicts` (js/ui-bowls.js) with 5 unit tests in tests/ui-bowls.test.js
 (new file, wired into test.html); suite 114/114.
+Superseded in part (2026-08-10, teacher): the "one bowl per ingredient" seed described here is replaced
+by a ZERO-bowl start (see "UX review — Screen 1 opens already done" and ticket T20). The pruning and
+renumber rules for student-created bowls in this entry still stand; only the initial seed changes.
 
 ## Future ticket idea — AI-assisted pack authoring (authoring-time only, NOT student runtime)
 Asked: 2026-07-30 (raised by the teacher during T10 testing)
@@ -681,7 +684,16 @@ restricted to store.js by docs/02). So print.js must be extended with a second h
 Schedule directly. The auto print path (ui-review uses `plan=`) would be completely unchanged.
 Question: Is `js/print.js` also a named target file for T18, or should T18 be re-scoped to
 name both `js/ui-manual.js` AND `js/print.js`?
-Resolved: <teacher fills this in>
+Resolved: 2026-08-10 (teacher) — re-scope T18 to name BOTH `js/ui-manual.js` and `js/print.js`. There
+is no other viable path: print.js `runBoot` unconditionally recomputes the schedule via
+`buildSchedule(pack, plan)` (js/print.js:322) and `parseHash` only knows `plan=` + the pack key, so a
+manually-arranged Schedule (which differs from the algorithm's) cannot enter the render pipeline
+without a code change. Decision: print.js gains a `sched=<encoded-JSON>` hash key; when present,
+`runBoot` decodes it and skips `buildSchedule`/`fillGaps`, feeding the Schedule straight to
+`renderPage1`/`renderPage2` (both already take a Schedule object). ui-manual synthesizes that
+Schedule from the lane stacks (no fillers; equipment strip from placed intervals only) and opens
+`print.html#<pack-part>&sched=<encoded>`. The auto print path (ui-review, `plan=`) is untouched. T18
+ticket in docs/07 amended to name both files.
 
 ## UX review — Screen 1 opens "already done", so a student can skip the merging lesson
 
@@ -700,7 +712,15 @@ question the walkthrough raised: should Screen 1 nudge toward merging (e.g. a wo
 labs use 3–5 bowls" hint, or starting from fewer/zero bowls so combining is the obvious action)?
 Any such change trades the always-valid default (and the T10 pruning model) for a stronger lesson, so
 it is a teacher call, not a tweak — flagged here rather than acted on.
-Resolved: <teacher fills this in>
+Resolved: 2026-08-10 (teacher) — start from ZERO bowls. `blankPlan` will seed `bowls: []`, so the
+student arrives with every ingredient in "Not in a bowl yet" and MUST actively bowl + merge; the
+existing Next gate (blocks while `unbowled.length > 0`, js/ui-bowls.js:318) becomes meaningful with no
+gate-logic change. This deliberately trades away the ratified always-valid default — the stronger
+merging lesson is the point. Scoped to its own ticket **T20** (docs/07) because it edits the frozen
+pure `blankPlan` (model.js), flips two model tests, and updates docs/03 + docs/05. The one-bowl-
+per-ingredient seed in the T10 pruning entry below is superseded; the pruning/renumber rules for
+student-created bowls still stand. Closes V3 (layout) and V4 ("Mixing bowls ×N") as downstream —
+see those entries.
 
 ## UX review — the Screen 3 equipment strip is unidentifiable on a touch Chromebook
 
@@ -785,7 +805,10 @@ width). Beyond the pedagogy point already logged, this is a pure space problem: 
 and never use the horizontal room, and the two-column split is empty-on-the-left whenever nothing is
 unbowled (i.e. the default and the finished state). A wrap/grid of bowl cards, or collapsing the empty
 left column, would cut the scroll dramatically. Tied to the bowls entry above — resolve together.
-Resolved: <teacher fills this in>
+Resolved: 2026-08-10 (teacher) — folded into T20 (docs/07). The zero-bowl start removes the default
+16-card wall (the student now builds a handful of merged bowls), and T20 also re-renders bowl cards as
+a wrap/grid instead of one vertical stack and collapses/de-emphasizes the empty left column. Fixed
+with the Screen-1 pedagogy decision above, not separately.
 
 ### V4 — Print + review checklist reads "Mixing bowls x16" (downstream of unmerged bowls)
 Because the default plan never merges, the printed EQUIPMENT checklist shows "Mixing bowls x16" and the
@@ -794,7 +817,10 @@ two-recipe lab. This is the concrete real-world cost of the Screen-1 bowls entry
 one-bowl-per-ingredient default propagates all the way to the printed artifact. Whatever is decided for
 Screen 1 should be judged partly on this output. No separate fix — record as the strongest argument in
 the bowls-merging decision above.
-Resolved: <teacher fills this in>
+Resolved: 2026-08-10 (teacher) — resolved by the zero-bowl decision (Screen-1 entry above, ticket T20).
+Once the student builds their own merged bowls instead of inheriting one-per-ingredient, the printed
+EQUIPMENT checklist and bowls list reflect the real bowl count (a handful, not 16). No separate fix;
+the printed artifact is a done-when check on T20.
 
 ### V5 — Idle lanes are a monotone wall of repeated filler (low-contrast, repetitive)
 On the example plan with 4 cooks, Cooks C and D are near-idle, so their lanes are ~10 repetitions of
