@@ -16,10 +16,15 @@
 // (the duration is printed on them), NOT to-scale bars — this is a touch board, so a 44px tap
 // target beats pixel-accurate height. Placement is in-memory only; it is not written to the plan
 // or the draft, because docs/03 defines no field for it. Never assigns innerHTML from pack/plan.
+//
+// Printing (T18): a Print button synthesizes a Schedule-shaped object from the lane stacks and opens
+// the EXISTING print.html with it as `sched=` in the hash, so the student prints their own board, not
+// the algorithm's. print.js reads `sched=` and skips the scheduler; the auto print path is unchanged.
 
 import { resolveDeps } from './model.js';
 import { buildSchedule } from './scheduler.js';
 import { fillGaps } from './fillers.js';
+import { encodePlan } from './codec.js';
 
 const COOK_LETTERS = ['A', 'B', 'C', 'D', 'E'];
 
@@ -227,6 +232,102 @@ export function mount(root, ctx) {
     } catch (err) {
       return null; // untagged step — unreachable in the normal flow (blankPlan tags everything)
     }
+  }
+
+  /** Build a Schedule-shaped object (docs/03) from the current lane stacks so the EXISTING print view
+   * renders the student's own arrangement (T18). It carries the exact fields print.js reads from a
+   * schedule: cooks[].assignments, equipmentUse, equipmentChecklist, bowlCount, floorMin, makespanMin.
+   * A manual plan has no fillers, so none are added; the equipment strip and the Page-1 checklist come
+   * from placed steps only. floorMin and criticalStepIds come from the AUTO scheduler — the floor is a
+   * property of the pack+plan, not the arrangement, so the printed floor line still shows the fastest
+   * possible time and critical steps still get their heavy edge. In manual placement a cook holds the
+   * whole duration, so endMin === runsUntilMin === block end (the manual model, OPEN-QUESTIONS.md T14).
+   * @returns {object} a Schedule with ok:true */
+  function synthesizeSchedule() {
+    const blocks = computeBlocks(pack, plan, placement);
+    const makespanMin = studentMakespan(blocks);
+
+    // Floor + critical set from the auto scheduler; both describe the pack+plan, not the board.
+    let floorMin = 0;
+    let criticalSet = new Set();
+    try {
+      const base = buildSchedule(pack, plan);
+      if (base.ok) { floorMin = base.floorMin; criticalSet = new Set(base.criticalStepIds); }
+    } catch (err) { /* untagged step — unreachable in the normal flow (blankPlan tags everything) */ }
+
+    const cooks = placement.map((ids, i) => {
+      const assignments = ids
+        .map((id) => {
+          const b = blocks.get(id);
+          const step = steps.get(id);
+          const tag = plan.stepTags[id];
+          return {
+            kind: 'step',
+            stepId: id,
+            recipeId: step.recipeId,
+            label: step.shortLabel,
+            startMin: b.start,
+            endMin: b.end,
+            runsUntilMin: b.end,
+            hands: tag ? tag.hands : 'busy',
+            isCritical: criticalSet.has(id),
+            equipmentIds: (step.equipmentIds || []).slice(),
+          };
+        })
+        .sort((x, y) => x.startMin - y.startMin || (x.stepId < y.stepId ? -1 : 1));
+      let busy = 0;
+      for (const r of assignments) busy += r.endMin - r.startMin;
+      return {
+        index: i,
+        name: cookName(i),
+        assignments,
+        idleMin: makespanMin - busy,
+        utilizationPct: makespanMin === 0 ? 0 : Math.round((busy / makespanMin) * 100),
+      };
+    });
+
+    // Equipment strip intervals — every placed step's equipment, [start, end]. print.js filters to
+    // the contended resources (capacity <= 2). Sorted to mirror scheduler.js's deterministic output.
+    const equipmentUse = [];
+    for (const [id, b] of blocks) {
+      for (const eid of (steps.get(id).equipmentIds || [])) {
+        equipmentUse.push({ equipmentId: eid, startMin: b.start, endMin: b.end, stepId: id });
+      }
+    }
+    equipmentUse.sort((a, b) =>
+      a.startMin - b.startMin ||
+      (a.equipmentId < b.equipmentId ? -1 : a.equipmentId > b.equipmentId ? 1 : 0) ||
+      (a.stepId < b.stepId ? -1 : 1));
+
+    // Page-1 checklist — checklist:true equipment used by a placed step, sorted by id (as the scheduler).
+    const usedEquip = new Set(equipmentUse.map((u) => u.equipmentId));
+    const equipmentChecklist = pack.equipment
+      .filter((e) => e.checklist && usedEquip.has(e.id))
+      .map((e) => ({ id: e.id, name: e.name, count: e.capacity }))
+      .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+
+    return {
+      ok: true,
+      floorMin,
+      makespanMin,
+      cooks,
+      equipmentUse,
+      criticalStepIds: [...criticalSet],
+      bowlCount: (plan.bowls || []).length,
+      equipmentChecklist,
+      warnings: [],
+    };
+  }
+
+  /** Open print.html in a new tab with the manual arrangement. It reuses the pack part of the current
+   * hash verbatim (`p=`/`pf=`), exactly as ui-review does, then adds the small plan (Page 1 draws the
+   * bowls table from plan.bowls) and the synthesized schedule as `sched=` (URI-encoded JSON). print.js
+   * reads `sched=` and renders it directly, skipping the scheduler. @returns {void} */
+  function openPrint() {
+    const packHash = (location.hash || '').replace(/^#/, ''); // "p=…" or "pf=…", as this student loaded it
+    const sched = encodeURIComponent(JSON.stringify(synthesizeSchedule()));
+    const url = `print.html#${packHash}&plan=${encodePlan(plan)}&sched=${sched}`;
+    window.open(url, '_blank', 'noopener');
   }
 
   /** Move a step to the end of a lane, removing it from wherever it currently sits.
@@ -455,6 +556,23 @@ export function mount(root, ctx) {
     wrap.appendChild(renderFlags(violations, leftover));
     wrap.appendChild(renderTray(unplacedIds()));
     wrap.appendChild(renderLanes());
+
+    // Print the student's own arrangement (T18). Enabled only when the board is complete and every
+    // rule holds — the same gate ui-review uses for errors — so a printed manual sheet is always valid.
+    const canPrint = leftover === 0 && violations.length === 0;
+    const printRow = el('div', 'man-print-row');
+    const print = el('button', 'primary man-print', 'Print my plan');
+    print.type = 'button';
+    print.disabled = !canPrint;
+    print.addEventListener('click', openPrint);
+    printRow.appendChild(print);
+    if (!canPrint) {
+      const reason = leftover
+        ? `Place every step first — ${leftover} to go.`
+        : 'Fix the flagged rules first.';
+      printRow.appendChild(el('p', 'man-print-reason', reason));
+    }
+    wrap.appendChild(printRow);
 
     root.appendChild(wrap);
   }

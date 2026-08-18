@@ -923,6 +923,35 @@ fixtures in docs/09 re-derived; Screen 2 gains a per-step "how many cooks?" cont
 duplicate-draw. Open sub-question for the ticket: is 0.75 a global constant or an authored per-task value?
 (Global constant recommended to start, minimal authoring burden.)
 
+## T18 — manual print carries `plan=` too, encodes the schedule as URI JSON, and skips the warnings check
+
+Asked/decided: 2026-08-17 (during T18)
+Context: T18 says ui-manual synthesizes a Schedule from the lane stacks and opens
+`print.html#<pack-part>&sched=<encoded-JSON>`, and print.js reads `sched=` to skip
+`buildSchedule`/`fillGaps`. Three points the ticket text does not pin were resolved while building it,
+none inventing behaviour beyond what the render path already requires:
+1. THE MANUAL URL ALSO CARRIES `plan=`. `renderPage1` draws the Page-1 bowls table from `plan.bowls`
+   (the synthesized Schedule has only `bowlCount`, not the bowl contents), so the plan is still needed.
+   The manual opener therefore emits `print.html#<pack-part>&plan=<encodePlan(plan)>&sched=<encoded-JSON>`.
+   This keeps `renderPage1`/`renderPage2` byte-for-byte unchanged — print.js decodes pack + plan exactly
+   as the auto path does, and `sched=` only swaps out the scheduler run. The ticket named just `sched=`;
+   adding `plan=` is the smallest change that satisfies "feed the existing renderPage1/renderPage2".
+2. `sched=` IS URI-ENCODED JSON (`encodeURIComponent(JSON.stringify(schedule))`), decoded with
+   `JSON.parse(decodeURIComponent(...))`. codec.js is a frozen pure module scoped to packs and plans;
+   the manual Schedule is neither, so it is not a codec type and codec.js is left untouched. URI encoding
+   turns any '&' into %26, so parseHash's split-on-'&' stays safe (same guarantee base64url gives `plan=`).
+3. THE `sched=` PATH SKIPS `checkPlan` (warnings = []). The manual board already gates its Print button
+   (enabled only when every step is placed AND no rule is broken), so the printed sheet is always valid;
+   there is no schedule to re-validate and no error to surface. Consequence: a manual print shows no
+   "Note:" footer lines. The auto `plan=` path still runs `checkPlan` unchanged.
+Synthesized Schedule shape (matches the fields print.js reads from scheduler.js output): `ok:true`,
+`floorMin` + `criticalStepIds` from `buildSchedule(pack, plan)` (both describe the pack+plan, not the
+arrangement, so the printed floor line and critical edges stay meaningful), `makespanMin` = student
+makespan, `cooks[].assignments` from the lane stacks (a cook holds the whole duration, so
+`endMin === runsUntilMin === block end`, per the T14 placement model), `equipmentUse` +
+`equipmentChecklist` + `bowlCount` from placed steps only, no fillers. Revisit if a later ticket wants
+manual prints to carry warnings, or wants the manual makespan/floor gap annotated on the sheet.
+
 ## Manual test log
 
 (Dated results from `09-test-plan.md` Part 4 go here.)

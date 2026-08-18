@@ -2,12 +2,15 @@
 // See docs/06-print-spec.md. Reads the pack + plan from the URL hash, recomputes the schedule,
 // renders Page 1 (bowls + equipment) and Page 2 (the ticket-rail time sheet), then window.print()s.
 //
-// HASH CONTRACT (fixed in OPEN-QUESTIONS.md, T12 entry — must match ui-review.js:openPrint):
-//   print.html#<pack-part>&plan=<encoded-plan>
+// HASH CONTRACT (fixed in OPEN-QUESTIONS.md, T12 + T18 entries — must match the openers):
+//   auto   (ui-review.js:openPrint): print.html#<pack-part>&plan=<encoded-plan>
+//   manual (ui-manual.js:openPrint): print.html#<pack-part>&plan=<encoded-plan>&sched=<encoded-JSON>
 // where <pack-part> is the SAME form index.html loads — `p=<encoded>` inline or `pf=<file>.json`
 // hosted — reused verbatim so the large pack is never re-encoded. This module parses that shape:
 // it splits the hash on '&', loads the pack part exactly as app.js's loadPackFromHash does, and
-// decodePlan()s the plan part. If this layout ever changes, change it in BOTH files at once.
+// decodePlan()s the plan part. When `sched=` is present the plan is a MANUAL arrangement: print uses
+// that Schedule directly and does NOT run the scheduler. Without `sched=`, the plan path is unchanged.
+// If this layout ever changes, change it in BOTH openers at once.
 //
 // Never assigns innerHTML from pack/plan content: every node is built with createElement/textContent.
 
@@ -40,19 +43,23 @@ function el(tag, cls, text) {
 }
 
 // ── Hash parsing ───────────────────────────────────────────────────────────────────────────────
-/** Split the location hash into its pack part and its encoded-plan part. The pack part is the one
- * `key=value` segment that is not `plan=…`; base64url payloads never contain '&', so a plain split
- * on '&' is safe. @param {string} hash location.hash including '#' @returns {{packPart:string|null, planStr:string|null}} */
+/** Split the location hash into its pack part, its encoded-plan part, and (manual print only) its
+ * encoded-schedule part. The pack part is the one `key=value` segment that is neither `plan=…` nor
+ * `sched=…`; base64url and URI-encoded payloads never contain a bare '&', so a plain split on '&'
+ * is safe. @param {string} hash location.hash including '#'
+ * @returns {{packPart:string|null, planStr:string|null, schedStr:string|null}} */
 function parseHash(hash) {
   const raw = (hash || '').replace(/^#/, '');
   let packPart = null;
   let planStr = null;
+  let schedStr = null;
   for (const seg of raw.split('&')) {
     if (!seg) continue;
     if (seg.startsWith('plan=')) planStr = seg.slice('plan='.length);
+    else if (seg.startsWith('sched=')) schedStr = seg.slice('sched='.length);
     else if (packPart === null) packPart = seg;
   }
-  return { packPart, planStr };
+  return { packPart, planStr, schedStr };
 }
 
 /** Load the pack from the pack part of the hash, mirroring index.html's loadPackFromHash so both
@@ -94,6 +101,20 @@ function isDamagedPack(r) {
  * @param {*} p @returns {boolean} */
 function isDamagedPlan(p) {
   return !p || p.ok === false || typeof p !== 'object' || !p.bowls || !p.stepTags || !p.kitchen;
+}
+
+/** Decode a MANUAL Schedule from the `sched=` hash segment (URI-encoded JSON, written by
+ * ui-manual.js:openPrint). Returns the Schedule object, or { ok:false } if it is absent, not
+ * decodable, or not a plausible schedule. Never throws — a bad value collapses to the damaged-link
+ * message, exactly like a bad pack or plan. @param {string} s @returns {object|{ok:false}} */
+function decodeSched(s) {
+  try {
+    const obj = JSON.parse(decodeURIComponent(s));
+    if (!obj || obj.ok !== true || !Array.isArray(obj.cooks)) return { ok: false };
+    return obj;
+  } catch (err) {
+    return { ok: false };
+  }
 }
 
 // ── Scale ────────────────────────────────────────────────────────────────────────────────────
@@ -300,7 +321,7 @@ function showMessage(text) {
  * once (docs/06). The exported boot() wraps this so any unexpected throw is shown on the page rather
  * than leaving a silent blank tab. @returns {Promise<void>} */
 async function runBoot() {
-  const { packPart, planStr } = parseHash(location.hash);
+  const { packPart, planStr, schedStr } = parseHash(location.hash);
 
   const packResult = await loadPack(packPart);
   if (isDamagedPack(packResult)) {
@@ -314,17 +335,27 @@ async function runBoot() {
     return;
   }
 
-  // Recompute the schedule from the plan (the plan is small; the pack is the heavy part reused
-  // from the hash). buildSchedule throws on an untagged step and returns { ok:false } on a cycle;
-  // both collapse to a non-ok result so checkPlan can still report the structural error.
-  let base;
-  try {
-    base = buildSchedule(pack, plan);
-  } catch (err) {
-    base = null;
+  // The schedule comes from one of two places (see the HASH CONTRACT above and OPEN-QUESTIONS.md T18):
+  //   • MANUAL — a `sched=` value is the student's own arrangement, already validated by the manual
+  //     board before it opened this tab. Use it directly: no scheduler run, and no warnings here.
+  //   • AUTO   — no `sched=`, so recompute from the plan exactly as before. buildSchedule throws on an
+  //     untagged step and returns { ok:false } on a cycle; both collapse to a non-ok result so
+  //     checkPlan can still report the structural error. This branch is byte-for-byte unchanged.
+  let schedule;
+  let warnings;
+  if (schedStr) {
+    schedule = decodeSched(schedStr);
+    warnings = [];
+  } else {
+    let base;
+    try {
+      base = buildSchedule(pack, plan);
+    } catch (err) {
+      base = null;
+    }
+    schedule = base && base.ok ? fillGaps(base, pack, plan) : base;
+    warnings = checkPlan(pack, plan, schedule && schedule.ok ? schedule : undefined);
   }
-  const schedule = base && base.ok ? fillGaps(base, pack, plan) : base;
-  const warnings = checkPlan(pack, plan, schedule && schedule.ok ? schedule : undefined);
   const hasError = warnings.some((w) => w.severity === 'error');
 
   if (!schedule || !schedule.ok || hasError) {
