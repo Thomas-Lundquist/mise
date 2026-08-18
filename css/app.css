@@ -116,9 +116,13 @@ body {
 }
 
 /* The 720px readable-column cap lives on the FORM screens, not the shared scroll container, so
-   Screen 3 (the wide plan view) can use the full width. The forms stay centered at a comfortable
+   Screen 3 (the wide plan view) can use most of the width. The forms stay centered at a comfortable
    line length. Screen 3 is intentionally NOT capped here. */
 #screen-0, #screen-1, #screen-2 { max-width: 720px; margin: 0 auto; }
+
+/* Screen 3 (auto-review timeline + manual board, T22): stays wide but backs off the shell edges with
+   a bigger gutter than the shared 16px shell padding — 160px extra each side, 176px total each side. */
+#screen-3 { padding: 0 160px; }
 
 .shell-footer {
   flex: 0 0 auto;

@@ -897,8 +897,9 @@ Follow-up (2026-08-18, teacher): tried full-bleed full-width on Screen 3 (commit
 quite right — "not sure if I like it." Direction: back off from edge-to-edge; add side margins/gutters
 so the timeline uses most of the viewport width but is not flush with the browser edges. Still full
 page width (breaks out of the 720px `.shell-content` cap as decided above), just not literally 100%.
-No ticket opened yet — needs a concrete margin value chosen against a real Chromebook width before
-scoping.
+Resolved: 2026-08-18 (teacher) — fixed side padding, 160px extra each side on top of the existing
+16px `.shell-content` padding (176px total each side), applied only to `#screen-3` so Screen 0-2
+forms keep their 720px centered column unchanged. Ticket: **T22** (docs/07).
 
 ## Design direction — cookNeed: moldable "gang" tasks (up to 2 cooks), greedy, ~0.75× speedup
 

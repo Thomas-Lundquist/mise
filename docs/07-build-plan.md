@@ -219,6 +219,19 @@ or its header; a plan that overbooks a capacity-limited resource still produces 
 warning/error exactly as before; the rest of Screen 3 and the print layout reclaim the freed space
 (no dangling empty column).
 
+### T22 — Screen 3 side gutters
+**Read:** OPEN-QUESTIONS.md ("Design direction — timeline: widen the vertical rail" follow-up,
+2026-08-18)
+**Produce:** updated `css/app.css`
+Commit e6bb96d removed the 720px cap from `.shell-content` and made Screen 3 (both the auto-review
+timeline and the manual placement board, which share `#screen-3`) run edge-to-edge minus the shared
+16px shell padding. Add a fixed 160px side gutter on `#screen-3` only (160px extra each side on top
+of the existing 16px, 176px total each side), so it stays a wide data view but is visibly off the
+browser edges. Screens 0–2 keep their unchanged 720px centered column.
+**Done when:** Screen 3 (both auto and manual views) has a clearly visible side margin instead of
+running to the shell edge; Screens 0–2 are pixel-identical to before; no horizontal scroll is
+introduced on a 1366px-wide viewport for the example fixture at 4-5 cooks.
+
 ---
 
 ## Session discipline
