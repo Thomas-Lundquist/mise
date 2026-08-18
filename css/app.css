@@ -112,10 +112,13 @@ body {
   flex: 1 1 auto;
   overflow-y: auto;
   padding: 16px;
-  max-width: 720px;
   width: 100%;
-  margin: 0 auto;
 }
+
+/* The 720px readable-column cap lives on the FORM screens, not the shared scroll container, so
+   Screen 3 (the wide plan view) can use the full width. The forms stay centered at a comfortable
+   line length. Screen 3 is intentionally NOT capped here. */
+#screen-0, #screen-1, #screen-2 { max-width: 720px; margin: 0 auto; }
 
 .shell-footer {
   flex: 0 0 auto;
@@ -490,6 +493,13 @@ body {
   background: var(--paper);
 }
 
+/* Screen 3 text blocks stay in a readable centered column; only the timeline uses the full width. */
+.plan-equal, .plan-nums, .warns, .tl-caption, .cook-summary, .plan-actions {
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
 /* ── The ticket rail (on screen, 2px/min) — same structure as the print view (docs/06) ──── */
 .timeline { margin: 0 0 12px; overflow-x: auto; }
 
@@ -498,7 +508,8 @@ body {
 .tl-spine-head, .tl-equip-head, .tl-spine, .tl-equip { flex: 0 0 auto; }
 .tl-spine-head, .tl-spine { width: 40px; }
 .tl-equip-head, .tl-equip { width: 28px; }
-.tl-lane-head, .tl-area { flex: 1 1 0; min-width: 0; }
+.tl-area { flex: 1 1 0; } /* sizes to the lanes; min-width defaults to auto so it never collapses */
+.tl-lane-head { flex: 1 1 0; min-width: 120px; } /* fill the width first; below this the rail scrolls */
 
 .tl-spine-head, .tl-lane-head, .tl-equip-head {
   font-weight: 700;
@@ -536,7 +547,7 @@ body {
   pointer-events: none;
 }
 .tl-lanes { display: flex; height: 100%; }
-.tl-lane { flex: 1 1 0; position: relative; min-width: 0; border-left: 1px solid var(--steel); }
+.tl-lane { flex: 1 1 0; position: relative; min-width: 120px; border-left: 1px solid var(--steel); }
 
 /* Blocks: absolutely positioned by minute. Colour carries meaning but never alone (docs/02):
    active = solid teal + dark border, passive = tape-yellow + dashed border, filler = gray italic. */
@@ -553,7 +564,7 @@ body {
   line-height: 1.15;
   cursor: pointer;
 }
-.tl-block-label { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-block-label { display: block; overflow: hidden; white-space: normal; overflow-wrap: break-word; }
 .tl-block-ref {
   position: absolute;
   top: 1px;
