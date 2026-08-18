@@ -491,20 +491,33 @@ body {
 }
 
 /* ── The ticket rail (on screen, 2px/min) — same structure as the print view (docs/06) ──── */
-.timeline { margin: 0 0 12px; overflow-x: auto; }
+/* V1: the rail is a wide data view, so it breaks OUT of the centered 720px .shell-content column to
+   the full viewport and scrolls horizontally only when the lanes exceed that width (teacher decision
+   — widen the vertical rail, do NOT reorient to landscape). --lane-w fixes each cook lane so labels
+   WRAP instead of truncating to "Dice oni…"; the form screens keep the centered column. */
+.timeline {
+  --lane-w: 150px;
+  box-sizing: border-box;
+  overflow-x: auto;
+  width: 100vw;
+  margin: 0 calc(50% - 50vw) 12px;
+  padding: 0 16px;
+}
 
-/* Header row: names above the lanes. Spine + equip columns are fixed; cook lanes share the rest. */
-.tl-heads, .tl-body { display: flex; }
+/* Header row: names above the lanes. Spine + equip columns are fixed; cook lanes are fixed-width so
+   the header cells and the body lanes line up and the row can grow past the viewport (then scroll). */
+.tl-heads, .tl-body { display: flex; width: max-content; }
 .tl-spine-head, .tl-equip-head, .tl-spine, .tl-equip { flex: 0 0 auto; }
 .tl-spine-head, .tl-spine { width: 40px; }
-.tl-equip-head, .tl-equip { width: 28px; }
-.tl-lane-head, .tl-area { flex: 1 1 0; min-width: 0; }
+.tl-equip-head, .tl-equip { width: 52px; } /* V1: was 28px, too narrow for the "EQUIP" head (showed "E…") */
+.tl-area { flex: 0 0 auto; }
+.tl-lane-head { flex: 0 0 var(--lane-w); } /* V1: fixed wide lanes instead of flex:1 1 0 */
 
 .tl-spine-head, .tl-lane-head, .tl-equip-head {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .08em;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--filler);
   padding: 4px 2px;
   border-bottom: 1px solid var(--ink);
@@ -522,7 +535,7 @@ body {
   transform: translateY(-50%);
   font-family: var(--font-data);
   font-variant-numeric: tabular-nums;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--filler);
 }
 
@@ -535,8 +548,8 @@ body {
   border-top: 1px solid var(--steel);
   pointer-events: none;
 }
-.tl-lanes { display: flex; height: 100%; }
-.tl-lane { flex: 1 1 0; position: relative; min-width: 0; border-left: 1px solid var(--steel); }
+.tl-lanes { display: flex; height: 100%; width: max-content; }
+.tl-lane { flex: 0 0 var(--lane-w); position: relative; border-left: 1px solid var(--steel); }
 
 /* Blocks: absolutely positioned by minute. Colour carries meaning but never alone (docs/02):
    active = solid teal + dark border, passive = tape-yellow + dashed border, filler = gray italic. */
@@ -549,11 +562,11 @@ body {
   padding: 1px 3px;
   border-radius: 2px;
   overflow: hidden;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.15;
   cursor: pointer;
 }
-.tl-block-label { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-block-label { display: block; overflow: hidden; white-space: normal; overflow-wrap: break-word; }
 .tl-block-ref {
   position: absolute;
   top: 1px;

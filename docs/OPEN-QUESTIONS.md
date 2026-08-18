@@ -783,7 +783,16 @@ container max-width / overflow interaction (js/ui-review.js renders the timeline
 fixed lane widths; the content column caps width). Question: should the timeline scroll horizontally
 within its own region, or should lane widths flex so cooks + EQUIP always fit the column? This looks
 more like a layout bug than a spec choice — flagged for confirmation.
-Resolved: <teacher fills this in>
+Resolved: 2026-08-17 (teacher chose the full "widen the vertical rail" direction). Implemented in
+css/app.css (CSS only — ui-review.js's structure already supported fixed widths): the Screen-3
+timeline breaks OUT of the centered 720px `.shell-content` column to full viewport width
+(`width: 100vw; margin: 0 calc(50% - 50vw)`) and scrolls horizontally only when the lanes exceed that
+width; cook lanes are a fixed `--lane-w` (150px) with WRAPPING labels instead of `flex: 1 1 0` with
+ellipsis; the equipment column widened 28px → 52px so the "EQUIP" head no longer clips to "E…";
+block/lane-head/spine type bumped to 12px. Verified at 1000px on the example plan (scripted
+Playwright measure): timeline width = 1000 (full breakout), EQUIP head not clipped, lane and lane-head
+both 150px (aligned), no page horizontal overflow. This also resolves the timeline half of V3; the
+form screens keep the 720px column.
 
 ### V2 — Manual board: to-scale passive bars become huge empty blocks
 The T14 "revised direction" made manual blocks to-scale (height = max(44, durationMin × 20px),
