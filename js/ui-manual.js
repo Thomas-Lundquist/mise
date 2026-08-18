@@ -182,6 +182,12 @@ export function mount(root, ctx) {
     try { sessionStorage.setItem(ssKey, JSON.stringify(p)); } catch (e) {}
   }
 
+  /** Delete this pack's saved board so the next entry falls back to seedPlacement (the auto layout).
+   * Used when the student leaves manual mode for auto (T19). Silent on failure. @returns {void} */
+  function clearSavedBoard() {
+    try { sessionStorage.removeItem(ssKey); } catch (e) {}
+  }
+
   // Lane index -> ordered step ids. Rebuilt when the cook count changes so lanes match the kitchen.
   // sessionStorage wins on re-entry (T17): auto-seed fires only when no stored state exists.
   // "Clear board" in the UI resets to emptyLanes and saves the empty state over the stored board.
@@ -508,7 +514,13 @@ export function mount(root, ctx) {
     const row = el('div', 'confirm-btns');
     const yes = el('button', 'primary', 'Yes, switch to auto');
     yes.type = 'button';
-    yes.addEventListener('click', () => { overlay.remove(); if (switchToAuto) switchToAuto(); });
+    yes.addEventListener('click', () => {
+      overlay.remove();
+      // Drop the saved board so a later return to manual re-seeds from the current auto layout,
+      // never the discarded manual arrangement (T19). loadBoard finds nothing → seedPlacement runs.
+      clearSavedBoard();
+      if (switchToAuto) switchToAuto();
+    });
     const no = el('button', 'link', 'Keep editing');
     no.type = 'button';
     no.addEventListener('click', () => overlay.remove());
@@ -546,6 +558,17 @@ export function mount(root, ctx) {
     clear.type = 'button';
     clear.addEventListener('click', () => { placement = emptyLanes(plan.kitchen.cooks); selected = null; render(); });
     toolRow.appendChild(clear);
+    // Recover the auto starting point without leaving the screen (T19). Re-seed from the CURRENT
+    // schedule, save it, and re-render — the counterpart to "Clear board", which empties the lanes.
+    const reset = el('button', 'link man-reset', 'Reset to auto layout');
+    reset.type = 'button';
+    reset.addEventListener('click', () => {
+      placement = seedPlacement(plan.kitchen.cooks);
+      selected = null;
+      saveBoard(placement);
+      render();
+    });
+    toolRow.appendChild(reset);
     wrap.appendChild(toolRow);
 
     const blocks = computeBlocks(pack, plan, placement);
