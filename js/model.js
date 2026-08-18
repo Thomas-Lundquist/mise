@@ -199,16 +199,13 @@ export function derivedTag(step, tag) {
   return { durationMin, hands, attentionMin };
 }
 
-/** Build a blank plan: one bowl per ingredient, tags from the teacher's suggestions, 4 cooks —
- * so a student who agrees with everything can finish instantly.
- * @param {object} pack @returns {object} a valid starting Plan */
+/** Build a blank plan: ZERO bowls, tags from the teacher's suggestions, 4 cooks. The student must
+ * bowl and merge every ingredient on Screen 1 (teacher decision 2026-08-10, ticket T20), so the
+ * merging lesson is active, not opt-in. A fresh plan is therefore intentionally INCOMPLETE:
+ * validatePlan reports UNBOWLED until every ingredient is placed. (Was one-bowl-per-ingredient; that
+ * always-valid seed let a student skip the lesson — see OPEN-QUESTIONS.md "Screen 1 opens already done".)
+ * @param {object} pack @returns {object} a starting Plan (incomplete until the student bowls) */
 export function blankPlan(pack) {
-  const bowls = allIngredients(pack).map((ing, idx) => ({
-    id: `b${idx + 1}`,
-    number: idx + 1,
-    ingredientIds: [ing.id],
-  }));
-
   const stepTags = {};
   for (const s of allSteps(pack)) {
     stepTags[s.id] = derivedTag(s, { durationMin: s.suggestedDurationMin, hands: s.suggestedHands });
@@ -217,7 +214,7 @@ export function blankPlan(pack) {
   return {
     planVersion: 1,
     packId: pack.packId,
-    bowls,
+    bowls: [],
     stepTags,
     kitchen: { cooks: 4, cookNames: ['', '', '', ''] },
   };

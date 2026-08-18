@@ -37,9 +37,13 @@ Layout: two columns on screens wider than 640px, stacked below that.
 **Left — Not in a bowl yet.** Every unassigned ingredient as a chip showing `label`, grouped
 under a small recipe-name heading. A counter above: `4 left`.
 
-**Right — Your bowls.** Bowl cards, each with `BOWL 1` as its eyebrow, its ingredients as
-removable chips, and a **Remove bowl** text button (only when empty). Below the cards, a
-full-width dashed button: **+ New bowl**.
+**Right — Your bowls.** The student starts with **no bowls** (`blankPlan` seeds `bowls: []`), so
+this column opens empty and every ingredient sits in the left column. Bowl cards wrap in a grid,
+not one tall stack; each has `BOWL 1` as its eyebrow, its ingredients as removable chips, and a
+**Remove bowl** text button (only when empty). Below the cards, a full-width dashed button:
+**+ New bowl**. While chips are selected it reads **+ New bowl with these** and creates the bowl
+**and** fills it in one action — the first placement, since with zero bowls there is no card to
+drop the first chip onto.
 
 Interaction, both paths required:
 
@@ -56,7 +60,9 @@ Guidance line under the heading, one sentence: "Put ingredients in the same bowl
 they go into the pan at the same moment."
 
 **Next** is disabled until every ingredient is placed, with the reason shown next to it:
-"2 ingredients still need a bowl."
+"2 ingredients still need a bowl." At the start no ingredient is bowled, so Next begins disabled
+and the student must build bowls to proceed. When everything is bowled the empty left column
+narrows and de-emphasizes, giving the bowls grid the room.
 
 Optional teacher answer key: if a pack step's `consumesBowlOf` implies two ingredients are
 added at different moments and the student has bowled them together, show a quiet inline

@@ -1,10 +1,12 @@
 // js/ui-bowls.js — Screen 1 (bowls). DOM only; all state lives on the shared plan object.
 // See docs/05-ui-spec.md Screen 1 and docs/03-data-model.md (Bowl).
 //
-// The student's job here is MERGING, not filling: blankPlan seeds one bowl per ingredient, so the
-// "Not in a bowl yet" column starts empty and Next starts enabled. Combining two ingredients means
-// moving one into the other's bowl; a bowl emptied by a move is pruned and the rest renumber, so the
-// student ends with a tidy, contiguous set of bowls. Never assigns innerHTML from pack/plan content.
+// The student's job here is BOWLING and MERGING: blankPlan seeds ZERO bowls (T20), so every
+// ingredient starts in "Not in a bowl yet" and Next starts DISABLED until all are placed. The student
+// makes bowls with "+ New bowl", or selects chips and taps "+ New bowl with these" to create-and-fill
+// in one action; merging moves a chip into another bowl. A bowl emptied by a move is pruned and the
+// rest renumber, so the student ends with a tidy, contiguous set of bowls. Never assigns innerHTML
+// from pack/plan content.
 
 const EMPTY = new Set();
 
@@ -126,11 +128,16 @@ export function mount(root, ctx) {
     commit();
   }
 
-  /** Add an empty bowl for the student to fill (not pruned until the next move leaves it empty). */
+  /** Make a new bowl. With chips selected, fill it with them in one action — the first-placement
+   * gesture (T20): with zero bowls there is no card to drop the first chip onto, so "+ New bowl"
+   * doubles as create-and-fill. With nothing selected, add an empty bowl the student fills next; an
+   * empty bowl is not pruned until a later move leaves it empty. */
   function newBowl() {
-    plan.bowls.push({ id: freshId(), number: plan.bowls.length + 1, ingredientIds: [] });
+    const id = freshId();
+    plan.bowls.push({ id, number: plan.bowls.length + 1, ingredientIds: [] });
     renumber();
-    commit();
+    if (selected.size) assign([...selected], id); // assign() prunes empty sources, clears, and commits
+    else commit();
   }
 
   /** Remove an empty bowl (the only "Remove bowl" case). @param {string} id */
@@ -288,12 +295,21 @@ export function mount(root, ctx) {
     return card;
   }
 
-  /** Right column: the bowl cards plus the full-width "+ New bowl" button. */
+  /** Right column: the bowl cards in a wrap grid (V3 — no long single-column scroll) plus the
+   * full-width "+ New bowl" button, which reads "+ New bowl with these" while chips are selected. */
   function renderRight() {
     const col = el('section', 'bowls-right');
     col.appendChild(el('p', 'eyebrow', 'Your bowls'));
-    for (const bowl of plan.bowls) col.appendChild(renderBowl(bowl));
-    const add = el('button', 'bowl-new', '+ New bowl');
+
+    const grid = el('div', 'bowl-grid');
+    for (const bowl of plan.bowls) grid.appendChild(renderBowl(bowl));
+    if (!plan.bowls.length) {
+      grid.appendChild(el('p', 'placeholder',
+        'No bowls yet. Select ingredients, then tap “+ New bowl with these”.'));
+    }
+    col.appendChild(grid);
+
+    const add = el('button', 'bowl-new', selected.size ? '+ New bowl with these' : '+ New bowl');
     add.type = 'button';
     add.addEventListener('click', () => newBowl());
     col.appendChild(add);
@@ -308,6 +324,9 @@ export function mount(root, ctx) {
     wrap.appendChild(el('p', 'bowls-guide',
       'Put ingredients in the same bowl only if they go into the pan at the same moment.'));
     const cols = el('div', 'bowls-cols');
+    // When nothing is unbowled the left column has nothing to show, so mark it: CSS narrows and
+    // de-emphasizes the left column and gives the bowls grid the room (V3, T20).
+    if (unbowledIds().length === 0) cols.classList.add('all-bowled');
     cols.appendChild(renderLeft());
     cols.appendChild(renderRight());
     wrap.appendChild(cols);

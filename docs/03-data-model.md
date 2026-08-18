@@ -140,6 +140,9 @@ The student's decisions. Small enough to fit in a Canvas text submission if want
 
 - Every ingredient in the pack must appear in exactly one bowl before the plan is valid.
 - A bowl with zero ingredients is dropped at validation, and remaining bowls are renumbered.
+- The starting plan (`blankPlan`) seeds **zero bowls** (`bowls: []`). A fresh plan is therefore
+  intentionally incomplete — `validatePlan` reports `UNBOWLED` until the student bowls every
+  ingredient on Screen 1 — so merging is an active step, not an opt-in one (ticket T20).
 
 ### StepTag
 

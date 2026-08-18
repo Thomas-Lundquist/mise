@@ -239,6 +239,21 @@ body {
 @media (max-width: 640px) { .bowls-cols { grid-template-columns: 1fr; } }
 .bowls-left, .bowls-right { min-width: 0; } /* let long chip labels wrap, not overflow */
 
+/* When every ingredient is bowled the left column has nothing to show, so narrow it and give the
+   bowls grid the room (V3, T20). Below 640px the columns already stack, so this only applies wide. */
+@media (min-width: 641px) {
+  .bowls-cols.all-bowled { grid-template-columns: minmax(0, 220px) 1fr; }
+}
+.bowls-cols.all-bowled .bowls-left { opacity: 0.65; }
+
+/* Bowl cards wrap into a grid instead of one tall column (V3, T20) — no more 16-card scroll. */
+.bowl-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+.bowl-grid .bowl-card { margin: 0; }
+
 .bowls-counter {
   font-family: var(--font-data);
   font-variant-numeric: tabular-nums;

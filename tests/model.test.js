@@ -185,12 +185,9 @@ test('derivedTag: passive step needs one minute of attention', () => {
 });
 
 // ── blankPlan ────────────────────────────────────────────────────────────────
-test('blankPlan: one bowl per ingredient, numbered from 1', () => {
+test('blankPlan: seeds zero bowls (T20 — the student bowls and merges on Screen 1)', () => {
   const pl = blankPlan(basePack());
-  eq(pl.bowls, [
-    { id: 'b1', number: 1, ingredientIds: ['i1'] },
-    { id: 'b2', number: 2, ingredientIds: ['i2'] },
-  ]);
+  eq(pl.bowls, []);
 });
 test('blankPlan: tags come from the teacher suggestions', () => {
   const pl = blankPlan(basePack());
@@ -204,6 +201,8 @@ test('blankPlan: 4 cooks and matching packId', () => {
   eq(pl.kitchen.cooks, 4);
   eq(pl.packId, 'p_t');
 });
-test('blankPlan produces a plan that validates clean', () => {
-  eq(validatePlan(blankPlan(basePack()), basePack()).ok, true);
+test('blankPlan is intentionally incomplete until the student bowls (only UNBOWLED)', () => {
+  const res = validatePlan(blankPlan(basePack()), basePack());
+  eq(res.ok, false);
+  eq(res.errors.map((e) => e.code), ['UNBOWLED']);
 });
