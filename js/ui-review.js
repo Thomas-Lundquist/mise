@@ -106,25 +106,26 @@ export function mount(root, ctx) {
     return list;
   }
 
-  /** The on-screen ticket rail: a header row, then a time spine + one lane per cook + an equipment
-   * strip, with the floor line drawn across at floorMin. Mirrors the print view's structure (docs/06)
-   * at SCALE px/min. Tapping a block writes its full label into the caption node.
+  /** The on-screen ticket rail: a header row, then a time spine + one lane per cook, with the floor
+   * line drawn across at floorMin. Mirrors the print view's structure (docs/06) at SCALE px/min.
+   * Tapping a block writes its full label into the caption node. (Equipment strip removed pending a
+   * redesign — OPEN-QUESTIONS.md T21.)
    * @param {object} schedule an ok Schedule @returns {HTMLElement} */
   function renderTimeline(schedule) {
     const height = schedule.makespanMin * SCALE;
 
     const timeline = el('div', 'timeline');
 
-    // Header row: an empty spine cell, a titled cell per cook, and the equipment-strip header.
+    // Header row: an empty spine cell and a titled cell per cook.
+    // Equipment-strip header removed (OPEN-QUESTIONS.md T21) — renderEquipStrip below is unused.
     const heads = el('div', 'tl-heads');
     heads.appendChild(el('div', 'tl-spine-head', 'MIN'));
     for (const cook of schedule.cooks) {
       heads.appendChild(el('div', 'tl-lane-head', cook.name));
     }
-    heads.appendChild(el('div', 'tl-equip-head', 'EQUIP'));
     timeline.appendChild(heads);
 
-    // Body: spine + lanes + equipment strip share one relative row so blocks and ticks align.
+    // Body: spine + lanes share one relative row so blocks and ticks align.
     const body = el('div', 'tl-body');
 
     const spine = el('div', 'tl-spine');
@@ -157,7 +158,7 @@ export function mount(root, ctx) {
     area.appendChild(floor);
 
     body.appendChild(area);
-    body.appendChild(renderEquipStrip(schedule, height));
+    // Equipment strip removed pending a redesign (OPEN-QUESTIONS.md T21); renderEquipStrip kept below.
     timeline.appendChild(body);
     return timeline;
   }
@@ -202,8 +203,10 @@ export function mount(root, ctx) {
     return nodes;
   }
 
-  /** The rightmost equipment strip: unlabelled bars for each committed interval on a contended
-   * resource (capacity <= 2), so the group can see the oven/burners are tied up (docs/06).
+  /** UNUSED — removed from renderTimeline pending a redesign (OPEN-QUESTIONS.md T21). Kept here so
+   * re-enabling is a one-line change. The rightmost equipment strip: unlabelled bars for each
+   * committed interval on a contended resource (capacity <= 2), so the group can see the
+   * oven/burners are tied up (docs/06).
    * @param {object} schedule an ok Schedule @param {number} height px @returns {HTMLElement} */
   function renderEquipStrip(schedule, height) {
     const strip = el('div', 'tl-equip');

@@ -186,7 +186,7 @@ function renderPage1(pack, plan, schedule) {
 }
 
 // ── Page 2: the time sheet ───────────────────────────────────────────────────────────────────
-/** Render Page 2: the ticket rail (header row, spine + lanes + equipment strip, floor line) and
+/** Render Page 2: the ticket rail (header row, spine + lanes, floor line) and
  * the footer (numbers line, notes, printed-by line). @param {object} pack @param {object} plan
  * @param {object} schedule @param {Array} warns warn-severity warnings only @returns {HTMLElement} */
 function renderPage2(pack, plan, schedule, warns) {
@@ -203,11 +203,11 @@ function renderPage2(pack, plan, schedule, warns) {
 
   const rail = el('div', 'timeline');
 
-  // Header row: MIN | one cell per cook | equipment header.
+  // Header row: MIN | one cell per cook.
+  // Equipment-strip header removed (OPEN-QUESTIONS.md T21) — capById below is now unused.
   const heads = el('div', 'tl-head-row');
   heads.appendChild(el('div', 'tl-spine-head', 'MIN'));
   for (const cook of schedule.cooks) heads.appendChild(el('div', 'tl-lane-head', cook.name));
-  heads.appendChild(el('div', 'tl-equip-head', 'OVEN/BURNERS'));
   rail.appendChild(heads);
 
   // Body: spine + area (gridlines behind lanes, lanes, floor line) + equipment strip.
@@ -255,18 +255,9 @@ function renderPage2(pack, plan, schedule, warns) {
   area.appendChild(floor);
   body.appendChild(area);
 
-  // Equipment strip: unlabelled bars for each committed interval on a contended resource
-  // (capacity <= 2), so the group can see the oven/burners are tied up (docs/06).
-  const strip = el('div', 'tl-equip');
-  for (const use of schedule.equipmentUse) {
-    const cap = capById.get(use.equipmentId);
-    if (cap == null || cap > 2) continue;
-    const bar = el('div', 'tl-equip-bar');
-    bar.style.top = `${use.startMin * scale}mm`;
-    bar.style.height = `${(use.endMin - use.startMin) * scale}mm`;
-    strip.appendChild(bar);
-  }
-  body.appendChild(strip);
+  // Equipment strip removed pending a redesign (OPEN-QUESTIONS.md T21). Was: unlabelled bars for
+  // each committed interval on a contended resource (capacity <= 2), built from capById + schedule
+  // .equipmentUse, appended here as a `tl-equip` strip.
 
   rail.appendChild(body);
   sheet.appendChild(rail);

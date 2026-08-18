@@ -783,7 +783,11 @@ container max-width / overflow interaction (js/ui-review.js renders the timeline
 fixed lane widths; the content column caps width). Question: should the timeline scroll horizontally
 within its own region, or should lane widths flex so cooks + EQUIP always fit the column? This looks
 more like a layout bug than a spec choice — flagged for confirmation.
-Resolved: <teacher fills this in>
+Resolved: 2026-08-18 (teacher) — superseded, not fixed. The teacher decided to remove the equipment
+strip entirely (both the on-screen "EQUIP" column here and the printed "OVEN/BURNERS" strip) rather
+than fix the clipping, until a better design for showing equipment contention exists. See the new
+"UX decision — remove the equipment/oven-burner strip pending a redesign" entry below and ticket T21.
+The underlying capacity warnings/checks are unaffected — only this visual strip goes away.
 
 ### V2 — Manual board: to-scale passive bars become huge empty blocks
 The T14 "revised direction" made manual blocks to-scale (height = max(44, durationMin × 20px),
@@ -889,6 +893,12 @@ label at ~14px/min, so — exactly as the T13 follow-up already resolved — the
 the lane and the passive cook-time is shown in the equipment strip, never a full wrapped label in a 14px
 block. Minor bug to carry the T13 fix for: the FLOOR line label collides with the last block when
 floorMin == makespanMin; nudge it above the rule.
+Follow-up (2026-08-18, teacher): tried full-bleed full-width on Screen 3 (commit e6bb96d) and it is not
+quite right — "not sure if I like it." Direction: back off from edge-to-edge; add side margins/gutters
+so the timeline uses most of the viewport width but is not flush with the browser edges. Still full
+page width (breaks out of the 720px `.shell-content` cap as decided above), just not literally 100%.
+No ticket opened yet — needs a concrete margin value chosen against a real Chromebook width before
+scoping.
 
 ## Design direction — cookNeed: moldable "gang" tasks (up to 2 cooks), greedy, ~0.75× speedup
 
@@ -922,6 +932,12 @@ test = count free cooks, duration selection by assigned count); model.js/schedul
 fixtures in docs/09 re-derived; Screen 2 gains a per-step "how many cooks?" control; the timeline's
 duplicate-draw. Open sub-question for the ticket: is 0.75 a global constant or an authored per-task value?
 (Global constant recommended to start, minimal authoring burden.)
+Re-raised (2026-08-18, teacher): independently restated the same need — "we're never going to have all
+students busy in a kitchen unless we allow tasks to be tied to multiple students... just add the block
+to both student's columns" — which matches decisions 2 and 4 above (moldable up to 2 cooks; render the
+same block duplicated into each assigned cook's lane) exactly. Confirms this is still wanted; no new
+decisions made. Still TBD: this needs its own docs/04 amendment (mirroring docs/10) and a scoped
+scheduler ticket before it can be built — not started.
 
 ## T18 — manual print carries `plan=` too, encodes the schedule as URI JSON, and skips the warnings check
 
@@ -951,6 +967,56 @@ makespan, `cooks[].assignments` from the lane stacks (a cook holds the whole dur
 `endMin === runsUntilMin === block end`, per the T14 placement model), `equipmentUse` +
 `equipmentChecklist` + `bowlCount` from placed steps only, no fillers. Revisit if a later ticket wants
 manual prints to carry warnings, or wants the manual makespan/floor gap annotated on the sheet.
+
+## UX decision — remove the equipment/oven-burner strip pending a redesign
+
+Decided: 2026-08-18 (teacher, this session, no walkthrough). Ticket: **T21** (docs/07).
+Context: the rightmost "EQUIP"/"OVEN/BURNERS" strip (js/ui-review.js `renderEquipStrip`, js/print.js's
+matching strip) already had an open clipping bug at 1000px (V1 above) and a touch-identifiability gap
+(the "Screen 3 equipment strip is unidentifiable on a touch Chromebook" entry above). Rather than fix
+either, the teacher wants the whole strip gone for now — "The space would be better utilized by the
+other steps" — to focus review time on the planner itself (lanes, timeline, warnings) rather than this
+still-rough piece. Explicitly NOT wanted full width: pull it entirely, on both the on-screen Screen 3
+view and the printed sheet, and come back to it later with a better design.
+Scope: visual only. `capById`/equipment-capacity checks elsewhere (over-capacity warnings in
+`js/warnings.js`, the manual board's own capacity validation in `js/ui-manual.js`) are untouched — a
+plan that overbooks the oven still errors; the student just can't see it as a strip of bars anymore.
+Implementation instruction (teacher-approved, so the redesign is easy to resume later): COMMENT OUT
+rather than delete. In `js/ui-review.js`, stop calling `renderEquipStrip` and stop appending the
+`tl-equip-head` header cell, with a short comment pointing at this entry; leave `renderEquipStrip` and
+`capById` defined but unused (or comment the function body) rather than removing them. Mirror the same
+in `js/print.js` for its equipment strip and the "OVEN/BURNERS" header. `equipmentUse` continues to be
+computed everywhere it already is (scheduler output, `ui-manual`'s synthesized print Schedule) since
+other code may still read it; only the rendering call sites go quiet.
+Resolved: 2026-08-18 (teacher) — as above. Not yet built — see T21.
+
+## Design direction — Screen 2 becomes free-form: students author their own steps
+
+Asked: 2026-08-18 (raised by the teacher, no walkthrough — a bigger direction change, not a bug)
+Context: today Screen 2 (`js/ui-steps.js`) is a TAGGING flow — the teacher pre-authors every step in
+`author.html` (label, suggested minutes, hands, equipment, dependencies) and the student's only choices
+are to accept or adjust those tags (docs/05 Screen 2). The teacher's new idea: instead, let the STUDENT
+notice and enter the steps themselves — read the recipe, decide what the discrete tasks are, and enter
+each one's duration and how many cooks it needs — closer to how a real prep list gets built. The teacher
+also connected this to the multi-cook idea above (a student-authored step could ask for 2 cooks
+directly) and noted the existing manual-placement board (T14/T16 toggle) already gives a fallback:
+"There is always the ability to manually move the tasks at the end if preferred" — i.e. if free-form
+step entry produces an awkward auto-schedule, the student can always drag it around afterward.
+Why this is NOT a small tweak: docs/00's own vocabulary defines Pack as "the teacher's recipes,
+**read-only to students**" and Plan as "the student's tagging on a pack" — free-form step entry inverts
+who authors the steps, which is a data-model change (docs/03: Step currently lives on the teacher-owned
+Pack; a student-entered step would need to live on the Plan, or Plan would need to carry student-created
+Steps merged with pack ones), a scheduler input change (dependencies between student-invented steps have
+no teacher-authored `dependsOnOverride` graph to fall back to — Screen 2's existing "needs something else
+first" disclosure assumes a fixed universe of OTHER steps to check against, which no longer exists if
+steps aren't fixed), and a pedagogy change (the "does the student correctly identify the discrete tasks
+and their order" judgment moves from teacher-authored-and-graded to student-invented-and-ungraded).
+Not decided: whether this replaces Screen 2 entirely, augments it (teacher-authored steps as a starting
+list the student can also add to), or is scoped as an alternate pack mode. No spec doc changes made.
+Needs its own docs/01 (goals/non-goals) and docs/03 (data model) pass — and probably its own numbered
+amendment doc, the way docs/10 (affinity) and the not-yet-written cookNeed amendment are handled —
+before any ticket can be scoped. Recorded here rather than acted on, per the working agreement.
+Resolved: <teacher fills this in>
 
 ## Manual test log
 

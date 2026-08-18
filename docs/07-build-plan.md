@@ -204,6 +204,21 @@ Next; the merge gesture still works; bowl cards no longer force a long single-co
 printed checklist reflects the real bowl count (closes V4); docs/03 and docs/05 match the new
 behavior; the browser suite is green with the two rewritten model tests.
 
+### T21 — Remove the equipment/oven-burner strip (temporary)
+**Read:** OPEN-QUESTIONS.md ("UX decision — remove the equipment/oven-burner strip pending a redesign",
+V1, "the Screen 3 equipment strip is unidentifiable on a touch Chromebook")
+**Produce:** updated `js/ui-review.js`, updated `js/print.js`
+Comment out (do not delete) the equipment strip in both places it renders: the on-screen Screen 3
+"EQUIP" column (`renderEquipStrip` + its `tl-equip-head` header cell in `js/ui-review.js`) and the
+printed "OVEN/BURNERS" strip + header in `js/print.js`. Leave a short comment at each site pointing at
+the OPEN-QUESTIONS.md entry so the redesign is easy to resume. `capById`/equipment-capacity WARNINGS and
+the manual board's own capacity validation (`js/ui-manual.js`) are untouched — this is a visual-only
+change. `equipmentUse` continues to be computed wherever it already is.
+**Done when:** neither the on-screen review nor the printed sheet shows an equipment/oven-burner strip
+or its header; a plan that overbooks a capacity-limited resource still produces an OVER_CAPACITY-style
+warning/error exactly as before; the rest of Screen 3 and the print layout reclaim the freed space
+(no dangling empty column).
+
 ---
 
 ## Session discipline
