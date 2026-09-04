@@ -1,7 +1,7 @@
 # Mise en Place Planner — Working Spec
 
-**Status:** current source of intent. Supersedes `mise-planner-build-spec.md`
-and `docs/design-brief.md`, both now marked historical.
+**Status:** current source of intent. Supersedes `mise-planner-build-spec.md` and
+`docs/design-brief.md`, both marked historical.
 
 **Repo:** github.com/Thomas-Lundquist/mise · **Live:** thomas-lundquist.github.io/mise
 
@@ -19,9 +19,9 @@ place.
 
 ## 2. The one thing it teaches
 
-**Organising your own time in the kitchen.** Specifically: working backward from
-when food has to be up, and noticing that unattended time is time you can spend
-on something else.
+**Organising your own time in the kitchen.** Specifically: noticing that
+unattended time is time you can spend on something else, and that the order the
+recipe is written in is not the order you cook it in.
 
 Everything in the app should be traceable to that. Sections that don't serve it
 are overhead.
@@ -29,75 +29,102 @@ are overhead.
 ### The solo-cook assumption
 
 Students cook in teams, but **each student plans as if they were the only one
-cooking.** This is deliberate. The skill being taught is personal time
-organisation, not delegation or team scheduling.
-
-Consequences, to be applied consistently:
+cooking.** The skill being taught is personal time organisation, not delegation.
 
 - One "You" lane. Two hands-on steps at the same time is always a real conflict.
 - Equipment contention is modelled **within one student's own plan** — their own
   two steps competing for the one oven. Contention between students sharing a
   kitchen is out of scope.
-- **`Today's role` is removed.** Under a solo-cook model it can never affect
-  anything, and it's a field to fill at 7:40am that buys nothing. One less.
 
-## 3. The core problem with the current build
+A group toggle exists on the board (§6), but it is a view of the same plan, not
+a second plan.
 
-The four sections are four independent forms that happen to share a page.
-Nothing flows between them, so students enter overlapping information up to
-three times:
+## 3. The flow
 
-| Entered in | Also asked for in | Currently connected? |
-|---|---|---|
-| Equipment (Pull) | Station lanes (Time) | No — station is guessed from step text |
-| Bowls of ingredients (Group) | "Prep reminders" per step (Time) | No — same question, asked twice |
-| Hardest step (Read) | The board | No — captured and never used (§4.5) |
+**The recipe stays outside the app.** Students arrive with it on paper or open in
+another tab. Nothing about it is imported, pasted or parsed; the app holds its
+name and two numbers off its header, and that is all. The app is a blank slate
+every time.
 
-**The fix that unlocks most of the rest: make it one plan with four views.**
+The sections are ordered to match how a recipe is actually read, so that most of
+the app can be filled in **while reading** rather than after:
+
+| # | Section | What it asks | When it can be filled |
+|---|---|---|---|
+| 1 | Today | Name, kitchen, date, period | Before opening the recipe |
+| 2 | The recipe | Name, yield, its claimed prep/cook time; ingredients; the method | While reading |
+| 3 | Equipment | What each step uses | After the method exists |
+| 4 | Mise en place | Which ingredients go in together | After the method exists |
+| 5 | Your plan | The board, and the printout | Derived |
+
+Sections 3 and 4 cannot come earlier, and the previous build's biggest structural
+mistake was putting them first:
+
+- **A recipe never lists its equipment.** You find it by reading the method and
+  noticing what it assumes. Asking for it before any steps exist means guessing —
+  and the old build's step editor said as much out loud: *"Pull some equipment in
+  Step 2 and it'll show up here."*
+- **A bowl is a moment, and moments are steps.** Grouping ingredients by when
+  they go in is impossible before the method is written down.
+
+### Steps are entered forward
+
+The student types each step in the order the recipe gives it. **The app schedules
+backward** (§5) — that is arithmetic it does on its own, and it does not care
+which end the steps were typed from.
+
+The previous build elicited steps backward, one at a time: *"what is the last
+thing you do before it goes on the plate?"*, then *"and what happens right before
+that?"* That is good at surfacing forgotten steps, but it cannot be done while
+reading — reading runs forward, and answering it requires already being at the
+end. The catch it provided is preserved as **one review pass**: once three steps
+exist, the section says *read your list from the bottom up; is there anything the
+recipe assumes you already did?* Every step row has a **+** that inserts above
+it, so acting on that costs no retyping.
+
+### Recipes, not "parts of a dish"
+
+The old model asked students to name the *parts* of a dish — protein, starch,
+sauce — before writing any step. That is an abstraction exercise before any
+concrete thinking, and students typing forward off a card never hit a part
+boundary anyway, because recipes interleave them (*"while the rice cooks, sear
+the chicken"*).
+
+It is replaced by something already on the bench: **a recipe**. One by default,
+`+ Another recipe` for the lab that hands out a protein and a starch on separate
+cards. A sauce written inside the main recipe is part of that recipe, not a
+separate one. Nothing needs explaining, and the grouping is still real for the
+board and for the per-recipe readout.
 
 ## 4. Data model
 
-One plan object. The four sections are views onto it, not separate stores.
+One plan object. Every section is a view onto it, never a store of its own.
 
 ```
 plan
-├─ meta        { name, kitchen, date, recipe }
-├─ read        { done, hardest, hardestStepId }
-├─ equipment[] { id, name, group, station }
-├─ bowls[]     { id, label, items[] }
-├─ components[]{ id, name }
-└─ steps[]     { id, component, name, mins, hands,
-                 equipmentIds[], bowlIds[], start, notes[] }
+├─ student      { name, kitchen, date }
+├─ readToEnd    bool
+├─ recipes[]    { id, name, serves, prepMins, cookMins }
+├─ ingredients[]{ id, recipeId, text, bowlId }
+├─ steps[]      { id, recipeId, name, mins, hands, ahead,
+│                 equipmentIds[], noEquipment, note, start, cook }
+├─ equipment[]  { id, name, station, custom, pulled }
+├─ bowls[]      { id, label, stepId }
+└─ schedule     { mode, windowMins, periodId, foodUpOverride, anchor, cooks }
 ```
 
-Five changes carry the weight — the first three remove duplicate questions, the
-last two remove dead ends:
+### 4.1 Station comes from equipment, never from guessing
 
-### 4.1 Station comes from equipment, not from guessing
+A step names **which equipment it uses**, and station is a property of the
+equipment. There is no keyword-guessing from step text — `"Set up the mixer"`
+used to resolve to the Cold station — and conflicts become concrete: *both of
+these need the sauté pan*, not *both of these are vaguely Stovetop*.
 
-`step.lane` (a string guessed from the step name) is deleted, along with
-`guessStation` and `STATION_KEYWORDS`. Instead a step names **which equipment it
-uses**, chosen from what the student pulled in Pull. Station is a property of
-the equipment.
+**Contention is station-level, not per item.** An inventory the app cannot verify
+would make warnings look precise while quietly being wrong.
 
-This gives Pull an actual job, removes a whole class of wrong guesses
-(`"Set up the mixer"` currently resolves to the Cold station), and makes
-conflicts concrete and correct: *both of these need the saucepan* rather than
-*both of these are vaguely Stovetop*.
-
-Palette entries gain one field:
-
-```js
-{ name: "Sauté pan", group: "Cook", station: "Stovetop" }
-{ name: "Sheet pan", group: "Cook", station: "Oven" }
-```
-
-**Contention is station-level, not per item.** Per-item counts were considered
-and rejected — an inventory the app can't verify would make warnings *look*
-precise while quietly being wrong.
-
-Stations are `Oven / Stovetop / Cold / Prep`. They serve two different purposes,
-and only one of them warns:
+Stations are `Oven / Stovetop / Cold / Prep`. They serve two purposes, and only
+one of them warns:
 
 | Station | Lane | Flags conflicts |
 |---|---|---|
@@ -106,245 +133,163 @@ and only one of them warns:
 | Cold | yes | no — a fridge holds many things |
 | Prep | yes | no — already caught by the hands conflict |
 
-So **the oven is the only equipment conflict in the app.** Every station still
-gets a lane, because seeing where your work is happening is the point of the
-board; but only the oven produces a warning.
+So **the oven is the only equipment conflict in the app**, deliberately. A model
+that over-warns trains students to dismiss warnings, which is the worst outcome
+for a design built on warn-never-block (§6). Better one warning students believe
+than four they learn to click past.
 
-This is deliberately narrow. A model that over-warns trains students to dismiss
-warnings, which is the worst possible outcome for a design built on
-warn-never-block (§6). Flagging "you're using the prep counter twice at once"
-would also double-warn on something the You lane already catches. Better one
-warning students believe than four they learn to click past.
+**"Nothing — it just sits" is a valid answer.** Resting meat on the counter is
+genuinely unattended with nothing running it. The point is to make the student
+think about where the thing is while it waits, not to force a false answer. Such
+a step contends for nothing and draws on the **Prep** lane.
 
-**Rule:** an unattended step must *answer* the equipment question, but "nothing"
-is a valid answer. Resting meat on the counter or letting dough relax is
-genuinely unattended with nothing running it. The picker therefore offers an
-explicit **"Nothing — it just sits"** option alongside the pulled equipment.
+A step using equipment from more than one station draws on the first station in
+the table above that it touches, so anything in the oven reads as an oven step.
+Contention is checked against *every* station a step touches.
 
-The point is to make the student think about where the thing is while it waits,
-not to force a false answer. A step answered "nothing" contends for nothing and
-draws on the **Prep** lane — resting on the counter is the prep bench, which
-keeps every unattended step on a lane without inventing a fifth station.
+### 4.2 Ingredients are listed once and assigned later
 
-A step using equipment from more than one station (a saucepan and a whisk) draws
-on the first station in the list above that it touches, so anything in the oven
-reads as an oven step. Contention is checked against *every* station a step
-touches, not just the one it draws on.
+The full ingredient list is typed in section 2, in reading order. Section 4 then
+assigns each one to a bowl with a dropdown — **assignment, not retyping**, which
+is what makes the up-front typing pay for itself. An ingredient that goes in
+straight from the container stays unassigned, and saying so is an answer.
 
-### 4.2 Bowls attach to steps
-
-The separate "prep reminders" **phase** is deleted — the wall of nine identical
-inputs, presented as mandatory, ordered by accident of entry. What it collected
-survives in two better places.
-
-Each step gets:
-
-1. **Which bowls do you need ready before this?** — the same information Group
-   already collected, entered once, attached where it means something.
-2. **A short free-text note.** Kept, because not every reminder is a bowl.
-
-For reminders that carry real duration — *preheat the pan*, *fill the ice bath*,
-*get the water boiling* — the app should **push students to enter them as actual
-steps** rather than notes. They take time, so they belong on the timeline. That
-is the more honest lesson, and it's the difference between a plan that works and
-one that forgets the twelve minutes the oven needs. The free-text note stays as
-the escape hatch for genuinely untimed things (*get plates down*).
-
-This is also closer to what mise en place actually is: the board can then open
-with **"Before you start: these bowls must be prepped,"** which is the real
-lesson and currently isn't stated anywhere.
-
-Group gains a prompt (it currently has none — just three boxes labelled `LABEL`).
+Each bowl names **which step it must be ready before**, which is what lets the
+board open with *"before you start, these have to be measured out"* — the actual
+definition of mise en place, and something the previous build collected and then
+never displayed anywhere.
 
 ### 4.3 Nothing is write-once
 
-**Every part of the plan can be added to, changed, or deleted at any point in
-the process.** This is a hard requirement, not polish, and the current build
-fails it in several places:
-
-| Today | Required |
-|---|---|
-| Components can't be revisited after "Start planning" — the naming UI never renders again | Add / rename / remove parts at any time |
-| Steps can only be deleted, never edited — a typo'd duration means retyping the row | Edit name, minutes, hands-on, equipment, bowls in place |
-| Steps can't be reordered | Reorder within a component |
-| The board offers no route back to parts | Every stage reachable from every other stage |
+**Every part of the plan can be added to, changed, or deleted at any point.**
+Hard requirement, not polish. Everything is on one scrolling page and every
+control is live at all times, which is what makes this true by construction
+rather than by effort.
 
 Rules that fall out of it:
 
-**Deleting a part that has steps** — never silent. Confirm, and offer both exits:
-
-> "Rice pilaf" has 4 steps. **[Delete them too]** **[Move them to…]** **[Cancel]**
-
-**Editing a duration after the board is built** — depends on mode, because the
-question is who positioned the blocks:
-
-- **Guided** — the app derived the positions, so it re-derives them. Expected.
-- **Free** — the student placed those blocks deliberately. Only the edited block
-  resizes; nothing else moves. Silently rearranging hand-placed work is how a
-  tool loses trust.
-
-**Deleting equipment or a bowl that steps point at** — the reference clears and
-the step survives. Losing a step because you tidied the equipment list is never
-the right outcome.
+- **Deleting a recipe that has work in it** — never silent. Confirm, and offer
+  both exits: *delete its steps and ingredients too*, or *move them to…*
+- **Deleting equipment or a bowl that things point at** — the reference clears
+  and the step or ingredient survives. Losing a step because you tidied the
+  equipment list is never the right outcome.
+- **Editing a duration after the board is built** — depends on mode. Guided
+  re-derives, because the app placed those blocks. Free does not, because the
+  student placed them, and silently rearranging hand-placed work is how a tool
+  loses trust.
 
 ### 4.4 One board, with free placement as a toggle
 
-`openBlocks` is deleted. Open mode stops being a separate URL mode with its own
-data model, its own renderer and its own inspector, and becomes **a toggle on
-the one board.**
+Every step stores a resolved `start`.
 
-Every step stores a resolved `start`:
+- **Guided** (default): the scheduler computes `start` for every step. Locked.
+- **Free** (toggle): same blocks, same lanes, same conflicts — the student sets
+  `start` directly, by keyboard.
 
-- **Guided** (default): the backward elicitation produces the chain and the
-  scheduler computes `start` for every step. Starts are locked.
-- **Free** (toggle): the same blocks, same lanes, same conflicts — the student
-  now sets `start` directly by keyboard.
+**The student controls the toggle**, from the board. The teacher sets the starting
+mode per assignment (§8). Flipping keeps the work; free → guided warns first,
+because it will re-derive positions placed by hand.
 
-**The student controls the toggle**, from the board itself. The teacher sets the
-starting mode per assignment (§8), but students can move either way at any time.
-Someone who's got it can work faster; someone who hasn't can drop back to the
-prompts mid-plan rather than being stuck.
+### 4.5 One thing is confirmed, not asked
 
-Flipping keeps the work. Guided → free is the semester arc; free → guided is
-allowed but warns first, because it will re-derive positions the student placed
-by hand (§4.3).
+The only tick in the app is **"I read this recipe all the way to the end —
+including anything I haven't written down yet."**
 
-One renderer, one set of bugs to fix, one print path.
+Filling the app in while reading (§3) introduces one failure mode that reading
+first did not: typing six steps and being ambushed by step seven. That tick is
+the counterweight, and it is the one thing a step list cannot already show.
 
-### 4.5 The hardest step gets flagged
-
-Read asks which step the student expects to be hardest, then drops it. Instead:
-once their steps exist, they can point that prediction at one of them
-(`read.hardestStepId`), and it's **marked on the board and on the printout**.
-
-Free text stays — they answer before they've written any steps, and the answer
-may not map to one. Pointing it at a step is an offer, not a requirement.
-
-Small piece of plumbing, but it's the one that makes Read part of the plan
-rather than a warm-up question.
+The old build also asked students to predict which step would be **hardest**, in
+free text, then point it at a step and flag it on the board. It was cut. Measured
+against §2 — *everything should be traceable to organising your own time* — it
+teaches anticipating difficulty, which is a different lesson, and it cost a text
+field, a dropdown, a board marker and a print marker to do it.
 
 ## 5. Scheduling and conflicts
 
-- The plan is scheduled **backward from plate-up**, so "these finish together"
-  is true by construction. **Keep this** — it's the best idea in the build, and
-  it's what forward/as-soon-as-possible scheduling would throw away.
+- Scheduled **backward from plate-up**, so "these finish together" is true by
+  construction. This is the best idea in the build.
 - **One pair of hands, globally.** Hands-on steps never overlap each other,
-  whichever part of the dish they belong to; unattended steps float freely
-  alongside them. Searing while the rice simmers is competence, not a clash.
-  Components are a grouping for *thinking*, not a scheduling unit — scheduling
-  each component independently against the same plate-up time manufactured the
-  very hands conflicts the app then flagged, which is what this replaces.
-- **Prep front-loads.** Any step the student marks "can be done ahead"
-  (`step.ahead`) runs in a prep block before cooking starts. This costs elapsed
-  time — a simmer window can't absorb prep that's already done — and that's the
-  trade the doctrine is worth: the idle gaps it opens are where cleaning down
-  goes.
-- **Group is a toggle, not a second plan.** `schedule.cooks` (1–`MAX_COOKS`)
-  is how many pairs of hands the scheduler may assume. Same steps, same
-  durations, same backward pass — only the hands constraint relaxes, so a
-  student keeps one solo plan and whoever is managing the kitchen flips it up
-  for the day. The scheduler assigns each hands-on step a `cook`, giving it to
-  whoever can take it latest and breaking ties toward whoever has done least;
-  one person quietly doing the whole dish is a bad plan even when the
-  arithmetic works. Hands conflicts are then checked **per cook** — two people
-  working at once is the entire point of a group, not a clash. Stations don't
-  relax: four cooks still share one oven.
-- **The anchor is a shift, not a direction.** `schedule.anchor` is `early`
-  (plan starts when the cooking window opens, spare time lands at the end) or
-  `fixed` (plan ends on the period's plate-up, as in service). The schedule is
-  identical either way; only its position on the clock moves, so finishing
-  early costs nothing in convergence.
-- Conflicts are **flagged, never auto-resolved.** The app does not decide what a
-  student is allowed to schedule. Keep this too.
-- Two conflict types:
-  - **Hands** — two hands-on steps overlapping. Always real, and the main one.
-  - **Oven** — two steps needing the oven at the same time. The only equipment
-    conflict; other stations draw lanes but never warn (§4.1).
-- Conflicts need an on-screen explanation, not just a red border and a `⚠`.
-  Currently the board's first impression is several red blocks and no text
-  saying what is wrong or what to do about it.
+  whichever recipe they belong to; unattended steps float freely alongside.
+  Searing while the rice simmers is competence, not a clash. Scheduling each
+  recipe independently against the same plate-up manufactured the very conflicts
+  the app then flagged.
+- **Prep front-loads.** Any step marked "do ahead" (`step.ahead`) runs in a prep
+  block before cooking starts. This costs elapsed time — a simmer window cannot
+  absorb prep that is already done — and that is the trade the doctrine is worth.
+  The idle gaps it opens are where cleaning down goes.
+- **The anchor is a shift, not a direction.** `schedule.anchor` is `early` (plan
+  starts when the cooking window opens, spare time lands at the end) or `fixed`
+  (plan ends on the period's plate-up, as in service). Identical schedule, only
+  its position on the clock moves, so finishing early costs nothing.
+- Conflicts are **flagged, never auto-resolved**, and explained in words rather
+  than left as a red border.
+- Two conflict types: **hands** (two hands-on steps overlapping — the main one)
+  and **oven** (§4.1).
 
 ## 6. Time budget and feedback
 
-A period is **10 minutes of intro, 70 minutes of cooking, 10 minutes of clean**.
-So the thing the plan is measured against is a flat **70-minute cooking
-window** — the same number in every period, all year.
+A period is 10 minutes of intro, **70 minutes of cooking**, 10 minutes of clean.
+The plan is measured against that flat 70-minute window — the same number in
+every period, all year.
 
-### Durations, not clock times
+The plan is stored as **durations**, not clock times:
 
-The plan is stored as **durations**, not wall-clock times. This matters more
-than it sounds:
+- "This plan is 38 minutes long" is true in every period, on a special day, and
+  next year. Storing `12:19` bakes one bell schedule into the data.
+- Slack is one subtraction — 70 minus the plan.
+- A wrong or missing anchor cannot corrupt a plan. It just shows no clock times.
 
-- A plan is "30 minutes long". That's true in every period, on a special day,
-  and next year. Storing `12:19` bakes one bell schedule into the data.
-- Slack is one subtraction — 70 minus the plan — with no second config value and
-  no assumption about when the kitchen actually opened.
-- A wrong or missing anchor can't corrupt the plan. It just shows no clock times.
+A period supplies the **anchor** that turns durations into wall-clock times for
+display, because "12:19, sear the chicken" beats "T+14" when there is a clock on
+the wall. The chosen period is named on the board **and on the printout**, so a
+wrong pick is visible rather than silently wrong.
 
-A period supplies the **anchor** that turns those durations into wall-clock
-times for display. That's worth keeping: "12:19, sear the chicken" beats
-"T+14" when you're under pressure and there's a clock on the wall.
-
-```
-COOKING_WINDOW_MINUTES = 70   — what the plan is measured against
-PERIODS = [{ id, label, foodUp }]  — set once for the year, supplies the anchor
-```
-
-Students pick their period; it defaults to whichever matches the current time of
-day. `?foodUp=` on the embed URL pins it instead — needed when each period has
-its own Canvas page, and how a special day is handled. The chosen period is
-named on the board **and on the printout**, so a wrong pick is visible rather
-than silently wrong.
-
-> **Warn, never block.** A student may build a plan that doesn't fit the time
-> available, and the app must let them. It says *"as this stands you may run
-> out of time"* and leaves the plan alone. This is the same principle already
-> applied to conflicts (§5) — the app surfaces problems, it never decides what
-> a student is allowed to schedule. No disabled buttons, no refusal to save, no
-> forced correction.
-
-### Why this matters: the payoff currently doesn't land
-
-Today the board's headline reward is `Overlapping saves you: X`, computed as a
-max across components. Overlapping inside any component that isn't the longest
-one produces **no visible change at all** — the student performs the app's
-signature interaction and every readout stays identical, including a savings box
-that still reads "Tap a dashed window to save time," as though the click didn't
-register. With two components this happens roughly half the time.
-
-Replace it with **slack against the real deadline**:
+What the board reports:
 
 ```
-You have 52 min of kitchen time.        (kitchenOpens → foodUp)
-Your plan needs 38 min.
-You're 14 min ahead.                    ← this moves whenever anything improves
+Start cooking at 12:02     Food up at 12:35
+Your plan takes 33 min     Time to spare 37 min
 ```
 
-Plus per-component breathing room, which is what actually teaches critical path:
+plus, when the student filled in the recipe's own header:
 
 ```
-Rice pilaf is your longest part — it sets your start time.
-Chicken and sauce has 7 min of slack.
+The recipe says 40 min. Your plan needs 33 min.
 ```
+
+That comparison is the lesson stated with the student's own numbers: printed
+recipe times assume the mise is already done and nothing waits on anything.
+
+> **Warn, never block.** A student may build a plan that does not fit, and the
+> app must let them. It says *"as this stands you may run out of time"* and
+> leaves the plan alone. No disabled buttons, no refusal to save, no forced
+> correction.
+
+### The group toggle
+
+`schedule.cooks` (1–`MAX_COOKS`) is how many pairs of hands the scheduler may
+assume. Same steps, same durations, same backward pass — only the hands
+constraint relaxes, so a student keeps one solo plan and whoever is managing the
+kitchen flips it up for the day. Each hands-on step is assigned a `cook`, given
+to whoever can take it latest and breaking ties toward whoever has done least;
+one person quietly doing the whole dish is a bad plan even when the arithmetic
+works. Hands conflicts are then checked **per cook**. Stations don't relax: four
+cooks still share one oven, and the board says plainly when someone has been
+given nothing to do.
 
 ## 7. The printed artifact
 
-The PDF is the deliverable and it goes in a recipe book. Requirements:
+The PDF is the deliverable and it goes in a recipe book.
 
-- **Clock times must be on it.** The printed board currently has no time axis and
-  no durations on blocks — bars on rails with no numbers. This is the one thing
-  a student needs at the stove.
-- **Nothing may be silently dropped.** Overlapping blocks currently draw on top
-  of each other; a step vanished entirely from my test printout.
-- **Two sheets, deliberately.** Sections 1–3 on page one (equipment and bowls
-  double as a setup checklist), the time plan on page two with room to breathe.
-  Both go in the recipe book. Not a compromise — the current forced page break
-  is the right call and stays.
-- Identity (name, recipe, date) repeats on **every** page. The time plan is
-  forced onto its own page and currently carries no name on it at all, so
-  separating the sheets makes page two anonymous.
-- Black and white, no interface chrome, no instructions addressed to a cursor
-  ("Tap a dashed window…" currently prints).
+- **Clock times must be on it** — the one thing a student needs at the stove.
+- **Nothing may be silently dropped.** Overlapping blocks pack into sub-columns
+  rather than painting over each other.
+- **Two sheets, deliberately.** Sections 1–4 on page one (the ingredient list,
+  pull list and bowls double as a setup checklist), the plan on page two with
+  room to breathe.
+- Identity (name, recipes, date) repeats on **every** page.
+- Black and white, no interface chrome, no instructions addressed to a cursor.
 - Every colour distinction also carries a text label.
 
 ## 8. Teacher configuration
@@ -353,142 +298,93 @@ Set once per assignment, via URL parameters on the Canvas embed:
 
 | Param | Purpose | Default |
 |---|---|---|
-| `recipe` | Prefills recipe name, keys the saved plan | — |
-| `foodUp` | Pins plate-up time, overriding the period picker. Also starts the plan on the `fixed` anchor (§5) | period's time |
+| `recipe` | Prefills the first recipe's name, keys the saved plan | — |
+| `foodUp` | Pins plate-up, overriding the period picker. Also starts the plan on the `fixed` anchor | period's time |
 | `period` | Preselects a period by id | nearest by time of day |
-| `mode` | `guided` or `free` **starting** state — student may change it (§4.4) | `guided` |
+| `mode` | `guided` or `free` **starting** state — student may change it | `guided` |
 | `timer` | Planning countdown, minutes | **off** |
 
-Equipment palette stays teacher-editable in `js/config.js` with no code changes
-elsewhere.
+The equipment palette, the stations, the cooking window and the bell schedule
+stay teacher-editable in `js/config.js` with no code changes elsewhere.
 
 ## 9. Non-goals
 
 - No accounts, no backend, no PII beyond a typed name.
 - No grading, scoring, or teacher dashboard. The PDF is the handoff.
-- No modelling of other students in the kitchen (see §2).
-- No recipe database or import. Students type their steps.
-- No "cook mode" for use at the station. The PDF is the artifact. Revisit later.
+- No modelling of other students in the kitchen (§2).
+- **No recipe import, paste box, or database.** The recipe stays where it is;
+  the app is a blank slate (§3).
+- No "cook mode" for use at the station. The PDF is the artifact.
 
-## 10. Scope
+## 10. Code shape
 
-Ordered so the board gets rebuilt **once**, against the unified model, rather
-than fixed now and again after. Styling is deferred throughout — no visual
-changes except where a fix requires them.
+```
+index.html          five section shells, everything else rendered by JS
+css/style.css       one file, ordered: tokens, base, chrome, per section, print
+js/
+  config.js         teacher-editable settings, and nothing else
+  time.js           clock and duration arithmetic
+  model.js          the plan shape, lookups, and every mutation
+  schedule.js       backward pass, lanes, conflicts
+  storage.js        sessionStorage with a memory fallback, backup/restore
+  dom.js            h() — the whole rendering vocabulary
+  app.js            boot, plan lifecycle, section order
+  views/            one module per section, each exporting render() and status()
+test/               node test/run.mjs
+```
 
-**Status: Phases 0–3 are built.** Phase 4 (the visual layer) remains deferred.
-See the end of this section for what's built but not yet verified.
+Two rules keep it legible: **nothing outside `views/` touches the DOM**, and
+**nothing inside `views/` reaches into another view**. A view gets `{ plan, save,
+refresh }` and returns a node.
 
-### Phase 0 — cheap unblocking
-
-- Mark old docs historical ✅
-- Planning timer off by default; label it; survive a refresh
-- `.btn:disabled` styling and a hint — disabled buttons currently look enabled
-
-> **No migration.** The app has not been used with students yet, so Phase 1 is
-> free to change the saved-plan shape outright. Any drafts in browser storage
-> from development are discarded rather than migrated — writing migration code
-> for data that doesn't exist is waste. This freedom ends at v1.0; after that,
-> saved plans are real student work and shape changes need a migration path.
-
-> **v1.0** is the label for the first build that goes in front of students.
-> Everything before it is free to change.
-
-### Phase 1 — one plan
-
-- Unified data model (§4)
-- Equipment carries station + count; delete `guessStation`, `STATION_KEYWORDS`
-- Steps reference equipment and bowls; "Nothing — it just sits" is a valid answer
-- Delete the prep-reminders phase; bowls-per-step plus a free-text note per step
-- Delete `openBlocks`; migrate to `steps` with explicit `start`
-- Group gains a prompt
-- **Full editability (§4.3)** — add / change / delete components, steps, bowls
-  and equipment at any point, from any stage. Built in from the start rather
-  than retrofitted, because it constrains how state and navigation are shaped.
-- **Plan history** — a list of recent plans (recipe + date), pick one on load.
-  The download-a-backup control becomes **always visible**, not just an
-  emergency measure that appears when storage fails, so students can keep their
-  own copies regardless of what the Canvas iframe allows. Lands here rather than
-  later because it's a persistence change and the data model is already being
-  reshaped; doing both at once avoids migrating saved plans twice.
+`save()` persists without re-rendering, for text typed into a field. `refresh()`
+re-renders the whole page and restores the caret, for anything that changes its
+shape. Rebuilding everything is cheap at this size and is what keeps five
+interdependent sections honest — pull an ingredient and it has to vanish from the
+bowl picker, the board and the printout at once.
 
 > **Storage is sessionStorage, deliberately — not localStorage.** These are
-> shared district Chromebooks, and one student's name and plan must not still
-> be sitting in the browser for whoever uses the machine next. That privacy
-> concern outranks convenience.
->
-> The cost is real and worth stating: **work does not survive closing the tab**,
-> so plan history is scoped to a single browser session. A student can switch
-> between plans they made this period, but cannot reopen last week's — which
-> was the original reason for building history. The download-a-backup control
-> is what covers that case, and `beforeunload` warns before work is lost.
->
-> If keeping work across days turns out to matter more than the shared-device
-> concern, the tier choice is one line in `js/storage.js`.
+> shared district Chromebooks, and one student's name and plan must not still be
+> sitting in the browser for whoever uses the machine next. That privacy concern
+> outranks convenience. The cost is real: work does not survive closing the tab,
+> so "Download backup" is always visible and `beforeunload` warns first. The tier
+> choice is one line in `js/storage.js`.
 
-### Phase 2 — one board
+> **No migration.** The app has not been used with students, so saved plans from
+> development are discarded rather than migrated. This ends at **v1.0** — the
+> first build that goes in front of students — after which saved plans are real
+> student work and shape changes need a migration path.
 
-Rebuilt once, against the Phase 1 model:
+## 11. Not yet verified
 
-- One lane per station, not one per step
-- Overlapping blocks stack into sub-rows instead of drawing over each other
-- Block labels carry name + clock time + duration; no more `P.`
-- Free-placement toggle replaces open mode
-- Keyboard reachable (guided-mode blocks currently aren't)
-- Conflict explanation in words
-- Print: axis, durations, repeated identity, nothing dropped
-- Responsive to 360px (the time axis currently desyncs from its own lanes)
+Honest list, so none of it gets assumed:
 
-### Phase 3 — feedback that lands
+- **Nothing has been tested on a district Chromebook.** Still the single biggest
+  unknown: whether `github.io` is blocked by the content filter, and whether
+  storage works inside the nested Canvas iframe. The storage fallback chain is
+  unit-tested against blocked and throwing storage, not against the real thing.
+- **`js/config.js` ships placeholder bell times.** Replace `PERIODS` before
+  students use it.
+- **Print has not been checked in a real print preview**, only reasoned about.
+  Page breaks in particular are unconfirmed.
+- **Narrow-viewport layout has not been checked on a real 360px screen.**
+- The board has not been driven in a browser end to end; views are covered by a
+  render smoke test and the scheduler by unit tests.
 
-- `kitchenOpens` / `foodUp` config
-- Slack readout replacing the broken savings box (§6)
-- Per-component breathing room
-- Completeness nudges: unattended steps have equipment, at least one bowl has
-  contents, plan finishes by `foodUp`
+## 12. Open questions
 
-### Phase 4 — deferred
+Settled: recipe stays outside the app (§3) · sections follow reading order (§3) ·
+steps entered forward, scheduled backward (§3) · recipes replace "parts of a
+dish" (§3) · equipment is a pass after the method (§3) · full ingredient list,
+assigned to bowls later (§4.2) · hardest-step prediction cut (§4.5) · station-level contention, oven only (§4.1) ·
+"nothing" is a valid equipment answer (§4.1) · warn-never-block (§6) · one board
+with free placement as a toggle (§4.4) · two printed sheets (§7) · sessionStorage
+(§10).
 
-- Visual layer: revisit the styling questions we set aside
+Worth revisiting once students have used it, but not holding anything up:
 
-### Built but not yet verified
-
-Honest list of what hasn't been proven, so it doesn't get assumed:
-
-- **Nothing has been tested on a district Chromebook**, which is still the
-  single biggest unknown: whether `github.io` is blocked by the content filter,
-  and whether storage works inside the nested Canvas iframe. The storage
-  fallback chain is unit-tested against blocked and throwing storage, but not
-  against the real thing.
-- **360px was verified by forcing the breakpoint, not by an actual narrow
-  viewport.** The layout is structurally right; exact wrapping is unconfirmed.
-- **Print was verified by swapping the print media query to screen**, not by an
-  actual print preview. Page breaks in particular are unconfirmed.
-- The hardest-step marker on a block is currently colour-only, so it likely
-  doesn't survive greyscale printing — needs a text or shape treatment.
-- Very short steps (2–3 min) still truncate their label on screen at typical
-  widths. They stack rather than overlap and carry a tooltip and full
-  accessible name, so nothing is lost — but they're tight.
-
-## 11. Open questions
-
-Settled: solo-cook model (§2) · one plan / four views (§4) · one board with free
-placement as a toggle (§4.4) · station-level contention (§4.1) · "nothing" is a
-valid equipment answer (§4.1) · warn-never-block (§6) · parts named first but
-everything editable throughout (§4.3) · delete-a-part offers delete-or-move
-(§4.3) · guided reflows, free doesn't (§4.3) · keep several plans (§10).
-
-Also settled: oven is the only warning station (§4.1) · stations stay
-`Oven / Stovetop / Cold / Prep` · student controls the mode toggle (§4.4) ·
-recent-plans list with download always available (§10) · two printed sheets
-(§7) · bowls stay free-text · `role` dropped (§2) · hardest step flags on the
-board (§4.5).
-
-**Nothing is currently open.** Things worth revisiting once students have used
-it, but which shouldn't hold up building:
-
-- Whether naming the parts of the dish up front is a stumbling block in practice
-  (§4.3 makes it recoverable either way, so this is an observation to make, not
-  a decision to take now)
-- Whether free-text bowls let too many forgotten ingredients through
-- Whether one oven warning is too few in practice
+- Whether typing the full ingredient list is too much at 7:40am, or whether the
+  saving in section 4 pays for it.
+- Whether the one bottom-up review pass catches as much as the old backward
+  elicitation did.
+- Whether one oven warning is too few in practice.

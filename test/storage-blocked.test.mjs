@@ -35,12 +35,12 @@ function check(label, actual, expected) {
 //    app only ever asks for sessionStorage (see storage.test.mjs for why).
 globalThis.window = { localStorage: blockedStorage("throws-on-write"), sessionStorage: workingStorage() };
 const S1 = await import("../js/storage.js?case=session");
-const { createPlan } = await import("../js/plan.js");
+const { createPlan } = await import("../js/model.js");
 check("a broken localStorage is irrelevant — session is the intended tier", S1.getStorageTier(), "session");
 check("and session counts as persistent", S1.isStoragePersistent(), true);
 const p1 = createPlan({ recipe: "Fallback" });
 check("still saves", S1.savePlan(p1), true);
-check("still loads", S1.loadPlan(p1.id).meta.recipe, "Fallback");
+check("still loads", S1.loadPlan(p1.id).recipes[0].name, "Fallback");
 
 // 2. Storage throws on mere property access, the way a locked-down iframe does
 //    -> memory tier. Nothing persists, but the app still works for the session
@@ -54,8 +54,8 @@ check("falls back to memory when storage throws on access", S2.getStorageTier(),
 check("memory tier is not persistent, so the banner shows", S2.isStoragePersistent(), false);
 const p2 = createPlan({ recipe: "In memory only" });
 check("memory tier still saves without throwing", S2.savePlan(p2), true);
-check("memory tier round-trips within the page view", S2.loadPlan(p2.id).meta.recipe, "In memory only");
-check("memory tier lists plans", S2.listPlans().map((e) => e.recipe), ["In memory only"]);
+check("memory tier round-trips within the page view", S2.loadPlan(p2.id).recipes[0].name, "In memory only");
+check("memory tier lists plans", S2.listPlans().map((e) => e.title), ["In memory only"]);
 check("purgeLegacy is safe on memory tier", typeof S2.purgeLegacy(), "number");
 
 console.log(failures === 0 ? "\nAll checks passed." : `\n${failures} FAILED`);

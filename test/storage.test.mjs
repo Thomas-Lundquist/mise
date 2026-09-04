@@ -17,7 +17,7 @@ const sessionStore = fakeStorage();
 globalThis.window = { localStorage: localStore, sessionStorage: sessionStore };
 
 const S = await import("../js/storage.js");
-const { createPlan } = await import("../js/plan.js");
+const { createPlan } = await import("../js/model.js");
 
 let failures = 0;
 function check(label, actual, expected) {
@@ -50,16 +50,16 @@ const b = createPlan({ recipe: "Risotto" });
 S.savePlan(a);
 S.savePlan(b);
 
-check("lists both, most recent first", S.listPlans().map((e) => e.recipe), ["Risotto", "Chicken Piccata"]);
+check("lists both, most recent first", S.listPlans().map((e) => e.title), ["Risotto", "Chicken Piccata"]);
 check("most recent id is the last saved", S.mostRecentPlanId(), b.id);
-check("round-trips a plan", S.loadPlan(a.id).meta.recipe, "Chicken Piccata");
+check("round-trips a plan", S.loadPlan(a.id).recipes[0].name, "Chicken Piccata");
 check("unknown id loads as null", S.loadPlan("nope"), null);
 
 // Re-saving moves a plan back to the top rather than duplicating it.
-a.meta.recipe = "Chicken Piccata (v2)";
+a.recipes[0].name = "Chicken Piccata (v2)";
 S.savePlan(a);
 check("re-saving reorders instead of duplicating",
-  S.listPlans().map((e) => e.recipe), ["Chicken Piccata (v2)", "Risotto"]);
+  S.listPlans().map((e) => e.title), ["Chicken Piccata (v2)", "Risotto"]);
 
 // Nothing above should have leaked into localStorage — that's the entire point
 // of the tier choice, so guard it rather than trusting it.
