@@ -1,5 +1,6 @@
 .DS_Store
 Thumbs.db
+*.log
 node_modules/
 .claude/
 .playwright-mcp/
@@ -9,3 +10,6 @@ node_modules/
 *.db
 .beads-credential-key
 .beads/proxieddb/
+
+# Local Claude Code binary, kept in-repo for PATH access on this machine
+claude.exe
