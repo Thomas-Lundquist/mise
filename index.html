@@ -11,13 +11,14 @@
 </head>
 <body>
 
-<!-- Shown only when the iframe refuses storage entirely, in which case
-     downloading a backup stops being a convenience and becomes the only copy. -->
+<!-- Shown only when the iframe refuses storage entirely, in which case saving a
+     copy stops being the ordinary way to carry a plan and becomes the only one.
+     Save and Load are in the plan bar either way, as normal buttons. -->
 <div id="storage-warning" class="banner" hidden role="status">
   <p>
     This browser won't let the page save your work — a refresh will clear everything.
     <a id="storage-warning-link" href="#" target="_blank" rel="noopener">Open this page in a new tab</a>
-    to be safe, and download a backup as you go.
+    to be safe, and use Save a copy as you go.
   </p>
 </div>
 
@@ -31,7 +32,7 @@
     <button type="button" id="print-btn" class="btn">Print / Save PDF</button>
   </div>
 
-  <!-- Plan picker, backup and restore. Built by app.js. -->
+  <!-- Plan picker, save and load. Built by app.js. -->
   <div id="plan-bar" class="plan-bar no-print"></div>
 
   <!-- Jump links. One navigation model for the whole page: the sections are a

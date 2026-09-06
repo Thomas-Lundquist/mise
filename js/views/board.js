@@ -12,14 +12,17 @@
 // for its label, its height carries the duration, and a long plan simply
 // scrolls, which is exactly what a time axis wants.
 
-import { STATIONS, MAX_COOKS } from "../config.js";
+import { STATIONS, MAX_COOKS, CLAIM_SHORTFALL_RATIO } from "../config.js";
 import {
   cookCount, stepsForRecipe, equipmentById, foodUpFor, claimedMinutes, ingredientsInBowl,
   stepMins, handsMins, waitingMins, hasWaiting, recipeById,
+  unestimatedSteps, statedTotalMinutes, periodById,
 } from "../model.js";
 import {
   resolveSchedule, computeConflicts, describeConflict, planSpan, resolvedFoodUp, laneForStep,
+  bindingChain,
 } from "../schedule.js";
+import { readiness, sayNeeds } from "../readiness.js";
 import { clockToMinutes, minutesToClock, formatDuration, formatShort } from "../time.js";
 import { h, button } from "../dom.js";
 
@@ -34,20 +37,24 @@ const TINY_BLOCK_PX = 28;    // below this a block puts its label and time on on
 // and the label carries the real duration.
 const MIN_BLOCK_PX = 18;
 
-// A one-minute hands-on moment that sits between waiting stretches of its own
-// step — flipping a cutlet, stirring the rice, turning the tray — is not a task
-// so much as an interruption of one. Drawn as its own block it is an
-// illegible sliver on the cook's lane, and worse, it says nothing about WHICH
-// dish is calling. Drawn as a notch across the dish's own block, its position
-// answers that before you read a word.
+// A one-minute hands-on moment that INTERRUPTS waiting already under way —
+// flipping a cutlet, stirring the rice, turning the tray — is not a task so much
+// as an interruption of one. Drawn as its own block it is an illegible sliver on
+// the cook's lane, and worse, it says nothing about WHICH dish is calling. Drawn
+// as a notch across the dish's own block, its position answers that before you
+// read a word.
+//
+// It has to have waiting BEFORE it. A short hands-on line that only has waiting
+// after it is not a moment you are called back for — it is the moment you start
+// the thing, which is exactly the shape every "starts, then runs by itself" step
+// now arrives in. Treating those as notches took the one minute your hands are
+// actually busy off the cook's lane, which is the one thing the lane is for.
 const CHECKPOINT_MAX_MINS = 1;
 
 function isCheckpoint(step, seg) {
   if (!seg.hands || seg.mins > CHECKPOINT_MAX_MINS) return false;
-  const i = step.segments.indexOf(seg);
-  const before = step.segments[i - 1];
-  const after = step.segments[i + 1];
-  return Boolean((before && !before.hands) || (after && !after.hands));
+  const before = step.segments[step.segments.indexOf(seg) - 1];
+  return Boolean(before && !before.hands);
 }
 
 // The drawn window rounds up to one of these, so a 28-minute plan is not shown
@@ -117,12 +124,14 @@ export function render(ctx) {
 
   return h("div", null,
     printIdentity(plan),
+    renderReadiness(view),
     renderControls(view),
     renderReadouts(view),
     renderTimeline(view),
     renderWatchPoints(view),
     renderBeforeYouStart(view),
     renderConflicts(view),
+    renderBindingChain(view),
     renderWhereTimeGoes(view),
     plan.schedule.mode === "guided" && renderIdle(view),
     renderNotes(view));
@@ -137,6 +146,26 @@ function printIdentity(plan) {
     plan.student.date,
   ].filter((part) => part && part.trim());
   return h("p", { class: "print-identity", "aria-hidden": "true", text: parts.join(" · ") });
+}
+
+// --- Ready to hand in? ----------------------------------------------------
+
+// The question every student has and the app never answered. Derived entirely
+// from answers already given, so it costs nothing to ask — and it NEVER blocks
+// printing. It prints too: a one-line readiness summary is exactly what a
+// teacher wants at the top of a handed-in sheet.
+function renderReadiness(view) {
+  const { plan, span, conflicts } = view;
+  const result = readiness(plan, { span, conflicts });
+  const done = result.missing.length === 0;
+
+  return h("div", { class: `readiness${done ? " readiness--done" : ""}` },
+    h("span", { class: "readiness__count", text: done ? "Ready" : `${result.met} of ${result.total}` }),
+    h("span", { class: "readiness__text", text: done
+      ? "Everything the sheet needs is filled in. Print it and upload it."
+      : sayNeeds(result) }),
+    !done && h("span", { class: "readiness__note no-print",
+      text: "Nothing here stops you printing." }));
 }
 
 // --- Controls -------------------------------------------------------------
@@ -221,6 +250,10 @@ function renderReadouts(view) {
   const slack = available - needed;
   const claimed = claimedMinutes(plan);
 
+  const untimed = unestimatedSteps(plan);
+  const period = periodById(plan.schedule.periodId);
+  const noPeriod = !plan.schedule.foodUpOverride && !period;
+
   const readout = (label, value, extra) =>
     h("div", { class: `readout${extra ? ` ${extra}` : ""}` },
       h("div", { class: "readout__value", text: value }),
@@ -235,6 +268,20 @@ function renderReadouts(view) {
         ? readout("Time to spare", formatDuration(slack), "readout--good")
         : readout("Over by", formatDuration(-slack), "readout--warn")),
 
+    // Every clock time on this board comes from one anchor. If nobody has said
+    // which period, they are placeholders, and saying nothing would leave a
+    // sheet of authoritative-looking wrong times.
+    noPeriod && h("p", { class: "board-warning",
+      text: "These times are a placeholder — nothing has said which period you're cooking in. Pick it in section 1 and every clock time here becomes real." }),
+
+    // Steps with no minutes on them are carried, not blocked — a card that says
+    // "until golden brown" gives a cue, not a number. But they are not drawn
+    // and not counted, so the length below is a floor, not an answer.
+    untimed.length > 0 && h("p", { class: "board-warning" },
+      `${untimed.length === 1 ? "One step has" : `${untimed.length} steps have`} no time yet, so ${untimed.length === 1 ? "it isn't" : "they aren't"} counted here: `,
+      h("strong", { text: untimed.map((step) => step.name).filter(Boolean).join(", ") }),
+      ". Your plan is at least this long, not exactly this long."),
+
     // Warn, never block. The plan is left exactly as it is.
     slack < 0 && h("p", { class: "board-warning",
       text: `Your plan needs ${formatDuration(needed)} but you only get ${formatDuration(available)} to cook — you're over by ${formatDuration(-slack)}. Nothing here stops you planning it this way. But look for something that could run while your hands are free.` }),
@@ -247,12 +294,29 @@ function renderReadouts(view) {
     // The recipe's own claim against the plan they just built. Printed times
     // almost always assume the mise is already done and nothing waits on
     // anything, which is the whole reason this app exists.
-    claimed !== null && h("p", { class: "claim-check" },
+    claimed !== null && renderClaimCheck(view, claimed, needed));
+}
+
+function renderClaimCheck(view, claimed, needed) {
+  const { plan } = view;
+  const stated = statedTotalMinutes(plan);
+  // A free integrity check on the READING. The elapsed comparison above is
+  // about overlapping; this one is about the card. If the times the student
+  // wrote down add up to well under what the recipe's own header claims, a step
+  // on the page probably never made it onto the list — and catching that is
+  // exactly what an app holding both numbers is for.
+  const short = stated > 0 && stated < claimed * CLAIM_SHORTFALL_RATIO;
+
+  return h("div", null,
+    h("p", { class: "claim-check" },
       `The recipe says ${formatDuration(claimed)}. Your plan needs `,
       h("strong", { text: formatDuration(needed) }),
       needed > claimed
         ? ` — ${formatDuration(needed - claimed)} more. That gap is usually the prep the recipe assumed you'd already done.`
-        : " — you've found time the recipe didn't claim. Check nothing has been left off your steps."));
+        : " — less than the card claims, which is what overlapping buys you."),
+
+    short && h("p", { class: "claim-check claim-check--warn",
+      text: `Your own step times add up to ${formatDuration(stated)}, against the ${formatDuration(claimed)} the recipe claims for itself. Read the card again — a gap that size usually means something on it never made it onto your list.` }));
 }
 
 function renderMise(view) {
@@ -578,7 +642,49 @@ function renderConflicts(view) {
     h("h3", { text: lines.length === 1 ? "One thing to sort out" : `${lines.length} things to sort out` }),
     h("ul", null, lines.map((line) => h("li", { text: line }))),
     h("p", { class: "hint",
-      text: "Nothing here stops you — a real kitchen has these problems too. Move something, or decide to do them one after the other." }));
+      text: "Nothing here stops you — a real kitchen has these problems too. Move something, or decide to do them one after the other." }),
+
+    // Deciding to live with a clash is a real answer, and the readiness line
+    // has to accept it — otherwise the only way to finish the sheet would be to
+    // plan something untrue.
+    h("label", { class: "check-row" },
+      h("input", {
+        id: "conflicts-accepted",
+        type: "checkbox",
+        checked: Boolean(plan.conflictsAccepted),
+        onChange: (e) => { plan.conflictsAccepted = e.target.checked; view.ctx.refresh(); },
+      }),
+      "I know — I'll do these one after the other."));
+}
+
+// --- What more cooks cannot fix -------------------------------------------
+
+// Raising the group size and seeing the plan not get any shorter looks like a
+// broken toggle. It is not: one recipe's steps have to happen in order, and
+// that chain is a floor no number of hands gets under. Only the idle list
+// hinted at it, and only to somebody who already knew what they were looking
+// at, so this names the chain outright.
+function renderBindingChain(view) {
+  const { plan, ranges, span, cooks } = view;
+  if (cooks < 2 || plan.schedule.mode !== "guided") return null;
+
+  const chain = bindingChain(plan);
+  if (!chain) return null;
+
+  // Against the COOKING span, not the whole plan: prep is unchained, so extra
+  // hands really do shorten that part and it must not be counted here.
+  const cooking = plan.steps.filter((step) => !step.prep && ranges.get(step.id));
+  if (cooking.length === 0) return null;
+  const cookStart = Math.min(...cooking.map((step) => ranges.get(step.id).start));
+  const cookingMins = span.end - cookStart;
+  if (chain.mins < cookingMins - 1) return null;
+
+  const names = chain.steps.map((step) => step.name).filter(Boolean);
+  return h("div", { class: "panel" },
+    h("h3", { text: `"${chain.recipe.name || "One recipe"}" is what sets the length` }),
+    h("p", { text: `Its steps have to happen one after another — ${names.join(", ")} — and that chain is ${formatDuration(chain.mins)} on its own. No number of cooks makes it shorter, so adding people here will not bring the finish time in.` }),
+    h("p", { class: "hint",
+      text: "What extra hands are for is everything else: the prep, the other dish, and cleaning down while this one runs. Look at the waiting list below — that is the work they can take." }));
 }
 
 // --- Where your time goes -------------------------------------------------

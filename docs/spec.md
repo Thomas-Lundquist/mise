@@ -52,6 +52,7 @@ the app can be filled in **while reading** rather than after:
 | # | Section | What it asks | When it can be filled |
 |---|---|---|---|
 | 1 | Today | Name, kitchen, date, period | Before opening the recipe |
+
 | 2 | The recipe | Name, yield, its claimed prep/cook time; ingredients; the method | While reading |
 | 3 | Equipment | What each step uses | After the method exists |
 | 4 | Mise en place | Which ingredients go in together | After the method exists |
@@ -104,21 +105,69 @@ One plan object. Every section is a view onto it, never a store of its own.
 plan
 ├─ student      { name, kitchen, date }
 ├─ readToEnd    bool
+├─ conflictsAccepted  bool
 ├─ recipes[]    { id, name, serves, prepMins, cookMins }
 ├─ ingredients[]{ id, recipeId, text, bowlId }
-├─ steps[]      { id, recipeId, name, prep, segments[],
+├─ steps[]      { id, recipeId, name, stated, prep, segments[],
 │                 equipmentIds[], noEquipment, note, start, cook }
 ├─ equipment[]  { id, name, station, custom, pulled }
 ├─ bowls[]      { id, label, stepId }
 └─ schedule     { mode, windowMins, periodId, foodUpOverride, anchor, cooks }
 ```
 
+`step.stated` is what the card says, kept as the student read it off the page —
+`"20"`, `"5-7"`, or `""` when the recipe gives a cue rather than a number. It is
+text on purpose: a range is what was *read*, and the board has to be able to say
+which end of it the plan was built on. The scheduled number lives on the
+segments, and a range is planned on its **top** — plan for the slow case.
+
+### 4.0 Minutes are read, never invented, and never a gate
+
+The recipe states its times, and reading them off the card is a skill the app
+must not replace. So the question is **"How long does the recipe say?"**, not
+"How many minutes?", and it is the one thing on the add row that is deliberately
+*not* pre-filled with a guess.
+
+It is also not a gate. A card that says *sauté until golden brown* gives a cue,
+not a number, and a student with nothing to read must not be stranded mid-flow.
+A step with no time goes in, is carried **unestimated**, is left off the drawn
+timeline, and is counted out loud on the board — the plan is stated as *at least*
+that long, never *exactly*.
+
+### 4.0.1 A step arrives with a shape
+
+The add row asks for one of three, not for a hands on / hands off binary:
+
+| Shape | Segments it creates |
+|---|---|
+| Hands on the whole time | one hands-on line |
+| **Starts, then runs by itself** | a short hands-on lead, then waiting |
+| Runs by itself | one waiting line |
+
+The middle one is the shape almost every real instruction has, and it is the
+only one that lets a plan overlap anything. It used to be reachable only by
+reopening a finished step and adding lines by hand, which almost nobody did — so
+almost every plan was one hands-on block per step and the scheduler had nothing
+to work with. The lead comes out of the stated time (`HANDS_ON_LEAD_MINUTES`),
+so a step still adds up to what the card says. Depth is unchanged: the step
+editor still takes arbitrary add, split, reorder and per-line minutes.
+
 ### 4.1 Station comes from equipment, never from guessing
 
 A step names **which equipment it uses**, and station is a property of the
-equipment. There is no keyword-guessing from step text — `"Set up the mixer"`
-used to resolve to the Cold station — and conflicts become concrete: *both of
-these need the sauté pan*, not *both of these are vaguely Stovetop*.
+equipment. Station is never inferred from step text — `"Set up the mixer"` used
+to resolve to the Cold station — and conflicts stay concrete: *both of these
+need the sauté pan*, not *both of these are vaguely Stovetop*.
+
+**Equipment is suggested from the wording; station never is.** Section 3 reads
+each step against `EQUIPMENT_HINTS` and offers what the method implies — *roast*
+suggests a sheet pan — as a visibly dashed guess that nothing acts on until the
+student taps it. Once accepted it is ordinary equipment and brings its own
+station, so the invariant above is untouched: no station has ever come from a
+keyword. The teaching survives too, arguably improved — the section's premise is
+that recipes never list their equipment and you have to read the method for it,
+and watching the app make the mapping and deciding whether to disagree teaches
+that relationship more directly than an empty dropdown does.
 
 **Contention is station-level, not per item.** An inventory the app cannot verify
 would make warnings look precise while quietly being wrong.
@@ -255,6 +304,14 @@ The plan is stored as **durations**, not clock times:
 - Slack is one subtraction — 70 minus the plan.
 - A wrong or missing anchor cannot corrupt a plan. It just shows no clock times.
 
+**The period is only guessed when the guess is reliable.** The default is the
+next period whose plate-up has not passed. A student planning at home in the
+evening has none, and falling through to the last period of the day put a wrong
+clock time on every line of the sheet while looking authoritative — so the field
+is left unset, asked for once, and the board says its times are placeholders
+until it is answered. During school hours the default stands and nobody is asked
+anything, which is the point. The same condition dates the sheet for tomorrow.
+
 A period supplies the **anchor** that turns durations into wall-clock times for
 display, because "12:19, sear the chicken" beats "T+14" when there is a clock on
 the wall. The chosen period is named on the board **and on the printout**, so a
@@ -314,6 +371,29 @@ Hands conflicts are then checked **per cook**. Stations don't relax: four
 cooks still share one oven, and the board says plainly when someone has been
 given nothing to do.
 
+**When extra hands cannot help, the board says why.** A dish whose critical path
+is one component's serial chain does not get shorter with more cooks — chicken
+plus rice pilaf stays the same length at 1, 2, 3 and 5 cooks, because the rice
+chain (toast 5 → simmer 18 → rest 5 → fluff 2 = 30) is binding. Flipping the
+toggle and seeing nothing change looks like a broken control, so `bindingChain()`
+names the recipe and its chain outright. Prep is excluded from the chain: it is
+scheduled unchained precisely because dicing an onion and juicing a lemon have
+nothing to do with each other, so extra hands really do shorten it.
+
+### Ready to hand in?
+
+Every student asks it and nothing used to answer. `js/readiness.js` derives a
+checklist from answers already given — name, period, read-to-end, no untimed
+step, fits the cooking window, clashes resolved *or knowingly accepted* — and the
+board states it as `4 of 6 — still need: your name`. It prints, because that
+line is what a teacher wants at the top of a handed-in sheet.
+
+It costs the student no new questions and it **never blocks printing**. The app
+warns and does not decide (§6), and this must not be the thing that breaks it.
+Deciding to live with a clash is a real answer for the same reason: a real
+kitchen has these problems too, and the only alternative would be to make
+finishing the sheet require planning something untrue.
+
 ## 7. The printed artifact
 
 > **Reopened 2026-09-05, and the question is purpose, not layout.** What the
@@ -347,7 +427,7 @@ Set once per assignment, via URL parameters on the Canvas embed:
 |---|---|---|
 | `recipe` | Prefills the first recipe's name, keys the saved plan | — |
 | `foodUp` | Pins plate-up, overriding the period picker. Also starts the plan on the `fixed` anchor | period's time |
-| `period` | Preselects a period by id | nearest by time of day |
+| `period` | Preselects a period by id | next one whose plate-up has not passed, **or nothing** |
 | `mode` | `guided` or `free` **starting** state — student may change it | `guided` |
 | `timer` | Planning countdown, minutes | **off** |
 | `demo` | Load the worked example in `js/demo.js` instead of a blank plan | off |
@@ -374,7 +454,8 @@ js/
   time.js           clock and duration arithmetic
   model.js          the plan shape, lookups, and every mutation
   schedule.js       backward pass, lanes, conflicts
-  storage.js        sessionStorage with a memory fallback, backup/restore
+  storage.js        sessionStorage with a memory fallback, save/load, plan labels
+  readiness.js      is this plan done enough to hand in? (derived, never a gate)
   dom.js            h() — the whole rendering vocabulary
   app.js            boot, plan lifecycle, section order
   views/            one module per section, each exporting render() and status()
@@ -394,9 +475,12 @@ bowl picker, the board and the printout at once.
 > **Storage is sessionStorage, deliberately — not localStorage.** These are
 > shared district Chromebooks, and one student's name and plan must not still be
 > sitting in the browser for whoever uses the machine next. That privacy concern
-> outranks convenience. The cost is real: work does not survive closing the tab,
-> so "Download backup" is always visible and `beforeunload` warns first. The tier
-> choice is one line in `js/storage.js`.
+> outranks convenience. The cost is real: work does not survive closing the tab
+> and does not follow a student to another machine, so **Save a copy** and **Load
+> a copy** are ordinary buttons in the plan bar — not an emergency exit shown
+> once the browser has already failed — and `beforeunload` warns first. There is
+> no backend and there should not be one for this. The tier choice is one line in
+> `js/storage.js`.
 
 > **No migration.** The app has not been used with students, so saved plans from
 > development are discarded rather than migrated. This ends at **v1.0** — the
@@ -418,6 +502,13 @@ Honest list, so none of it gets assumed:
 - **Narrow-viewport layout has not been checked on a real 360px screen.**
 - The board has not been driven in a browser end to end; views are covered by a
   render smoke test and the scheduler by unit tests.
+- **`EQUIPMENT_HINTS` has never been run against real lab recipes.** The word
+  list is a first guess. A guess that is wrong costs a student nothing — nothing
+  is attached until they tap it — but a guess that is *usually* wrong would make
+  the section noise, and that has not been measured.
+- **`HANDS_ON_LEAD_MINUTES` is a guess at one minute.** How long getting
+  something going actually takes, and whether taking it out of the stated time is
+  the right trade, wants a real recipe and a real student.
 
 ## 12. Open questions
 
@@ -437,6 +528,10 @@ Worth revisiting once students have used it, but not holding anything up:
   elicitation did.
 - Whether one oven warning is too few in practice.
 - **What the printout is for** (§7), which decides what goes on it.
+- Whether the readiness line reads as help or as a grade. It is deliberately
+  neither a score nor a gate, but a student may not read it that way.
+- Whether section 3 still earns its place once it is mostly pre-filled by the
+  equipment guesses.
 - Whether the board should explain when extra cooks cannot help. Rule 2 above
   means a third cook on a two-recipe plan now gets an empty lane. That is
   truthful — the plan has only two independent chains, and a serial chain cannot

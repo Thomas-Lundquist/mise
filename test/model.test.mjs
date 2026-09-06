@@ -11,8 +11,13 @@ import {
   addEquipment, removeEquipment, addBowl, removeBowl,
   addSegment, removeSegment, moveSegment, stepMins, handsMins, waitingMins, hasWaiting,
   stepsForRecipe, ingredientsForRecipe, ingredientsInBowl,
-  claimedMinutes, hasWork,
+  claimedMinutes, hasWork, defaultPeriodId, defaultPlanDate,
+  isUnestimated, unestimatedSteps, statedTotalMinutes, setStatedMinutes,
+  suggestedEquipment, acceptSuggestion,
 } from "../js/model.js";
+import { parseStatedMinutes } from "../js/time.js";
+import { readiness, sayReadiness } from "../js/readiness.js";
+import { bindingChain } from "../js/schedule.js";
 
 let failures = 0;
 function check(label, actual, expected) {
@@ -189,8 +194,184 @@ const add = (plan, recipeId, name, mins = 5, hands = true) =>
   const good = createPlan({ periodId: "p3" });
   check("a real period id is honoured", good.schedule.periodId, "p3");
   const typo = createPlan({ periodId: "p33" });
-  check("a typo falls back to a real period rather than being kept",
-    [typo.schedule.periodId === "p33", typeof typo.schedule.periodId], [false, "string"]);
+  check("a typo is never kept",
+    [typo.schedule.periodId === "p33", typo.schedule.periodId === null || typeof typo.schedule.periodId === "string"],
+    [false, true]);
+}
+
+// --- Only guess the period when the guess is reliable ----------------------
+//
+// The default used to fall through to the LAST period of the day for anyone
+// planning outside school hours, which put a wrong clock time on every line of
+// the sheet while looking authoritative. During school hours nobody is asked
+// anything, which is the whole point of having a default at all.
+{
+  const at = (h, m = 0) => new Date(2026, 8, 6, h, m);
+  check("mid-morning picks the period still to come", defaultPeriodId(at(9, 0)), "p1");
+  check("just after one period's plate-up picks the next", defaultPeriodId(at(9, 30)), "p2");
+  check("the evening picks nothing at all", defaultPeriodId(at(20, 0)), null);
+  check("and dates the sheet for the lab, not for tonight",
+    [defaultPlanDate(at(20, 0)), defaultPlanDate(at(9, 0))], ["2026-09-07", "2026-09-06"]);
+}
+
+// --- What the recipe says --------------------------------------------------
+//
+// The minutes field is a reading task, not a guess: the card states its times
+// and reading them off it is the skill. So a range is taken as written and
+// planned on its SLOW end, and a card that gives a cue rather than a number
+// must never block the step.
+{
+  check("a plain number is itself", parseStatedMinutes("6"), { mins: 6, range: false });
+  check("a range plans for the slow case", parseStatedMinutes("5-7"), { mins: 7, range: true });
+  check("however it is written", parseStatedMinutes("5 to 7"), { mins: 7, range: true });
+  check("words around the number are fine", parseStatedMinutes("about 8"), { mins: 8, range: false });
+  check("a cue is not a number", parseStatedMinutes("until golden brown"), { mins: 0, range: false });
+  check("and neither is nothing", parseStatedMinutes(""), { mins: 0, range: false });
+}
+
+// A step with no time goes in, is carried, and is counted somewhere visible.
+{
+  const plan = createPlan();
+  const recipe = plan.recipes[0];
+  const timed = appendStep(plan, createStep({ recipeId: recipe.id, name: "Dice the onion", mins: 4, shape: "hands" }));
+  const untimed = appendStep(plan, createStep({ recipeId: recipe.id, name: "Sauté until golden", mins: 0, shape: "hands" }));
+
+  check("a step the card put no number on is still a step", plan.steps.length, 2);
+  check("it is carried unestimated", [isUnestimated(timed), isUnestimated(untimed)], [false, true]);
+  check("and counted where it can be seen",
+    unestimatedSteps(plan).map((step) => step.name), ["Sauté until golden"]);
+  check("the plan's own total ignores what it cannot know", statedTotalMinutes(plan), 4);
+
+  const applied = setStatedMinutes(untimed, "10-12");
+  check("reading a range off the card later plans for the slow end",
+    [applied.mins, applied.range, untimed.segments[0].mins, untimed.stated], [12, true, 12, "10-12"]);
+  check("and the step stops being unestimated", isUnestimated(untimed), false);
+}
+
+// --- The shape a step arrives in -------------------------------------------
+//
+// "Starts, then runs by itself" is the shape almost every instruction has, and
+// it is the only one that lets a plan overlap anything. It used to exist only
+// for a student who reopened a finished step and added lines by hand.
+{
+  const plan = createPlan();
+  const recipe = plan.recipes[0].id;
+  const shaped = (name, mins, shape) =>
+    appendStep(plan, createStep({ recipeId: recipe, name, mins, shape }));
+
+  const hands = shaped("Dice the onion", 4, "hands");
+  check("hands on the whole time is one line, all yours",
+    [hands.segments.length, handsMins(hands), waitingMins(hands)], [1, 4, 0]);
+
+  const runs = shaped("Rest the meat", 10, "runs");
+  check("runs by itself is one line, none of it yours",
+    [runs.segments.length, handsMins(runs), waitingMins(runs)], [1, 0, 10]);
+
+  const both = shaped("Simmer the rice", 18, "start-then-runs");
+  check("start-then-runs arrives as two lines without anyone editing it",
+    [both.segments.length, handsMins(both), waitingMins(both)], [2, 1, 17]);
+  check("the lead comes out of the stated time, so the step still adds up to the card",
+    stepMins(both), 18);
+  check("and the waiting line is what makes the plan able to overlap", hasWaiting(both), true);
+
+  const brief = shaped("Taste it", 1, "start-then-runs");
+  check("a step too short to split stays one line", brief.segments.length, 1);
+
+  const unknown = shaped("Reduce until thick", 0, "start-then-runs");
+  check("with no time read off the card the shape is still kept",
+    [unknown.segments.length, unknown.segments.map((seg) => seg.hands)], [2, [true, false]]);
+  check("and it asks to be filled in", isUnestimated(unknown), true);
+}
+
+// --- Reading the method for its equipment ----------------------------------
+//
+// A recipe never lists its equipment. Guessing out loud teaches the mapping
+// better than an empty dropdown, so long as the guess is visibly a guess and
+// nothing is attached until the student says so.
+{
+  const plan = createPlan();
+  const recipe = plan.recipes[0].id;
+  const step = (name) => appendStep(plan, createStep({ recipeId: recipe, name, mins: 5, shape: "hands" }));
+
+  check("roasting suggests the pan that puts it in the oven",
+    suggestedEquipment(plan, step("Roast the vegetables")), ["Sheet pan"]);
+  check("and an ending does not hide the word",
+    suggestedEquipment(plan, step("Roasting the garlic")), ["Sheet pan"]);
+  check("a word inside a longer one is not a match",
+    suggestedEquipment(plan, step("Season the cutlets")), []);
+  check("nothing recognised is no guess at all",
+    suggestedEquipment(plan, step("Ask the teacher")), []);
+
+  const dice = step("Dice the onion");
+  check("one step can imply several things",
+    suggestedEquipment(plan, dice), ["Chef knife", "Cutting board"]);
+  check("nothing is in the plan until a guess is accepted", plan.equipment.length, 0);
+
+  acceptSuggestion(plan, dice, "Chef knife");
+  check("accepting one puts it in the plan, on the step, with its station",
+    [plan.equipment.map((e) => `${e.name}/${e.station}`), dice.equipmentIds.length], [["Chef knife/Prep"], 1]);
+  check("and it stops being offered", suggestedEquipment(plan, dice), ["Cutting board"]);
+}
+
+// --- Ready to hand in? -----------------------------------------------------
+//
+// Derived from answers already given, so it costs no new questions. It says
+// what is missing; it never blocks anything.
+{
+  const plan = createPlan({ periodId: "p2" });
+  const recipe = plan.recipes[0].id;
+  appendStep(plan, createStep({ recipeId: recipe, name: "Sauté until golden", mins: 0, shape: "hands" }));
+  const span = { start: 0, end: 20 };
+
+  const first = readiness(plan, { span, conflicts: new Map() });
+  check("a fresh plan names everything it still needs",
+    first.missing.map((item) => item.id), ["name", "read", "times"]);
+  check("and says so in one line", sayReadiness(first),
+    '3 of 6 — still need: your name, to tick that you read the recipe to the end and a time on "Sauté until golden".');
+
+  plan.student.name = "Ana";
+  plan.readToEnd = true;
+  setStatedMinutes(plan.steps[0], "6");
+  const done = readiness(plan, { span, conflicts: new Map() });
+  check("filling them in finishes the checklist", [done.met, done.missing.length], [6, 0]);
+  check("and it says so", sayReadiness(done), "This plan is ready to hand in.");
+
+  const clash = new Map([["a", new Set(["hands"])]]);
+  check("an unresolved clash is not ready",
+    readiness(plan, { span, conflicts: clash }).missing.map((i) => i.id), ["clashes"]);
+  plan.conflictsAccepted = true;
+  check("but deciding to live with it is a real answer",
+    readiness(plan, { span, conflicts: clash }).missing.length, 0);
+
+  const over = readiness(plan, { span: { start: 0, end: 200 }, conflicts: new Map() });
+  check("a plan that does not fit is flagged, not blocked",
+    over.missing.map((i) => i.id), ["fits"]);
+}
+
+// --- What extra cooks cannot fix -------------------------------------------
+//
+// One recipe's steps happen in order, so the sum of that chain is a floor no
+// number of hands gets under. Raising the group size then changes nothing,
+// which looks like a broken toggle unless something names the chain.
+{
+  const plan = createPlan();
+  const chicken = plan.recipes[0];
+  const rice = addRecipe(plan, "Rice pilaf");
+  const step = (recipeId, name, mins, shape, prep = false) =>
+    appendStep(plan, createStep({ recipeId, name, mins, shape, prep }));
+
+  step(chicken.id, "Pound the cutlets", 5, "hands", true);
+  step(chicken.id, "Sear the chicken", 8, "hands");
+  step(rice.id, "Toast the rice", 5, "hands");
+  step(rice.id, "Simmer covered", 18, "runs");
+  step(rice.id, "Rest it", 5, "runs");
+  step(rice.id, "Fluff and season", 2, "hands");
+
+  const chain = bindingChain(plan);
+  check("the binding chain is the longest run that has to happen in order",
+    [chain.recipe.name, chain.mins], ["Rice pilaf", 30]);
+  check("prep is left out of it, because extra hands really do shorten prep",
+    chain.steps.some((s) => s.prep), false);
 }
 
 // --- A step is a sequence of timed lines -----------------------------------

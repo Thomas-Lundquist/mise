@@ -18,7 +18,7 @@ import { DEFAULT_TIMER_MINUTES } from "./config.js";
 import { createPlan, hasWork } from "./model.js";
 import {
   purgeLegacy, listPlans, loadPlan, savePlan, mostRecentPlanId,
-  downloadPlan, restorePlanFromFile, isStoragePersistent, planTitle,
+  downloadPlan, restorePlanFromFile, isStoragePersistent, entryFor, planLabels,
 } from "./storage.js";
 import { h, button } from "./dom.js";
 
@@ -215,9 +215,12 @@ function switchTo(next, message = "") {
 function renderPlanBar(message = "") {
   const bar = document.getElementById("plan-bar");
   const entries = listPlans();
-  if (!entries.some((entry) => entry.id === plan.id)) {
-    entries.unshift({ id: plan.id, title: planTitle(plan), date: plan.student.date });
-  }
+  if (!entries.some((entry) => entry.id === plan.id)) entries.unshift(entryFor(plan));
+
+  // Labels come from storage, which guarantees they are distinct. Two plans for
+  // the same recipe on the same day are the NORMAL case behind a Canvas link,
+  // and resuming the wrong one with no way to tell them apart loses work.
+  const labels = planLabels(entries);
 
   const picker = h("select", {
     id: "plan-picker",
@@ -226,10 +229,10 @@ function renderPlanBar(message = "") {
       const next = loadPlan(e.target.value);
       if (next) switchTo(next);
     },
-  }, entries.map((entry) => h("option", {
+  }, entries.map((entry, index) => h("option", {
     value: entry.id,
     selected: entry.id === plan.id,
-    text: entry.date ? `${entry.title} — ${entry.date}` : entry.title,
+    text: labels[index],
   })));
 
   bar.replaceChildren(
@@ -243,26 +246,32 @@ function renderPlanBar(message = "") {
         switchTo(freshPlan(), "Started a new plan.");
       }, { class: "btn btn--small" }),
 
-      button("Download backup", () => {
+      // An ordinary pair, not an emergency exit. Work lives in sessionStorage,
+      // so it does not survive closing the tab and it does not follow you to
+      // another machine — which makes saving a file the normal way to carry a
+      // plan home, not a thing you do once the browser has already failed.
+      // There is no backend and there should not be one for this.
+      button("Save a copy", () => {
         downloadPlan(plan);
-        renderPlanBar("Backup downloaded — keep it somewhere you can find it.");
+        renderPlanBar("Saved to your downloads. Load it back here on any machine.");
       }, { class: "btn btn--small btn--secondary" }),
 
       h("label", { class: "btn btn--small btn--secondary", for: "restore-input" },
-        "Restore",
+        "Load a copy",
         h("input", {
           type: "file", id: "restore-input", accept: "application/json", hidden: true,
           onChange: (e) => {
             const file = e.target.files && e.target.files[0];
             if (!file) return;
             restorePlanFromFile(file)
-              .then((restored) => switchTo(restored, "Plan restored."))
+              .then((restored) => switchTo(restored, "Plan loaded."))
               .catch((err) => renderPlanBar(err.message))
               .finally(() => { e.target.value = ""; });
           },
         }))),
 
-    h("p", { class: "plan-bar__status", "aria-live": "polite", text: message }),
+    h("p", { class: "plan-bar__status", "aria-live": "polite",
+      text: message || "Your work is kept in this tab only. Save a copy to carry it to another machine." }),
   );
 }
 

@@ -331,6 +331,27 @@ export function planSpan(plan, ranges) {
   return { start, end };
 }
 
+// --- What extra hands cannot fix ------------------------------------------
+
+// A recipe's cooking steps happen one after another — you cannot sear before
+// you dredge — so the sum of one recipe's chain is a floor on the whole plan.
+// No number of cooks gets under it. That is why raising the group size
+// sometimes changes nothing at all, which looks like a broken toggle unless
+// somebody says why.
+//
+// Prep is excluded: it is scheduled unchained precisely because juicing a lemon
+// and dicing an onion have nothing to do with each other, so extra hands DO
+// shorten it.
+export function bindingChain(plan) {
+  let longest = null;
+  for (const recipe of plan.recipes) {
+    const steps = plan.steps.filter((step) => step.recipeId === recipe.id && !step.prep);
+    const mins = steps.reduce((total, step) => total + stepMins(step), 0);
+    if (mins > 0 && (!longest || mins > longest.mins)) longest = { recipe, steps, mins };
+  }
+  return longest;
+}
+
 // --- Conflicts ------------------------------------------------------------
 //
 // Flagged, never resolved. The app does not decide what a student is allowed to

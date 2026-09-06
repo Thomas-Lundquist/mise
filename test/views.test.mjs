@@ -199,8 +199,11 @@ function samplePlan() {
   fire(addBtn(), "click");
   check("clicking an untouched row adds nothing", plan.steps.length, 0);
   check("and says everything that is missing", hint().textContent,
-    "Still needed: what the step is, how many minutes and whether your hands are on it.");
+    "Still needed: what the step is and whether your hands are on it.");
 
+  // Minutes are NOT a gate. Recipes are sometimes silent — "sauté until golden
+  // brown" gives a cue, not a number — and a student with nothing to read must
+  // not be stuck mid-flow.
   type(find(tree, `add-name-${recipe.id}`), "Dice the tomatoes");
   type(find(tree, `add-mins-${recipe.id}`), "4");
   fire(addBtn(), "click");
@@ -208,23 +211,60 @@ function samplePlan() {
   check("and the hint narrows to what is actually left", hint().textContent,
     "Still needed: whether your hands are on it.");
 
-  fire(find(tree, `add-hands-${recipe.id}-on`), "click");
+  fire(find(tree, `add-shape-${recipe.id}-hands`), "click");
   fire(addBtn(), "click");
-  check("answering all three adds the step", plan.steps.length, 1);
+  check("answering both adds the step", plan.steps.length, 1);
   check("with what was typed, as a single timed line",
     plan.steps.map((s) => [s.name, s.segments.length, s.segments[0].mins, s.segments[0].hands]),
     [["Dice the tomatoes", 1, 4, true]]);
 
-  // The order that actually broke: hands chosen FIRST, then the text fields.
-  // Choosing hands re-renders, so the captured list was stale from then on.
+  // The order that actually broke: the shape chosen FIRST, then the text
+  // fields. Choosing it re-renders, so the captured list was stale from then on.
   tree = draw();
-  fire(find(tree, `add-hands-${recipe.id}-off`), "click");
+  fire(find(tree, `add-shape-${recipe.id}-runs`), "click");
   tree = draw();
   type(find(tree, `add-name-${recipe.id}`), "Let it sit");
   type(find(tree, `add-mins-${recipe.id}`), "10");
   fire(find(tree, `add-step-${recipe.id}`), "click");
-  check("and it still works when hands is answered first", plan.steps.length, 2);
+  check("and it still works when the shape is answered first", plan.steps.length, 2);
   check("the waiting answer is kept", plan.steps[1].segments[0].hands, false);
+
+  // The shape that makes a plan able to overlap at all, on the first pass,
+  // without anyone reopening a finished step to add lines by hand.
+  tree = draw();
+  type(find(tree, `add-name-${recipe.id}`), "Simmer the sauce");
+  type(find(tree, `add-mins-${recipe.id}`), "20");
+  fire(find(tree, `add-shape-${recipe.id}-start-then-runs`), "click");
+  tree = draw();
+  fire(find(tree, `add-step-${recipe.id}`), "click");
+  check("start-then-runs arrives already split into a lead and a wait",
+    plan.steps[2].segments.map((seg) => [seg.mins, seg.hands]), [[1, true], [19, false]]);
+
+  // A range is what the card says. The app plans on its slow end and says so
+  // before the step is even added, which is where the rule is learnt.
+  tree = draw();
+  type(find(tree, `add-name-${recipe.id}`), "Sear the cutlets");
+  type(find(tree, `add-mins-${recipe.id}`), "5-7");
+  fire(find(tree, `add-shape-${recipe.id}-hands`), "click");
+  tree = draw();
+  check("a range is read back before the step is added",
+    find(tree, `add-hint-${recipe.id}`).textContent,
+    "Planning for 7 min — the slow end of 5-7.");
+  fire(find(tree, `add-step-${recipe.id}`), "click");
+  check("and the plan is built on the slow case",
+    [plan.steps[3].segments[0].mins, plan.steps[3].stated], [7, "5-7"]);
+
+  // A card that gives a cue rather than a number must never block the step.
+  tree = draw();
+  type(find(tree, `add-name-${recipe.id}`), "Sauté until golden brown");
+  fire(find(tree, `add-shape-${recipe.id}-hands`), "click");
+  tree = draw();
+  check("a step with no time says what will happen to it",
+    find(tree, `add-hint-${recipe.id}`).textContent,
+    "No time on this one. It'll go in unestimated — the board will remind you.");
+  fire(find(tree, `add-step-${recipe.id}`), "click");
+  check("and goes in anyway rather than stranding the student",
+    [plan.steps.length, M.isUnestimated(plan.steps[4])], [5, true]);
 
   // The draft is cleared, not carried into the next step.
   tree = draw();
@@ -263,6 +303,38 @@ function samplePlan() {
   check("and it brings its station from the palette", added.station, "Prep");
 }
 
+// --- Equipment is guessed out loud, and never attached silently ------------
+{
+  const plan = samplePlan();
+  const roast = M.appendStep(plan, M.createStep({
+    recipeId: plan.recipes[0].id, name: "Roast the vegetables", mins: 20, shape: "runs",
+  }));
+  const before = plan.equipment.length;
+  const tree = views.equipment.render(ctxFor(plan));
+  const text = allText(tree).join(" | ");
+
+  check("the section says the guesses are guesses", text.includes("Dashed ones are our guess"), true);
+  check("and nothing is attached until the student says so",
+    [plan.equipment.length, roast.equipmentIds.length], [before, 0]);
+
+  // Accepting is one tap, which is the whole point: the section becomes a
+  // review rather than a third walk through the recipe.
+  const guess = (function findGuess(node) {
+    if (node && node.className === "chip chip--guess" && node.childNodes[0]
+        && node.childNodes[0].textContent === "Sheet pan?") return node;
+    for (const child of (node && node.childNodes) || []) {
+      const hit = findGuess(child);
+      if (hit) return hit;
+    }
+    return null;
+  })(tree);
+  check("the guess is on the step it was read from", Boolean(guess), true);
+  fire(guess, "click");
+  check("one tap accepts it, with the station that puts the step on a lane",
+    [plan.equipment.find((e) => e.name === "Sheet pan").station, roast.equipmentIds.length],
+    ["Oven", 1]);
+}
+
 // --- Short moments become notches, not slivers -----------------------------
 //
 // A one-minute hands-on line between two waiting lines of the same step is an
@@ -289,6 +361,23 @@ function samplePlan() {
     text.includes("Taste and adjust"), true);
 }
 
+// Starting something is not being called back to it. Every "starts, then runs
+// by itself" step opens with a short hands-on line, and treating those as
+// notches would take the one minute your hands are actually busy off the cook's
+// lane — which is the one thing that lane is for.
+{
+  const plan = M.createPlan({ recipe: "Rice", foodUp: "12:35" });
+  plan.schedule.anchor = "fixed";
+  const rice = M.appendStep(plan, M.createStep({
+    recipeId: plan.recipes[0].id, name: "Simmer the rice", mins: 20, shape: "start-then-runs",
+  }));
+  const text = allText(views.board.render(ctxFor(plan))).join(" | ");
+  check("the lead of a start-then-runs step is not a watch point",
+    text.includes("Watch points"), false);
+  check("and its waiting line is still what the board is drawing",
+    M.waitingMins(rice), 19);
+}
+
 // --- The board says the things it exists to say ----------------------------
 {
   const plan = samplePlan();
@@ -299,6 +388,41 @@ function samplePlan() {
   ]) {
     check(`the board says "${phrase}"`, text.includes(phrase), true);
   }
+
+  // The question every student has and the app never answered.
+  check("and answers whether the plan is ready to hand in",
+    text.includes("Still need:"), true);
+  check("naming what is actually missing", text.includes("your name"), true);
+  check("without ever standing between them and the printer",
+    text.includes("Nothing here stops you printing."), true);
+}
+
+// --- A step with no time is carried, and said out loud ---------------------
+{
+  const plan = samplePlan();
+  M.appendStep(plan, M.createStep({
+    recipeId: plan.recipes[0].id, name: "Sauté until golden brown", mins: 0, shape: "hands",
+  }));
+  const text = allText(views.board.render(ctxFor(plan))).join(" | ");
+  check("the board counts the steps it cannot draw",
+    text.includes("no time yet"), true);
+  check("and says the length is a floor, not an answer",
+    text.includes("at least this long"), true);
+}
+
+// --- Why more cooks sometimes change nothing -------------------------------
+//
+// Verified before this existed: chicken + rice pilaf stays the same length at
+// 1, 2, 3 and 5 cooks because the rice chain is binding. The manager flipped
+// the toggle, saw no improvement, and got no reason why.
+{
+  const plan = samplePlan();
+  plan.schedule.cooks = 3;
+  const text = allText(views.board.render(ctxFor(plan))).join(" | ");
+  check("the board names the chain that sets the length",
+    text.includes("is what sets the length"), true);
+  check("and says plainly that hands will not help it",
+    text.includes("No number of cooks makes it shorter"), true);
 }
 
 console.log(failures === 0 ? "\nAll checks passed." : `\n${failures} FAILED`);

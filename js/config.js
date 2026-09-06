@@ -70,6 +70,58 @@ export const EQUIPMENT_PALETTE = [
   { name: "Instant-read thermometer", station: "Prep" },
 ];
 
+// How long a step's hands-on lead is when the student says it "starts, then
+// runs by itself". Almost every instruction has this shape — you put the pan
+// on, it heats without you — and one minute is the honest small number for
+// getting something going.
+//
+// It comes OUT of the time the recipe states, rather than being added on top,
+// so a step still adds up to what the card says. The student can stretch it
+// afterwards like any other line.
+export const HANDS_ON_LEAD_MINUTES = 1;
+
+// What the method implies about equipment. A recipe never lists it, so section
+// 3 exists to make the student read for it — but sending them at an empty
+// dropdown teaches less than showing them the mapping and letting them disagree
+// with it. These are SUGGESTIONS: nothing is attached to a step until it is
+// tapped.
+//
+// `words` are matched whole, case-insensitively, against the step's name and
+// its line labels. Order matters only in that every match is offered.
+export const EQUIPMENT_HINTS = [
+  { words: ["roast", "roasted", "bake", "baked", "sheet pan"], equipment: "Sheet pan" },
+  { words: ["broil", "broiled"], equipment: "Broiler pan" },
+  { words: ["casserole", "gratin", "lasagna"], equipment: "Casserole dish" },
+
+  { words: ["saute", "sauté", "sear", "brown", "fry", "pan-fry"], equipment: "Sauté pan" },
+  { words: ["boil", "blanch", "parboil"], equipment: "Stock pot" },
+  { words: ["simmer", "reduce", "poach", "steam"], equipment: "Saucepan" },
+  { words: ["stir-fry", "stir fry"], equipment: "Wok" },
+  { words: ["griddle", "pancakes"], equipment: "Griddle" },
+  { words: ["melt", "temper"], equipment: "Double boiler" },
+
+  { words: ["chill", "refrigerate", "fridge", "marinate", "rest in the fridge"], equipment: "Refrigerator" },
+  { words: ["freeze"], equipment: "Freezer" },
+  { words: ["shock", "ice bath"], equipment: "Ice bath" },
+
+  { words: ["chop", "dice", "mince", "slice", "julienne", "cut"], equipment: "Chef knife" },
+  { words: ["chop", "dice", "mince", "slice", "julienne", "cut"], equipment: "Cutting board" },
+  { words: ["peel"], equipment: "Peeler" },
+  { words: ["grate", "shred"], equipment: "Box grater" },
+  { words: ["whisk", "whip"], equipment: "Whisk" },
+  { words: ["drain", "rinse"], equipment: "Colander" },
+  { words: ["measure", "weigh"], equipment: "Kitchen scale" },
+  { words: ["mix", "combine", "toss", "dredge", "fold"], equipment: "Mixing bowl (large)" },
+  { words: ["temperature", "temp", "probe", "internal"], equipment: "Instant-read thermometer" },
+  { words: ["cool", "rest"], equipment: "Cooling rack" },
+];
+
+// How far under a recipe's own claimed times the student's step times have to
+// fall before the board says they probably missed something on the card. Some
+// gap is normal — a recipe's header is a round number — so this is deliberately
+// loose. Only a real shortfall is worth a word.
+export const CLAIM_SHORTFALL_RATIO = 0.6;
+
 // How many people can share one plan. The sheet a student keeps is always the
 // solo one; group is a toggle over the same steps, for whoever is managing the
 // kitchen that day.

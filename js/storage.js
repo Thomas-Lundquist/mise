@@ -12,6 +12,7 @@
 // be refused, so there is a fallback: sessionStorage, then memory.
 
 import { PLAN_VERSION } from "./model.js";
+import { minutesToClock } from "./time.js";
 
 const PREFIX = "mise-planner:";
 const INDEX_KEY = `${PREFIX}index`;
@@ -125,13 +126,68 @@ export function planTitle(plan) {
   return names.length > 0 ? names.join(" + ") : "Untitled plan";
 }
 
-function entryFor(plan) {
+export function entryFor(plan) {
   return {
     id: plan.id,
     title: planTitle(plan),
     date: plan.student.date || "",
+    // Only ever used to tell two otherwise identical entries apart. A plan is
+    // named by its recipe, and a Canvas link that prefills one makes "same
+    // recipe, same day" the normal case rather than the odd one.
+    name: (plan.student.name || "").trim(),
     updatedAt: Date.now(),
   };
+}
+
+// Labels for the plan picker, guaranteed distinct.
+//
+// Recipe plus date is what a student recognises, so it stays the label wherever
+// it is unambiguous. It stops being unambiguous the moment they click "New
+// plan" on a ?recipe=X Canvas link: the second plan inherits the same prefilled
+// recipe and the same date, and the picker then offered two identical rows with
+// no way to tell which one held their work.
+//
+// So detail is added only where it is needed, cheapest first: their name, then
+// the time it was last saved, then a bare ordinal — which cannot collide, so
+// the list is always readable even if it ends up ugly.
+export function planLabels(entries) {
+  const labels = entries.map((entry) => (entry.date ? `${entry.title} — ${entry.date}` : entry.title));
+
+  const tally = () => {
+    const counts = new Map();
+    for (const label of labels) counts.set(label, (counts.get(label) || 0) + 1);
+    return counts;
+  };
+
+  for (const detail of [byName, bySaveTime]) {
+    const counts = tally();
+    for (let i = 0; i < entries.length; i++) {
+      if ((counts.get(labels[i]) || 0) < 2) continue;
+      const extra = detail(entries[i]);
+      if (extra) labels[i] = `${labels[i]} · ${extra}`;
+    }
+  }
+
+  const counts = tally();
+  const seen = new Map();
+  for (let i = 0; i < labels.length; i++) {
+    if ((counts.get(labels[i]) || 0) < 2) continue;
+    const nth = (seen.get(labels[i]) || 0) + 1;
+    seen.set(labels[i], nth);
+    labels[i] = `${labels[i]} (${nth})`;
+  }
+  return labels;
+}
+
+function byName(entry) {
+  return (entry.name || "").trim();
+}
+
+function bySaveTime(entry) {
+  const at = Number(entry.updatedAt);
+  if (!Number.isFinite(at) || at <= 0) return "";
+  const when = new Date(at);
+  return `saved ${minutesToClock(when.getHours() * 60 + when.getMinutes())}`;
 }
 
 // --- Plans ----------------------------------------------------------------

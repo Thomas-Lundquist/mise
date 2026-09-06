@@ -14,10 +14,12 @@ import {
   MAX_COOKS,
   EQUIPMENT_PALETTE,
   CUSTOM_EQUIPMENT_STATION,
+  HANDS_ON_LEAD_MINUTES,
+  EQUIPMENT_HINTS,
 } from "./config.js";
-import { clockToMinutes, todayISO } from "./time.js";
+import { clockToMinutes, todayISO, tomorrowISO, parseStatedMinutes } from "./time.js";
 
-export const PLAN_VERSION = 8;
+export const PLAN_VERSION = 9;
 
 export function newId(prefix = "id") {
   if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
@@ -29,11 +31,24 @@ export function newId(prefix = "id") {
 // Which period a student is most likely in: the next one whose food-up time
 // hasn't passed. A wrong pick is the main risk of anchoring to a period, so the
 // default should be right most of the time without anyone thinking about it.
+//
+// Only guess when the guess is reliable. Planning at home at 8pm has no
+// upcoming period, and falling through to the last one of the day put a wrong
+// clock time on every line of the sheet while looking authoritative. Null means
+// "ask them once" — during school hours nobody is asked anything, which is the
+// point.
 export function defaultPeriodId(now = new Date()) {
   if (PERIODS.length === 0) return null;
   const nowMins = now.getHours() * 60 + now.getMinutes();
   const upcoming = PERIODS.find((p) => clockToMinutes(p.foodUp) >= nowMins);
-  return (upcoming || PERIODS[PERIODS.length - 1]).id;
+  return upcoming ? upcoming.id : null;
+}
+
+// Planning the night before is the normal reason to be here outside school
+// hours, so the sheet should be dated for the lab, not for the evening it was
+// written. Shown in an ordinary date field they can change.
+export function defaultPlanDate(now = new Date()) {
+  return defaultPeriodId(now) === null ? tomorrowISO(now) : todayISO(now);
 }
 
 export function periodById(id) {
@@ -57,7 +72,7 @@ export function createPlan({ recipe = "", foodUp = "", periodId = null, mode = "
     id: newId("plan"),
     createdAt: Date.now(),
 
-    student: { name: "", kitchen: "", date: todayISO() },
+    student: { name: "", kitchen: "", date: defaultPlanDate() },
 
     // The one thing worth confirming that the step list cannot show: that they
     // got to the END of the recipe, including the parts they have not written
@@ -84,6 +99,12 @@ export function createPlan({ recipe = "", foodUp = "", periodId = null, mode = "
     equipment: [],
 
     bowls: [],
+
+    // A clash the student has looked at and decided to live with. The app warns
+    // and never decides, so "I know — I'll do them one after the other" has to
+    // be a real answer, or the readiness line would nag forever about a plan
+    // that is finished.
+    conflictsAccepted: false,
 
     schedule: {
       mode: mode === "free" ? "free" : "guided",
@@ -141,14 +162,47 @@ export function createSegment({ label = "", mins = 1, hands = true } = {}) {
   return { id: newId("seg"), label, mins, hands };
 }
 
-export function createStep({ recipeId, name = "", mins = 0, hands = true, prep = false } = {}) {
+// The three shapes a step arrives in, chosen once on the add row.
+//
+// "start-then-runs" is the overwhelmingly common one and the only one that
+// makes a plan overlap at all — you put the pan on, it heats without you. It
+// used to exist only for a student who went back into a finished step and added
+// lines by hand, which almost nobody does, so almost every plan was one
+// hands-on block per step and could never overlap.
+export const STEP_SHAPES = ["hands", "start-then-runs", "runs"];
+
+function segmentsForShape(shape, mins) {
+  if (shape !== "start-then-runs") {
+    return [createSegment({ mins, hands: shape !== "runs" })];
+  }
+  const lead = HANDS_ON_LEAD_MINUTES;
+  const leadLine = () => createSegment({ label: "get it going", mins: lead, hands: true });
+  // Nothing read off the card yet. The shape is still worth keeping, so the
+  // waiting line arrives unestimated and visibly asks to be filled in.
+  if (mins <= 0) return [leadLine(), createSegment({ mins: 0, hands: false })];
+  // Too short to split: a one-minute step is all hands and nothing else.
+  if (mins <= lead) return [createSegment({ mins, hands: true })];
+  return [leadLine(), createSegment({ mins: mins - lead, hands: false })];
+}
+
+export function createStep({
+  recipeId, name = "", mins = 0, hands = true, prep = false, shape = null, stated = "",
+} = {}) {
   return {
     id: newId("step"),
     recipeId,
     name,
+    // What the recipe card says this takes, in the student's own words off the
+    // page: "20", "5-7", or nothing at all when the card gives a cue rather
+    // than a number. Kept as text because a range is what was READ, and the
+    // board has to be able to say which end of it the plan was built on.
+    //
+    // Defaults to the number itself, so a step built in code — the demo, a
+    // test — reads back exactly as one typed by hand.
+    stated: stated || (mins > 0 ? String(mins) : ""),
     // What you accomplish, broken into what you actually do. One segment is the
     // normal case and reads exactly like a plain step.
-    segments: [createSegment({ mins, hands })],
+    segments: shape ? segmentsForShape(shape, mins) : [createSegment({ mins, hands })],
     // Prep: cutting, measuring, portioning. Deliberately a category a student
     // recognises rather than a question about ordering — "is this prep?" is a
     // word they already use, where "can this be done earlier?" asks them to
@@ -188,6 +242,59 @@ export function createEquipment(name) {
   };
 }
 
+// --- Reading the method for its equipment ---------------------------------
+//
+// A recipe never lists its equipment; you find it by reading the method for
+// what it assumes. That reading is the lesson of section 3, and sending a
+// student at an empty dropdown teaches it worse than showing them the mapping
+// and letting them disagree with it. So the app guesses, out loud, and nothing
+// is attached to a step until the student taps it.
+
+// Whole words, allowing the ordinary endings, so "roast" catches "roasting"
+// without "cut" catching "cutlet". A plain substring match got both wrong.
+const WORD_END = "(?:s|es|d|ed|ing|en)?(?![a-z])";
+
+function mentions(text, word) {
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?:^|[^a-z])${escaped}${WORD_END}`).test(text);
+}
+
+// Everything the step says, in one lowercase string: its name and the labels of
+// its lines, because "then it simmers" often only exists on a line.
+function stepText(step) {
+  return [step.name, ...step.segments.map((seg) => seg.label)]
+    .filter(Boolean).join(" ").toLowerCase();
+}
+
+// Equipment names this step's wording implies, minus anything already on it.
+// Names, not equipment objects — nothing enters the plan until it is accepted.
+export function suggestedEquipment(plan, step) {
+  const text = stepText(step);
+  if (!text.trim()) return [];
+  const attached = new Set(step.equipmentIds
+    .map((id) => plan.equipment.find((e) => e.id === id))
+    .filter(Boolean)
+    .map((item) => item.name.toLowerCase()));
+
+  const out = [];
+  for (const hint of EQUIPMENT_HINTS) {
+    if (attached.has(hint.equipment.toLowerCase())) continue;
+    if (out.includes(hint.equipment)) continue;
+    if (hint.words.some((word) => mentions(text, word))) out.push(hint.equipment);
+  }
+  return out;
+}
+
+// Take a guess the student has agreed with. Adding the equipment to the plan
+// and attaching it to the step is one action, because accepting is one tap.
+export function acceptSuggestion(plan, step, name) {
+  const item = addEquipment(plan, name);
+  if (!item) return null;
+  if (!step.equipmentIds.includes(item.id)) step.equipmentIds.push(item.id);
+  step.noEquipment = false;
+  return item;
+}
+
 export function createBowl(label = "") {
   // `stepId` is what makes a bowl mean something: it is ready *before* that
   // step. Null while the student has not said yet.
@@ -216,6 +323,33 @@ export function ingredientsInBowl(plan, bowlId) {
 // these rather than reaching into segments itself.
 export function stepMins(step) {
   return step.segments.reduce((total, seg) => total + seg.mins, 0);
+}
+
+// A step the recipe never put a number on. "Sauté until golden brown" gives a
+// cue, not a time, and a student with nothing to read must not be stuck — so
+// the step goes in with no minutes and is counted somewhere visible instead.
+export function isUnestimated(step) {
+  return step.segments.some((seg) => !(seg.mins > 0));
+}
+
+export function unestimatedSteps(plan) {
+  return plan.steps.filter(isUnestimated);
+}
+
+// Everything the student's own steps add up to. Held against the recipe's own
+// header claim, a total well under it means something on the card never made it
+// onto the list.
+export function statedTotalMinutes(plan) {
+  return plan.steps.reduce((total, step) => total + stepMins(step), 0);
+}
+
+// Apply what was read off the card to a step. One place, because the add row,
+// the step row and any test all have to agree on which end of a range is used.
+export function setStatedMinutes(step, text) {
+  const { mins, range } = parseStatedMinutes(text);
+  step.stated = String(text == null ? "" : text);
+  if (step.segments.length === 1) step.segments[0].mins = mins;
+  return { mins, range };
 }
 
 export function handsMins(step) {

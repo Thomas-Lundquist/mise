@@ -85,5 +85,44 @@ S.deletePlan(keep);
 check("delete removes it from the list", S.listPlans().some((e) => e.id === keep), false);
 check("delete removes the stored plan", S.loadPlan(keep), null);
 
+// --- Two plans are never indistinguishable ---------------------------------
+//
+// Recipe plus date is what a student recognises, so it stays the label wherever
+// it is unambiguous. Clicking "New plan" on a ?recipe=X Canvas link makes it
+// ambiguous immediately: the second plan inherits the same prefilled recipe and
+// the same date, and the picker offered two identical rows with no way to tell
+// which one held the work.
+{
+  const at = (h, m) => new Date(2026, 6, 29, h, m).getTime();
+  const entry = (id, title, date, name, updatedAt) => ({ id, title, date, name, updatedAt });
+
+  check("distinct plans keep the label a student recognises",
+    S.planLabels([entry("a", "One", "2026-07-29", "", at(9, 0)), entry("b", "Two", "2026-07-29", "", at(9, 0))]),
+    ["One — 2026-07-29", "Two — 2026-07-29"]);
+
+  check("the name separates them when there is one",
+    S.planLabels([entry("a", "One", "2026-07-29", "Ana", at(9, 0)), entry("b", "One", "2026-07-29", "Ben", at(9, 0))]),
+    ["One — 2026-07-29 · Ana", "One — 2026-07-29 · Ben"]);
+
+  check("otherwise the time it was last saved does",
+    S.planLabels([entry("a", "One", "2026-07-29", "", at(9, 5)), entry("b", "One", "2026-07-29", "", at(11, 40))]),
+    ["One — 2026-07-29 · saved 09:05", "One — 2026-07-29 · saved 11:40"]);
+
+  // The exact case that was verified broken: same recipe, same day, nothing
+  // else filled in yet, saved in the same minute.
+  check("and an ordinal is the floor, so the list is always readable",
+    S.planLabels([entry("a", "One", "2026-07-29", "", at(9, 5)), entry("b", "One", "2026-07-29", "", at(9, 5))]),
+    ["One — 2026-07-29 · saved 09:05 (1)", "One — 2026-07-29 · saved 09:05 (2)"]);
+}
+
+// The name is carried on the index entry for exactly that reason.
+{
+  const plan = createPlan({ recipe: "Piccata" });
+  plan.student.name = "Ana";
+  S.savePlan(plan);
+  check("the index remembers whose plan it is",
+    S.listPlans().find((e) => e.id === plan.id).name, "Ana");
+}
+
 console.log(failures === 0 ? "\nAll checks passed." : `\n${failures} FAILED`);
 process.exit(failures === 0 ? 0 : 1);
