@@ -43,10 +43,16 @@
 <!-- Every section is rendered by its view module in js/views/. -->
 <main id="sections"></main>
 
+<!-- The printed sheet. Hidden on screen and the ONLY thing shown in print:
+     composed by js/views/printout.js rather than being this page with its
+     chrome hidden, which is why nothing above needs a print stylesheet any
+     more. -->
+<div id="printout" class="printout" aria-hidden="true"></div>
+
 <footer class="no-print">
   <p>
-    When you're done, print to PDF and upload it to the Canvas assignment.
-    Suggested filename: <code>LastName-Recipe-Mise.pdf</code>
+    Print this and take it to your station — it's a working sheet, so write on it.
+    Save a PDF too if your teacher asks for one.
   </p>
 </footer>
 

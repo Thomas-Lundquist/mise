@@ -1135,103 +1135,144 @@ input[type="checkbox"] {
   .field--tiny, .field--narrow { flex: 1 1 6rem; }
 }
 
-/* ---------- Print ---------- */
+/* ---------- The printed sheet ---------- */
+
+/* Composed by js/views/printout.js and hidden on screen. Printing used to be
+   this page with its chrome hidden by CSS, which said the ingredients twice,
+   said the steps twice, and printed form controls as underlined blanks so the
+   result read like a half-filled worksheet. Nothing above this line prints any
+   more. */
+.printout { display: none; }
 
 @media print {
-  @page { margin: 12mm; }
+  @page { size: letter portrait; margin: 12mm; }
 
-  body {
+  /* Sizes in pt and mm, never px or rem: this is paper. */
+  html, body {
+    margin: 0;
+    padding: 0;
     background: #fff;
-    font-size: 10.5pt;
-    padding: 0;
+    color: #000;
+    font-size: 10pt;
   }
 
-  .no-print,
-  .section-nav,
-  .masthead__row,
-  .plan-bar,
+  /* The entire screen app. */
+  .masthead,
+  #sections,
   footer,
-  .banner { display: none !important; }
+  .banner,
+  .no-print { display: none !important; }
 
-  .masthead { position: static; border: none; padding: 0; }
-  main { max-width: none; padding: 0; }
+  .printout { display: block; }
 
-  .card {
-    border: none;
-    padding: 0;
-    margin: 0 0 0.6rem;
-    break-inside: auto;
+  /* Two sheets: gather, then cook. Both go to the station. */
+  .sheet { break-after: page; }
+  .sheet:last-child { break-after: auto; }
+
+  .sheet__head {
+    border-bottom: 1pt solid #000;
+    padding-bottom: 2mm;
+    margin-bottom: 4mm;
   }
-  .card > h2 { font-size: 1rem; border-bottom-width: 1px; margin-bottom: 0.4rem; }
+  /* Identity leads every sheet. Once they are separated the second one is
+     anonymous otherwise, and a class set produces thirty of them. */
+  .sheet__identity { font-family: var(--mono); font-size: 8.5pt; margin: 0 0 1.5mm; }
+  .sheet__title { font-size: 15pt; margin: 0; }
+  .sheet__sub { font-size: 9pt; margin: 1mm 0 0; }
 
-  /* Two sheets, deliberately. Sections 1-4 are the setup checklist; the plan
-     gets a page of its own with room to breathe. Both go in the recipe book. */
-  #section-plan { break-before: page; }
-  .print-identity {
-    display: block;
+  .sheet__readiness {
     font-family: var(--mono);
     font-size: 9pt;
-    border-bottom: 1px solid var(--ink);
-    padding-bottom: 0.2rem;
-    margin-bottom: 0.5rem;
+    border: 0.5pt solid #000;
+    padding: 1.5mm 2mm;
+    margin: 0 0 4mm;
   }
+  .sheet__numbers { font-size: 11pt; margin: 0 0 4mm; }
 
-  /* Fields print as filled-in lines, not as form controls. */
-  input[type="text"],
-  input[type="date"],
-  input[type="time"],
-  input[type="number"],
-  select {
-    border: none;
-    border-bottom: 1px solid var(--line-strong);
-    border-radius: 0;
-    padding: 0 0 1px;
-    min-height: 0;
-    background: none;
-    -webkit-appearance: none;
-    appearance: none;
+  .sheet__block { margin-bottom: 5mm; break-inside: avoid; }
+  .sheet__h {
+    font-size: 8.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    border-bottom: 0.5pt solid #000;
+    padding-bottom: 0.8mm;
+    margin: 0 0 2mm;
   }
-  .icon-btn, .btn { display: none !important; }
-  .card--optional > summary > h2::after,
-  .card__optional,
-  .card__adds,
-  .plan-options { display: none !important; }
-  .card--optional > summary { list-style: none; }
+  .sheet__h4 { font-size: 8.5pt; margin: 0 0 1mm; }
+  .sheet__group { break-inside: avoid; margin-bottom: 2.5mm; }
+  .sheet__stations { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3mm; }
+  .sheet__list { margin-left: 5mm; list-style: disc; font-size: 9.5pt; }
+  .sheet__list li { margin-bottom: 0.8mm; }
+  .sheet__note { font-size: 8.5pt; font-style: italic; margin: 0 0 2mm; max-width: 80%; }
 
-  /* Colour is never the only signal, but where it does appear it has to
-     survive the printer rather than be dropped as a background. */
-  .timeline__track .block, .tag, .timeline__over, .panel--warn, .board-warning,
-  .timeline__track .block__notch-label {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
-  .timeline { overflow: visible; }
-  .timeline__track .block { font-size: 8pt; }
-  .timeline__track .block__time { color: var(--ink); }
-
-  .panel, .pull-list, .recipe { break-inside: avoid; }
-  .equip-list__note, .nudge, .confirm { display: none; }
-
-  /* The big-ideas pass is a question being asked, not part of the plan. Its
-     headings ARE part of the plan, so they print — as headings, not as boxes. */
-  .big-idea-prompt { display: none !important; }
-  .big-idea { border-left: none; padding-left: 0; margin-bottom: 0.5rem; }
-  .big-idea__name {
-    border: none;
-    font-weight: 700;
-    padding: 0;
-  }
-
-  /* An unaccepted guess is not part of the plan, so it has no business on the
-     paper. What the student kept prints as ordinary equipment, because by then
-     it is their answer and not ours. */
-  .chip--guess { display: none !important; }
-
-  /* Readiness is the first thing a teacher wants at the top of the sheet. */
-  .readiness {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
+  /* Checkboxes, because the paper is a working document and not a receipt.
+     Drawn in CSS rather than typed as ☐, which not every printer font carries
+     and which silently becomes a blank square when it is missing. */
+  .ticklist { list-style: none; margin: 0; font-size: 9.5pt; }
+  .ticklist--cols { columns: 2; column-gap: 6mm; }
+  .ticklist__item {
+    display: flex;
+    gap: 2mm;
+    align-items: baseline;
     break-inside: avoid;
+    padding: 0.5mm 0;
   }
+  .tickbox {
+    border: 0.5pt solid #000;
+    width: 3.5mm;
+    height: 3.5mm;
+    flex: none;
+    display: inline-block;
+  }
+
+  .sheet__table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+  .sheet__table th {
+    text-align: left;
+    font-size: 7.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-bottom: 0.5pt solid #000;
+    padding: 0 2mm 0.8mm 0;
+  }
+  .sheet__table td {
+    vertical-align: top;
+    padding: 1.3mm 2mm 1.3mm 0;
+    border-bottom: 0.25pt solid #999;
+  }
+  .sheet__bowlname { font-weight: 700; }
+
+  /* The running order. No fills anywhere: a solid block per step, times a
+     hundred and eighty students, is a toner cartridge. Rules and weight carry
+     the structure instead. */
+  .run__time { font-family: var(--mono); font-weight: 600; white-space: nowrap; }
+  .run__name { font-weight: 700; }
+  .run__tag {
+    border: 0.5pt solid #000;
+    font-size: 7pt;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0 1mm;
+    margin-left: 1.5mm;
+    white-space: nowrap;
+  }
+  .run__tag--warn { font-weight: 700; }
+  .run__context,
+  .run__checks,
+  .run__shape,
+  .run__source { display: block; font-size: 8pt; }
+  .run__context { font-style: italic; }
+  .run__checks { font-weight: 600; }
+  /* Where the number came from, on every row, so a guess never prints looking
+     like something the recipe said. */
+  .run__source { font-style: italic; }
+  .run__long { white-space: nowrap; }
+  /* Prep is the orderless block at the front. A left edge says so with a rule
+     rather than a fill. */
+  .run__step--prep .run__time { border-left: 1.5pt solid #000; padding-left: 1.5mm; }
+  /* Hands free reads as the negative space it is. */
+  .run__gap td { border-bottom: none; font-style: italic; font-size: 9pt; }
+  .run__actual { width: 24mm; }
+  .blank { display: block; border-bottom: 0.5pt solid #000; height: 4.5mm; width: 22mm; }
+
+  .printout__empty { font-size: 11pt; }
 }

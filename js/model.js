@@ -224,9 +224,11 @@ export function createStep({
     // than a number. Kept as text because a range is what was READ, and the
     // board has to be able to say which end of it the plan was built on.
     //
-    // Defaults to the number itself, so a step built in code — the demo, a
-    // test — reads back exactly as one typed by hand.
-    stated: stated || (mins > 0 ? String(mins) : ""),
+    // Empty means the card never said, which is NOT the same as "no time": a
+    // student can put a number on a step the recipe left as a cue. The printed
+    // sheet leans on exactly this distinction to decide whose number it is
+    // printing, so it must never be filled in on a guess.
+    stated,
     // What you accomplish, broken into what you actually do. One segment is the
     // normal case and reads exactly like a plain step.
     segments: shape ? segmentsForShape(shape, mins) : [createSegment({ mins, hands })],

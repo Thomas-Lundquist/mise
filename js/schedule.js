@@ -331,6 +331,43 @@ export function planSpan(plan, ranges) {
   return { start, end };
 }
 
+// --- Hands free -----------------------------------------------------------
+
+// Every stretch a cook's hands are actually occupied, in time order.
+//
+// Counted from the SEGMENTS, so the minute you stand over a pan to flip a
+// cutlet counts as busy even though the board draws it as a notch on the dish
+// rather than as a block on your lane. Drawing and availability are different
+// questions and only this one decides whether you have time to wash up.
+export function handsBlocks(plan, ranges, cook = 0) {
+  const out = [];
+  for (const step of plan.steps) {
+    const range = ranges.get(step.id);
+    if (!range || (step.cook || 0) !== cook) continue;
+    for (const part of range.segments) {
+      if (part.seg.hands && part.seg.mins > 0) out.push({ start: part.start, end: part.end });
+    }
+  }
+  return out.sort((a, b) => a.start - b.start);
+}
+
+// The gaps between them, across the WHOLE plan rather than between a cook's own
+// first and last job — somebody with a single three-minute task is idle almost
+// throughout, and bounding it to their own work would report the opposite.
+//
+// Shared, because the board and the printed sheet must never disagree about
+// when a student is free.
+export function idleGaps(plan, ranges, span, cook = 0) {
+  const gaps = [];
+  let cursor = span.start;
+  for (const busy of handsBlocks(plan, ranges, cook)) {
+    if (busy.start > cursor) gaps.push({ start: cursor, end: busy.start });
+    cursor = Math.max(cursor, busy.end);
+  }
+  if (cursor < span.end) gaps.push({ start: cursor, end: span.end });
+  return gaps;
+}
+
 // --- What extra hands cannot fix ------------------------------------------
 
 // A recipe's cooking steps happen one after another — you cannot sear before

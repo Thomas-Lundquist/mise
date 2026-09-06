@@ -503,7 +503,10 @@ function statedField(ctx, step, label) {
       autocomplete: "off",
       placeholder: "—",
       "aria-label": label,
-      value: step.stated || "",
+      // Falls back to the number the step already carries, so a step built
+      // anywhere but this row still shows its time — without that standing in
+      // as a claim about where the number came from.
+      value: (step.stated || "").trim() || (stepMins(step) > 0 ? String(stepMins(step)) : ""),
       onInput: (e) => { setStatedMinutes(step, e.target.value); save(); },
       onChange: refresh,
     }),

@@ -40,8 +40,14 @@ export function buildDemoPlan() {
   // --- Steps ---------------------------------------------------------------
   // `lines` is the step broken into timed pieces. A one-minute hands-on line
   // between two waiting lines is what becomes a notch on the board.
+  // `stated` is what the recipe card says. Prep steps deliberately have none —
+  // no recipe ever times its own knife work — so the worked example shows both
+  // kinds of row, and both kinds of "actual" blank, on the printed sheet.
   const add = (recipe, { name, mins, hands, prep = false, uses = [], note = "", lines = null }) => {
-    const step = createStep({ recipeId: recipe.id, name, mins, hands, prep });
+    const step = createStep({
+      recipeId: recipe.id, name, mins, hands, prep,
+      stated: prep ? "" : String(mins),
+    });
     step.equipmentIds = uses.map((n) => gear[n].id);
     step.note = note;
     if (lines) {

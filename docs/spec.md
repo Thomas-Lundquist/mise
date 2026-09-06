@@ -441,28 +441,63 @@ finishing the sheet require planning something untrue.
 
 ## 7. The printed artifact
 
-> **Reopened 2026-09-05, and the question is purpose, not layout.** What the
-> paper is *for* was inherited from the original spec and never re-examined: a
-> gate to hand in, a working sheet at the stove, and a permanent record are
-> three different documents. Nothing below is being built against until that is
-> settled — see the beads issue "Rethink the printout".
->
-> One thing is already known to be wrong whatever the answer: print is the input
-> form with its chrome hidden, so sheet one prints the ingredients twice (the
-> list in §2 and the bowl assignment in §4) and the steps twice (the method in
-> §2 and the equipment pass in §3).
+> **Settled 2026-09-06: the paper is a WORKING SHEET AT THE STOVE.** Not a gate
+> handed in on Canvas, not a permanent record for the recipe book. Those were
+> the three candidates and they are three different documents; this is the one.
 
-The PDF is the deliverable and it goes in a recipe book.
+It is **composed**, not filtered. `js/views/printout.js` builds a document of
+its own from the plan, into a `#printout` container that is the only thing
+`@media print` shows. Printing used to be this page with its chrome hidden by
+CSS, which is why it said the ingredients twice (the list in §2 and the bowl
+assignment in §4) and the steps twice (the method in §2 and the equipment pass
+in §3), printed form controls as underlined blanks, and needed a `beforeprint`
+listener to force the folded sections open. That listener is gone.
+
+### The two sheets
+
+**Sheet one — Before you start.** The gathering sheet, in the order decided
+2026-09-04: the full ingredient list as a tick-off checklist, then the pull list
+grouped by station, then the bowls with what goes in each and which step it has
+to be ready before. Headed by the one-line readiness summary (§5), because
+whatever else the paper is, a teacher wants to see at a glance that the thinking
+happened.
+
+**Sheet two — At the stove.** A **running order**: one pass down the clock
+carrying every step and every stretch where a pair of hands is free, then the
+clashes in words, then the notes.
+
+> **There is no timeline on the paper.** The board is the planning artefact and
+> belongs on screen; at a stove the question is "what do I do next", which a
+> time-ordered list answers better than a Gantt. A printed Gantt is also exactly
+> the wall of dark fill the toner rule below forbids, and the overlap it teaches
+> has already been taught by the time anything is printed. This is the one part
+> of the stove-sheet decision that was inferred rather than stated — reversing it
+> means putting the board back on sheet two.
+
+What comes off the paper, decided with the purpose: the recipe-vs-your-plan
+comparison, "where your time goes", the recipe's own claimed times, the review
+nudge, and empty note boxes. What stays: the hands-free gaps and the clashes,
+because you act on both while cooking.
+
+### Rules
 
 - **Clock times must be on it** — the one thing a student needs at the stove.
-- **Nothing may be silently dropped.** Overlapping blocks pack into sub-columns
-  rather than painting over each other.
-- **Two sheets, deliberately.** Sections 1–4 on page one (the ingredient list,
-  pull list and bowls double as a setup checklist), the plan on page two with
-  room to breathe.
-- Identity (name, recipes, date) repeats on **every** page.
+- **Nothing may be silently dropped.** Every step appears exactly once, and the
+  mise block appears as one row rather than one row per prep task, because prep
+  is scheduled with no internal order (§5) and six exact minutes would claim a
+  precision the scheduler never asserted.
+- **An estimate must print as an estimate.** Every row says where its number
+  came from, and a time the student supplied — rather than read off the card —
+  prints beside a blank to write the actual in. `step.stated` is what carries
+  that distinction, which is why it must never be auto-filled from a number the
+  app already had.
+- Identity (name, recipes, date, period) leads **each sheet**.
+- **No large areas of dark fill.** A solid block per step, times a hundred and
+  eighty students, is a toner cartridge. Rules and weight carry the structure.
+- Checkboxes, because it is a working document and not a receipt.
 - Black and white, no interface chrome, no instructions addressed to a cursor.
 - Every colour distinction also carries a text label.
+- Sizes in `pt` and `mm`, never `px` or `rem`. This is paper.
 
 ## 8. Teacher configuration
 
@@ -547,7 +582,11 @@ Honest list, so none of it gets assumed:
 - **`js/config.js` ships placeholder bell times.** Replace `PERIODS` before
   students use it.
 - **Print has not been checked in a real print preview**, only reasoned about.
-  Page breaks in particular are unconfirmed.
+  Page breaks in particular are unconfirmed — and the printed sheet was rewritten
+  from scratch on 2026-09-06, so it has *never* met a printer.
+- **The `no-print` class is now vestigial.** Nothing on screen prints at all, so
+  the ~35 uses of it across the views no longer do anything. They are harmless
+  and were left rather than churned through in the same change.
 - **Narrow-viewport layout has not been checked on a real 360px screen.**
 - The board has not been driven in a browser end to end; views are covered by a
   render smoke test and the scheduler by unit tests.
@@ -565,6 +604,7 @@ Settled: recipe stays outside the app (§3) · sections follow reading order (§
 steps entered forward, scheduled backward (§3) · recipes replace "parts of a
 dish" (§3) · equipment is a pass after the method (§3) · full ingredient list,
 assigned to bowls later (§4.2) · hardest-step prediction cut (§4.5) · station-level contention, oven only (§4.1) ·
+**what the printout is for — a working sheet at the stove (§7)** ·
 "nothing" is a valid equipment answer (§4.1) · warn-never-block (§6) · one board
 with free placement as a toggle (§4.4) · two printed sheets (§7) · sessionStorage
 (§10).
@@ -576,7 +616,8 @@ Worth revisiting once students have used it, but not holding anything up:
 - Whether the one bottom-up review pass catches as much as the old backward
   elicitation did.
 - Whether one oven warning is too few in practice.
-- **What the printout is for** (§7), which decides what goes on it.
+- Whether sheet two wants the board on it after all (§7). The running order was
+  inferred from "working sheet at the stove", not stated.
 - Whether the readiness line reads as help or as a grade. It is deliberately
   neither a score nor a gate, but a student may not read it that way.
 - **How many students skip the big-ideas pass** (§4.0), and whether the ones who

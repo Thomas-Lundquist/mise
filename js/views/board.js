@@ -20,7 +20,7 @@ import {
 } from "../model.js";
 import {
   resolveSchedule, computeConflicts, describeConflict, planSpan, resolvedFoodUp, laneForStep,
-  bindingChain,
+  bindingChain, idleGaps, handsBlocks,
 } from "../schedule.js";
 import { readiness, sayNeeds } from "../readiness.js";
 import { clockToMinutes, minutesToClock, formatDuration, formatShort } from "../time.js";
@@ -735,23 +735,15 @@ function renderWhereTimeGoes(view) {
 // read as "busy throughout", which is the opposite of what a kitchen manager
 // needs to see.
 function renderIdle(view) {
-  const { span, cooks, handsItems } = view;
+  const { plan, ranges, span, cooks } = view;
 
   const lanes = Array.from({ length: cooks }, (_, cook) => {
-    const busy = handsItems(cook).map((item) => item.range).sort((a, b) => a.start - b.start);
-    const gaps = [];
-    let cursor = span.start;
-    for (const range of busy) {
-      if (range.start > cursor) gaps.push({ start: cursor, end: range.start });
-      cursor = Math.max(cursor, range.end);
-    }
-    if (cursor < span.end) gaps.push({ start: cursor, end: span.end });
-
+    const gaps = idleGaps(plan, ranges, span, cook);
     return {
       label: cooks === 1 ? "You" : `Cook ${cook + 1}`,
       gaps,
       total: gaps.reduce((sum, gap) => sum + (gap.end - gap.start), 0),
-      working: busy.length > 0,
+      working: handsBlocks(plan, ranges, cook).length > 0,
     };
   });
 

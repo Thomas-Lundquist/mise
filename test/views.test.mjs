@@ -68,6 +68,9 @@ const views = {};
 for (const name of ["today", "recipes", "equipment", "mise", "board"]) {
   views[name] = await import(`../js/views/${name}.js`);
 }
+// Not one of the five: the printed sheet is a document of its own, takes the
+// plan rather than a ctx, and has no status line.
+const printout = await import("../js/views/printout.js");
 
 let failures = 0;
 function check(label, actual, expected) {
@@ -94,6 +97,13 @@ function allText(node, out = []) {
   if (node.textContent && (!node.childNodes || node.childNodes.length === 0)) out.push(node.textContent);
   for (const child of node.childNodes || []) allText(child, out);
   return out;
+}
+
+function countClass(node, className, n = 0) {
+  if (!node) return n;
+  if (typeof node.className === "string" && node.className.split(" ").includes(className)) n += 1;
+  for (const child of node.childNodes || []) n = countClass(child, className, n);
+  return n;
 }
 
 function fire(node, event, payload = {}) {
@@ -502,6 +512,92 @@ function samplePlan() {
     text.includes("is what sets the length"), true);
   check("and says plainly that hands will not help it",
     text.includes("No number of cooks makes it shorter"), true);
+}
+
+// --- The printed sheet -----------------------------------------------------
+//
+// A WORKING SHEET AT THE STOVE (teacher decision, 2026-09-06) — not the input
+// form with its chrome hidden, which is what it used to be. That old printout
+// said the ingredients twice and the steps twice, and printed form controls as
+// underlined blanks so the whole thing read like a half-filled worksheet.
+{
+  const plan = samplePlan();
+  plan.student.name = "Ana";
+  const tree = printout.render(plan);
+  const text = allText(tree).join(" | ");
+
+  for (const phrase of ["Before you start", "At the stove", "Running order", "Start cooking"]) {
+    check(`the sheet says "${phrase}"`, text.includes(phrase), true);
+  }
+
+  // Screen-only teaching. Useless with flour on your hands, and the decision
+  // was explicit that it comes off the paper.
+  for (const phrase of ["Where your time goes", "The recipe says", "Plan options", "Before you move on"]) {
+    check(`and does NOT say "${phrase}"`, text.includes(phrase), false);
+  }
+
+  check("it carries clock times, which is the one thing needed at a stove",
+    /\d\d:\d\d/.test(text), true);
+  check("identity leads both sheets, so a separated page two is not anonymous",
+    countClass(tree, "sheet__identity"), 2);
+  check("and it is two sheets", countClass(tree, "sheet"), 2);
+}
+
+// Prep has no internal order — that is what lets a team split it — so printing
+// one row per prep step at an exact minute would claim precision the scheduler
+// never asserted.
+{
+  const plan = samplePlan();
+  plan.steps[0].prep = true;
+  plan.steps[1].prep = true;
+  const tree = printout.render(plan);
+  const text = allText(tree).join(" | ");
+
+  check("the mise block prints as one row", countClass(tree, "run__mise"), 1);
+  check("saying so in words", text.includes("any order"), true);
+  check("and naming what is in it",
+    text.includes("Pound and dredge chicken") && text.includes("Sear chicken cutlets"), true);
+}
+
+// A number the app or the student guessed must never print looking like one the
+// recipe stated. This is the whole reason `stated` exists.
+{
+  const plan = M.createPlan({ recipe: "Chicken", foodUp: "12:35" });
+  const recipe = plan.recipes[0];
+  M.appendStep(plan, M.createStep({
+    recipeId: recipe.id, name: "Simmer the sauce", mins: 20, shape: "hands", stated: "20",
+  }));
+  M.appendStep(plan, M.createStep({
+    recipeId: recipe.id, name: "Dice the onion", mins: 4, shape: "hands", stated: "",
+  }));
+
+  const tree = printout.render(plan);
+  const text = allText(tree).join(" | ");
+  check("a time read off the card is labelled as the recipe's",
+    text.includes("recipe"), true);
+  check("a time the student supplied is labelled as theirs",
+    text.includes("your estimate"), true);
+  check("and only the guessed one gets a blank to measure against",
+    countClass(tree, "blank"), 1);
+}
+
+// Never throws on the shapes a student can actually leave behind.
+{
+  let threw = null;
+  try {
+    printout.render(M.createPlan());
+    const solo = M.createPlan({ recipe: "Toast" });
+    M.appendStep(solo, M.createStep({
+      recipeId: solo.recipes[0].id, name: "Sauté until golden", mins: 0, shape: "hands",
+    }));
+    printout.render(solo);
+    const group = samplePlan();
+    group.schedule.cooks = 3;
+    printout.render(group);
+  } catch (err) {
+    threw = err.message;
+  }
+  check("the sheet builds on an empty plan, an untimed step and a group", threw, null);
 }
 
 console.log(failures === 0 ? "\nAll checks passed." : `\n${failures} FAILED`);

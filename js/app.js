@@ -8,7 +8,11 @@
 //   2  The recipe   name, its own claimed times, ingredients, steps
 //   3  Equipment    read back through the method; a recipe never lists this
 //   4  Mise         which ingredients go in at the same moment
-//   5  The plan     the board, and the printout
+//   5  The plan     the board
+//
+// The printed sheet is not one of them. It is a document of its own, composed
+// by views/printout.js from the same plan, because printing this page with its
+// chrome hidden produced a half-filled worksheet that said everything twice.
 //
 // One scrolling page, one navigation model. The previous build had a flat
 // scroll for sections 1-3 and a three-view tabbed mini-app for section 4, which
@@ -27,6 +31,7 @@ import * as recipes from "./views/recipes.js";
 import * as equipment from "./views/equipment.js";
 import * as mise from "./views/mise.js";
 import * as board from "./views/board.js";
+import * as printout from "./views/printout.js";
 
 // --- Teacher configuration, off the embed URL -----------------------------
 
@@ -128,8 +133,18 @@ function refresh() {
   save();
   const focus = snapshotFocus();
   renderSections();
+  renderPrintout();
   renderPlanBar();
   restoreFocus(focus);
+}
+
+// Kept up to date with everything else rather than built on beforeprint. That
+// event does not fire everywhere — iOS Safari's share-sheet print is the case
+// that matters here — and an empty sheet at the printer is not a risk worth
+// taking to save a few milliseconds a keystroke.
+function renderPrintout() {
+  const target = document.getElementById("printout");
+  if (target) target.replaceChildren(printout.render(plan));
 }
 
 const ctx = { get plan() { return plan; }, save, refresh };
@@ -209,6 +224,7 @@ function switchTo(next, message = "") {
   plan = next;
   savePlan(plan);
   renderSections();
+  renderPrintout();
   renderPlanBar(message);
 }
 
@@ -338,18 +354,12 @@ function initTimer() {
 
 renderNav();
 renderSections();
+renderPrintout();
 renderPlanBar();
 initStorageWarning();
 initTimer();
 
 document.getElementById("print-btn").addEventListener("click", () => window.print());
-
-// A folded section still has to print — the pull list and the bowls are half of
-// what page one is for. Opening them before the print dialog is the only
-// reliable way, since CSS cannot force <details> open.
-window.addEventListener("beforeprint", () => {
-  for (const node of document.querySelectorAll("details.card")) node.open = true;
-});
 
 // Work lives in sessionStorage, so closing the tab loses it. Say so first.
 window.addEventListener("beforeunload", (event) => {
