@@ -19,7 +19,7 @@ import {
 } from "./config.js";
 import { clockToMinutes, todayISO, tomorrowISO, parseStatedMinutes } from "./time.js";
 
-export const PLAN_VERSION = 9;
+export const PLAN_VERSION = 10;
 
 export function newId(prefix = "id") {
   if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
@@ -67,6 +67,7 @@ export function foodUpFor(plan) {
 // --- Construction ---------------------------------------------------------
 
 export function createPlan({ recipe = "", foodUp = "", periodId = null, mode = "guided" } = {}) {
+  const first = createRecipe(recipe);
   return {
     version: PLAN_VERSION,
     id: newId("plan"),
@@ -82,7 +83,16 @@ export function createPlan({ recipe = "", foodUp = "", periodId = null, mode = "
 
     // One recipe by default. A second is one button away, for the lab that
     // hands out a protein and a starch on separate cards.
-    recipes: [createRecipe(recipe)],
+    recipes: [first],
+
+    // The layer between a recipe and its steps: the three or four big things
+    // you have to do. Named FIRST, before any step exists, which is why this is
+    // a list of its own rather than a label on steps — at the moment a student
+    // names them there is nothing to label.
+    //
+    // Every recipe always has at least one, unnamed, so nothing downstream has
+    // to special-case a plan that skipped the pass.
+    bigIdeas: [createBigIdea(first.id)],
 
     // Typed while reading, in recipe order. Grouping them into bowls happens
     // later, once the steps exist, because a bowl is a *moment* and moments
@@ -138,12 +148,24 @@ export function createRecipe(name = "") {
   return {
     id: newId("recipe"),
     name,
+    // Has the big-ideas pass been dealt with — either named or skipped? The
+    // pass is offered once, before the method, and skipping is a real answer
+    // that has to stick. Without this the prompt would come back on every
+    // render until a step existed.
+    bigIdeasSettled: false,
     // What the recipe *claims* it takes, off its header. Worth capturing: the
     // board compares it against the plan the student just built, and recipe
     // times almost always assume the mise is already done.
     prepMins: null,
     cookMins: null,
   };
+}
+
+// A big idea is one of the three or four things a recipe actually asks you to
+// do. It is an authoring and reading structure, not a scheduling one: the
+// scheduler never looks at it, and grouping steps changes no timing.
+export function createBigIdea(recipeId, name = "") {
+  return { id: newId("idea"), recipeId, name };
 }
 
 export function createIngredient(recipeId, text = "") {
@@ -187,10 +209,15 @@ function segmentsForShape(shape, mins) {
 
 export function createStep({
   recipeId, name = "", mins = 0, hands = true, prep = false, shape = null, stated = "",
+  bigIdeaId = null,
 } = {}) {
   return {
     id: newId("step"),
     recipeId,
+    // Which of the recipe's big ideas this step is one of. Null means "the
+    // first one", which is what a skipped pass and every step written before
+    // this layer existed both resolve to — see bigIdeaForStep().
+    bigIdeaId,
     name,
     // What the recipe card says this takes, in the student's own words off the
     // page: "20", "5-7", or nothing at all when the card gives a cue rather
@@ -309,6 +336,34 @@ export function cookCount(plan) {
 
 export function stepsForRecipe(plan, recipeId) {
   return plan.steps.filter((s) => s.recipeId === recipeId);
+}
+
+export function bigIdeasForRecipe(plan, recipeId) {
+  return (plan.bigIdeas || []).filter((b) => b.recipeId === recipeId);
+}
+
+// A step with no big idea — one typed before the layer existed, or built by the
+// demo — belongs to its recipe's first one. Treating null as "the default"
+// here, once, is what lets every caller ignore the question.
+export function bigIdeaForStep(plan, step) {
+  const ideas = bigIdeasForRecipe(plan, step.recipeId);
+  if (ideas.length === 0) return null;
+  return ideas.find((b) => b.id === step.bigIdeaId) || ideas[0];
+}
+
+export function stepsForBigIdea(plan, bigIdeaId) {
+  return plan.steps.filter((step) => {
+    const idea = bigIdeaForStep(plan, step);
+    return idea !== null && idea.id === bigIdeaId;
+  });
+}
+
+// Is this recipe actually using the layer? One unnamed big idea is the shape a
+// skipped pass leaves behind, and it must read exactly like the flat step list
+// it replaced — no headings, no grouping, nothing to explain.
+export function isGrouped(plan, recipeId) {
+  const ideas = bigIdeasForRecipe(plan, recipeId);
+  return ideas.length > 1 || ideas.some((b) => b.name.trim());
 }
 
 export function ingredientsForRecipe(plan, recipeId) {
@@ -432,8 +487,54 @@ export function appendStep(plan, step) {
   step.start = siblings.length > 0
     ? Math.max(...siblings.map((s) => s.start + stepMins(s)))
     : windowOpens(plan);
-  plan.steps.push(step);
+
+  // A step joins the END OF ITS OWN BIG IDEA, not the end of the recipe. The
+  // scheduler chains a recipe's steps in array order, so if the array order and
+  // the order on screen disagreed the plan would be built in an order the
+  // student never wrote.
+  const order = bigIdeasForRecipe(plan, step.recipeId).map((b) => b.id);
+  const rank = (s) => {
+    const idea = bigIdeaForStep(plan, s);
+    const i = idea ? order.indexOf(idea.id) : -1;
+    return i === -1 ? order.length : i;
+  };
+  const mine = rank(step);
+
+  let insertAt = null;
+  for (let i = plan.steps.length - 1; i >= 0; i--) {
+    const other = plan.steps[i];
+    if (other.recipeId !== step.recipeId) continue;
+    if (rank(other) <= mine) { insertAt = i + 1; break; }
+  }
+  if (insertAt === null) {
+    const firstOfRecipe = plan.steps.findIndex((s) => s.recipeId === step.recipeId);
+    insertAt = firstOfRecipe === -1 ? plan.steps.length : firstOfRecipe;
+  }
+
+  plan.steps.splice(insertAt, 0, step);
   return step;
+}
+
+export function addBigIdea(plan, recipeId, name = "") {
+  const idea = createBigIdea(recipeId, name);
+  plan.bigIdeas.push(idea);
+  return idea;
+}
+
+// Never takes steps with it. They move to the neighbouring big idea, because
+// losing a step to a tidy-up is never the right outcome — the same rule every
+// other delete in this file follows.
+export function removeBigIdea(plan, bigIdeaId) {
+  const idea = plan.bigIdeas.find((b) => b.id === bigIdeaId);
+  if (!idea) return false;
+  const siblings = bigIdeasForRecipe(plan, idea.recipeId);
+  if (siblings.length <= 1) return false;
+
+  const index = siblings.indexOf(idea);
+  const heir = siblings[index - 1] || siblings[index + 1];
+  for (const step of stepsForBigIdea(plan, bigIdeaId)) step.bigIdeaId = heir.id;
+  plan.bigIdeas = plan.bigIdeas.filter((b) => b.id !== bigIdeaId);
+  return true;
 }
 
 // Inserting between two steps is how a forgotten preheat or rest gets back in
@@ -467,6 +568,19 @@ export function moveStep(plan, stepId, direction) {
   const siblings = stepsForRecipe(plan, step.recipeId);
   const target = siblings[siblings.indexOf(step) + direction];
   if (!target) return false;
+
+  // Moving past a big-idea boundary moves the step INTO that big idea rather
+  // than swapping over it. Pressing ↓ on the last step of "Prep the chicken"
+  // means "this belongs to the sauce instead", which is the only reading that
+  // makes sense — and because the step keeps its place in the array, it lands
+  // at the right end of the group it joins.
+  const mine = bigIdeaForStep(plan, step);
+  const theirs = bigIdeaForStep(plan, target);
+  if (mine && theirs && mine.id !== theirs.id) {
+    step.bigIdeaId = theirs.id;
+    return true;
+  }
+
   const i = plan.steps.indexOf(step);
   const j = plan.steps.indexOf(target);
   [plan.steps[i], plan.steps[j]] = [plan.steps[j], plan.steps[i]];
@@ -510,6 +624,7 @@ export function moveSegment(plan, stepId, segmentId, direction) {
 export function addRecipe(plan, name = "") {
   const recipe = createRecipe(name);
   plan.recipes.push(recipe);
+  plan.bigIdeas.push(createBigIdea(recipe.id));
   return recipe;
 }
 
@@ -519,12 +634,19 @@ export function removeRecipe(plan, recipeId, { moveTo = null } = {}) {
   if (plan.recipes.length <= 1) return;
 
   if (moveTo) {
-    for (const step of stepsForRecipe(plan, recipeId)) step.recipeId = moveTo;
+    // The steps survive, so they need a big idea that survives with them. Their
+    // old one belongs to a recipe that is about to stop existing.
+    const heir = bigIdeasForRecipe(plan, moveTo)[0] || addBigIdea(plan, moveTo);
+    for (const step of stepsForRecipe(plan, recipeId)) {
+      step.recipeId = moveTo;
+      step.bigIdeaId = heir.id;
+    }
     for (const ing of ingredientsForRecipe(plan, recipeId)) ing.recipeId = moveTo;
   } else {
     for (const step of stepsForRecipe(plan, recipeId)) removeStep(plan, step.id);
     for (const ing of ingredientsForRecipe(plan, recipeId)) removeIngredient(plan, ing.id);
   }
+  plan.bigIdeas = plan.bigIdeas.filter((b) => b.recipeId !== recipeId);
   plan.recipes = plan.recipes.filter((r) => r.id !== recipeId);
 }
 

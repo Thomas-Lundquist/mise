@@ -53,7 +53,7 @@ the app can be filled in **while reading** rather than after:
 |---|---|---|---|
 | 1 | Today | Name, kitchen, date, period | Before opening the recipe |
 
-| 2 | The recipe | Name, yield, its claimed prep/cook time; ingredients; the method | While reading |
+| 2 | The recipe | Name, its claimed prep/cook time; ingredients; the big ideas, then the method under each | While reading |
 | 3 | Equipment | What each step uses | After the method exists |
 | 4 | Mise en place | Which ingredients go in together | After the method exists |
 | 5 | Your plan | The board, and the printout | Derived |
@@ -106,9 +106,10 @@ plan
 ├─ student      { name, kitchen, date }
 ├─ readToEnd    bool
 ├─ conflictsAccepted  bool
-├─ recipes[]    { id, name, serves, prepMins, cookMins }
+├─ recipes[]    { id, name, prepMins, cookMins, bigIdeasSettled }
+├─ bigIdeas[]   { id, recipeId, name }
 ├─ ingredients[]{ id, recipeId, text, bowlId }
-├─ steps[]      { id, recipeId, name, stated, prep, segments[],
+├─ steps[]      { id, recipeId, bigIdeaId, name, stated, prep, segments[],
 │                 equipmentIds[], noEquipment, note, start, cook }
 ├─ equipment[]  { id, name, station, custom, pulled }
 ├─ bowls[]      { id, label, stepId }
@@ -121,7 +122,51 @@ text on purpose: a range is what was *read*, and the board has to be able to say
 which end of it the plan was built on. The scheduled number lives on the
 segments, and a range is planned on its **top** — plan for the slow case.
 
-### 4.0 Minutes are read, never invented, and never a gate
+### 4.0 Big ideas: the layer between a recipe and its steps
+
+From the teacher's own handwritten workflow:
+
+> 1. Read the recipe — note the prep and cook times. Note the BIG IDEAS.
+> 2. For each BIG IDEA, write out major sub tasks and task times, in order.
+
+So a plan is `recipe → 3-4 big ideas → sub-tasks under each`, not `recipe →
+flat list of transcribed instructions`. Summarising three big ideas replaces
+typing nine method lines, which is where most of the work went.
+
+**They are named FIRST, before any step exists.** That is why `bigIdeas` is a
+list of its own rather than a label on steps: at the moment a student names
+them there is nothing to label.
+
+**And the pass is skippable.** This was the live risk — the design rule is that
+a student must be able to open the app and get a usable plan with almost no
+friction, and a compulsory naming ceremony before you may type a step is exactly
+what that rule forbids. Skipping is one tap and leaves **one unnamed big idea**,
+which renders as precisely the flat step list it replaced: no headings, no
+grouping, nothing to explain. `isGrouped()` is the single place that decides
+which of the two a recipe is showing.
+
+Consequences that fall out of "always at least one":
+
+- `bigIdeaForStep()` resolves a null or unknown `bigIdeaId` to the recipe's
+  **first** big idea. Doing that once, in the model, is what lets every other
+  caller ignore the question — including steps built by the worked example and
+  by tests written before the layer existed.
+- The prompt appears only when a recipe has **no steps yet** and has not been
+  answered, or when the student asks for it again with *"+ Group these into big
+  ideas"*. A restored plan or the worked example is never ambushed by it.
+- Deleting a big idea moves its steps to the neighbour. The last one cannot be
+  deleted. Same rule as everywhere else in §4.3: no delete ever takes work with
+  it.
+
+**Order, not timing.** A big idea is an authoring and reading structure; the
+scheduler never looks at one. But it *does* decide the order steps sit in, and
+the scheduler chains a recipe's steps in array order — so `appendStep()` puts a
+step at the end of **its own big idea**, not the end of the recipe. If those two
+orders disagreed, the plan would be built in an order the student never wrote.
+For the same reason, moving a step past a boundary moves it **into** the
+neighbouring big idea rather than swapping it over one.
+
+### 4.0.1 Minutes are read, never invented, and never a gate
 
 The recipe states its times, and reading them off the card is a skill the app
 must not replace. So the question is **"How long does the recipe say?"**, not
@@ -134,7 +179,7 @@ A step with no time goes in, is carried **unestimated**, is left off the drawn
 timeline, and is counted out loud on the board — the plan is stated as *at least*
 that long, never *exactly*.
 
-### 4.0.1 A step arrives with a shape
+### 4.0.2 A step arrives with a shape
 
 The add row asks for one of three, not for a hands on / hands off binary:
 
@@ -442,7 +487,11 @@ stay teacher-editable in `js/config.js` with no code changes elsewhere.
 - No modelling of other students in the kitchen (§2).
 - **No recipe import, paste box, or database.** The recipe stays where it is;
   the app is a blank slate (§3).
-- No "cook mode" for use at the station. The PDF is the artifact.
+- No "cook mode" for use at the station. The **printed sheet** is the artifact
+  taken to the stove (§7).
+- **No yield, no scaling.** The teacher supplies the recipes, so a lab recipe
+  already yields what the class needs. Yield was specced here and never built;
+  cut 2026-09-06 rather than left as a stub the model did not carry.
 
 ## 10. Code shape
 
@@ -530,6 +579,9 @@ Worth revisiting once students have used it, but not holding anything up:
 - **What the printout is for** (§7), which decides what goes on it.
 - Whether the readiness line reads as help or as a grade. It is deliberately
   neither a score nor a gate, but a student may not read it that way.
+- **How many students skip the big-ideas pass** (§4.0), and whether the ones who
+  skip produce worse plans. The pass is deliberately skippable; if nearly
+  everyone skips it, the answer is better framing, not a locked door.
 - Whether section 3 still earns its place once it is mostly pre-filled by the
   equipment guesses.
 - Whether the board should explain when extra cooks cannot help. Rule 2 above

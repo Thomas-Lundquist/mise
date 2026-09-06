@@ -189,11 +189,18 @@ function samplePlan() {
   const draw = () => views.recipes.render(ctx);
   let tree = draw();
 
+  // Steps live behind the big-ideas pass now. Skipping it is one tap and leaves
+  // exactly the flat list this replaced, which is what the rest of this block
+  // is about.
+  fire(find(tree, `idea-skip-${recipe.id}`), "click");
+  tree = draw();
+  const scope = M.bigIdeasForRecipe(plan, recipe.id)[0].id;
+
   // The button is never disabled. A greyed-out control that does nothing when
   // clicked is indistinguishable from a broken one, and this app warns rather
   // than refuses everywhere else.
-  const addBtn = () => find(tree, `add-step-${recipe.id}`);
-  const hint = () => find(tree, `add-hint-${recipe.id}`);
+  const addBtn = () => find(tree, `add-step-${scope}`);
+  const hint = () => find(tree, `add-hint-${scope}`);
   check("Add step is never disabled", addBtn().attrs.disabled, undefined);
 
   fire(addBtn(), "click");
@@ -204,14 +211,14 @@ function samplePlan() {
   // Minutes are NOT a gate. Recipes are sometimes silent — "sauté until golden
   // brown" gives a cue, not a number — and a student with nothing to read must
   // not be stuck mid-flow.
-  type(find(tree, `add-name-${recipe.id}`), "Dice the tomatoes");
-  type(find(tree, `add-mins-${recipe.id}`), "4");
+  type(find(tree, `add-name-${scope}`), "Dice the tomatoes");
+  type(find(tree, `add-mins-${scope}`), "4");
   fire(addBtn(), "click");
   check("filling name and minutes alone does not add a step", plan.steps.length, 0);
   check("and the hint narrows to what is actually left", hint().textContent,
     "Still needed: whether your hands are on it.");
 
-  fire(find(tree, `add-shape-${recipe.id}-hands`), "click");
+  fire(find(tree, `add-shape-${scope}-hands`), "click");
   fire(addBtn(), "click");
   check("answering both adds the step", plan.steps.length, 1);
   check("with what was typed, as a single timed line",
@@ -221,58 +228,130 @@ function samplePlan() {
   // The order that actually broke: the shape chosen FIRST, then the text
   // fields. Choosing it re-renders, so the captured list was stale from then on.
   tree = draw();
-  fire(find(tree, `add-shape-${recipe.id}-runs`), "click");
+  fire(find(tree, `add-shape-${scope}-runs`), "click");
   tree = draw();
-  type(find(tree, `add-name-${recipe.id}`), "Let it sit");
-  type(find(tree, `add-mins-${recipe.id}`), "10");
-  fire(find(tree, `add-step-${recipe.id}`), "click");
+  type(find(tree, `add-name-${scope}`), "Let it sit");
+  type(find(tree, `add-mins-${scope}`), "10");
+  fire(find(tree, `add-step-${scope}`), "click");
   check("and it still works when the shape is answered first", plan.steps.length, 2);
   check("the waiting answer is kept", plan.steps[1].segments[0].hands, false);
 
   // The shape that makes a plan able to overlap at all, on the first pass,
   // without anyone reopening a finished step to add lines by hand.
   tree = draw();
-  type(find(tree, `add-name-${recipe.id}`), "Simmer the sauce");
-  type(find(tree, `add-mins-${recipe.id}`), "20");
-  fire(find(tree, `add-shape-${recipe.id}-start-then-runs`), "click");
+  type(find(tree, `add-name-${scope}`), "Simmer the sauce");
+  type(find(tree, `add-mins-${scope}`), "20");
+  fire(find(tree, `add-shape-${scope}-start-then-runs`), "click");
   tree = draw();
-  fire(find(tree, `add-step-${recipe.id}`), "click");
+  fire(find(tree, `add-step-${scope}`), "click");
   check("start-then-runs arrives already split into a lead and a wait",
     plan.steps[2].segments.map((seg) => [seg.mins, seg.hands]), [[1, true], [19, false]]);
 
   // A range is what the card says. The app plans on its slow end and says so
   // before the step is even added, which is where the rule is learnt.
   tree = draw();
-  type(find(tree, `add-name-${recipe.id}`), "Sear the cutlets");
-  type(find(tree, `add-mins-${recipe.id}`), "5-7");
-  fire(find(tree, `add-shape-${recipe.id}-hands`), "click");
+  type(find(tree, `add-name-${scope}`), "Sear the cutlets");
+  type(find(tree, `add-mins-${scope}`), "5-7");
+  fire(find(tree, `add-shape-${scope}-hands`), "click");
   tree = draw();
   check("a range is read back before the step is added",
-    find(tree, `add-hint-${recipe.id}`).textContent,
+    find(tree, `add-hint-${scope}`).textContent,
     "Planning for 7 min — the slow end of 5-7.");
-  fire(find(tree, `add-step-${recipe.id}`), "click");
+  fire(find(tree, `add-step-${scope}`), "click");
   check("and the plan is built on the slow case",
     [plan.steps[3].segments[0].mins, plan.steps[3].stated], [7, "5-7"]);
 
   // A card that gives a cue rather than a number must never block the step.
   tree = draw();
-  type(find(tree, `add-name-${recipe.id}`), "Sauté until golden brown");
-  fire(find(tree, `add-shape-${recipe.id}-hands`), "click");
+  type(find(tree, `add-name-${scope}`), "Sauté until golden brown");
+  fire(find(tree, `add-shape-${scope}-hands`), "click");
   tree = draw();
   check("a step with no time says what will happen to it",
-    find(tree, `add-hint-${recipe.id}`).textContent,
+    find(tree, `add-hint-${scope}`).textContent,
     "No time on this one. It'll go in unestimated — the board will remind you.");
-  fire(find(tree, `add-step-${recipe.id}`), "click");
+  fire(find(tree, `add-step-${scope}`), "click");
   check("and goes in anyway rather than stranding the student",
     [plan.steps.length, M.isUnestimated(plan.steps[4])], [5, true]);
 
   // The draft is cleared, not carried into the next step.
   tree = draw();
   check("the draft row is empty again",
-    [find(tree, `add-name-${recipe.id}`).attrs.value, find(tree, `add-mins-${recipe.id}`).attrs.value],
+    [find(tree, `add-name-${scope}`).attrs.value, find(tree, `add-mins-${scope}`).attrs.value],
     ["", ""]);
   check("an untouched row says nothing rather than nagging",
-    find(tree, `add-hint-${recipe.id}`).textContent, "");
+    find(tree, `add-hint-${scope}`).textContent, "");
+}
+
+// --- The big ideas pass ----------------------------------------------------
+//
+// The teacher's own workflow: read the recipe, name the three or four big
+// things you have to do, then write the sub-tasks under each. Offered first,
+// before any step exists — and skippable, so it is never a toll gate.
+{
+  const plan = M.createPlan({ recipe: "Chicken piccata" });
+  const recipe = plan.recipes[0];
+  const ctx = ctxFor(plan);
+  const draw = () => views.recipes.render(ctx);
+  let tree = draw();
+
+  check("a fresh recipe asks for the big ideas first",
+    Boolean(find(tree, `idea-skip-${recipe.id}`)), true);
+  check("and holds the step rows back until it is answered",
+    find(tree, `add-name-${M.bigIdeasForRecipe(plan, recipe.id)[0].id}`), null);
+
+  const first = M.bigIdeasForRecipe(plan, recipe.id)[0];
+  type(find(tree, `idea-name-${first.id}`), "Prep the chicken");
+  fire(find(tree, `idea-add-${recipe.id}`), "click");
+  tree = draw();
+
+  const two = M.bigIdeasForRecipe(plan, recipe.id);
+  check("another big idea can be named", two.length, 2);
+  type(find(tree, `idea-name-${two[1].id}`), "Make the pan sauce");
+  fire(find(tree, `idea-done-${recipe.id}`), "click");
+  tree = draw();
+
+  check("settling keeps the named ones and drops the blanks",
+    M.bigIdeasForRecipe(plan, recipe.id).map((b) => b.name),
+    ["Prep the chicken", "Make the pan sauce"]);
+  check("the recipe is now grouped", M.isGrouped(plan, recipe.id), true);
+  check("and every big idea has its own add row",
+    M.bigIdeasForRecipe(plan, recipe.id).every((b) => Boolean(find(tree, `add-name-${b.id}`))),
+    true);
+
+  // The point of a per-group add row: a step lands where you typed it.
+  const sauce = M.bigIdeasForRecipe(plan, recipe.id)[1];
+  type(find(tree, `add-name-${sauce.id}`), "Deglaze the pan");
+  type(find(tree, `add-mins-${sauce.id}`), "6");
+  fire(find(tree, `add-shape-${sauce.id}-hands`), "click");
+  fire(find(tree, `add-step-${sauce.id}`), "click");
+  check("a step joins the big idea whose row it was typed in",
+    M.stepsForBigIdea(plan, sauce.id).map((s) => s.name), ["Deglaze the pan"]);
+  check("and not the other one", M.stepsForBigIdea(plan, first.id).length, 0);
+}
+
+// Skipping leaves exactly what was there before: one plain list, no headings.
+{
+  const plan = M.createPlan({ recipe: "Salsa" });
+  const recipe = plan.recipes[0];
+  const ctx = ctxFor(plan);
+  let tree = views.recipes.render(ctx);
+
+  fire(find(tree, `idea-skip-${recipe.id}`), "click");
+  tree = views.recipes.render(ctx);
+
+  check("skipping leaves one unnamed big idea and no grouping",
+    [M.bigIdeasForRecipe(plan, recipe.id).length, M.isGrouped(plan, recipe.id)], [1, false]);
+  check("and the step row is right there",
+    Boolean(find(tree, `add-name-${M.bigIdeasForRecipe(plan, recipe.id)[0].id}`)), true);
+}
+
+// A plan that already has steps and never answered — the worked example, a
+// restored file — must not be ambushed by the prompt.
+{
+  const plan = samplePlan();
+  const tree = views.recipes.render(ctxFor(plan));
+  check("a plan that already has steps is not asked to name big ideas",
+    find(tree, `idea-skip-${plan.recipes[0].id}`), null);
 }
 
 // --- Adding an ingredient --------------------------------------------------

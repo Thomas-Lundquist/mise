@@ -5,7 +5,7 @@
 // the two things a recipe never tells you and they have to work out themselves.
 //
 //   1  Today        who you are, which period, when food is up
-//   2  The recipe   name, yield, its own claimed times, ingredients, steps
+//   2  The recipe   name, its own claimed times, ingredients, steps
 //   3  Equipment    read back through the method; a recipe never lists this
 //   4  Mise         which ingredients go in at the same moment
 //   5  The plan     the board, and the printout

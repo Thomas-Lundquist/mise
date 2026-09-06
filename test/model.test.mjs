@@ -6,6 +6,7 @@
 // outcome, and every one of these cascades used to be untested.
 
 import {
+  bigIdeasForRecipe, stepsForBigIdea, addBigIdea, removeBigIdea, isGrouped, bigIdeaForStep,
   createPlan, createStep, appendStep, insertStepBefore, removeStep, moveStep,
   addRecipe, removeRecipe, addIngredient, removeIngredient,
   addEquipment, removeEquipment, addBowl, removeBowl,
@@ -415,6 +416,89 @@ const add = (plan, recipeId, name, mins = 5, hands = true) =>
   const step = add(plan, plan.recipes[0].id, "Dice the onion", 4, true);
   check("the last line cannot be removed", removeSegment(plan, step.id, step.segments[0].id), false);
   check("so the step keeps its duration", stepMins(step), 4);
+}
+
+// --- Big ideas -------------------------------------------------------------
+//
+// The layer between a recipe and its steps, named before any step exists. An
+// authoring and reading structure, not a scheduling one — but it does decide
+// the ORDER steps sit in, and the scheduler chains a recipe's steps in array
+// order, so the two must never disagree.
+{
+  const plan = createPlan({ recipe: "Chicken piccata" });
+  const recipe = plan.recipes[0];
+
+  check("every recipe starts with one unnamed big idea",
+    bigIdeasForRecipe(plan, recipe.id).map((b) => b.name), [""]);
+  check("which is not 'grouped' — it reads as the plain list it replaced",
+    isGrouped(plan, recipe.id), false);
+
+  const prep = bigIdeasForRecipe(plan, recipe.id)[0];
+  prep.name = "Prep the chicken";
+  const sauce = addBigIdea(plan, recipe.id, "Make the pan sauce");
+  check("naming one is what turns grouping on", isGrouped(plan, recipe.id), true);
+
+  const mk = (idea, name) =>
+    appendStep(plan, createStep({ recipeId: recipe.id, bigIdeaId: idea.id, name, mins: 4, shape: "hands" }));
+
+  // Deliberately out of order: the sauce step is written first.
+  const deglaze = mk(sauce, "Deglaze the pan");
+  const pound = mk(prep, "Pound the cutlets");
+  const dredge = mk(prep, "Dredge them");
+
+  check("a step joins the end of its OWN big idea, not the end of the recipe",
+    stepsForRecipe(plan, recipe.id).map((s) => s.name),
+    ["Pound the cutlets", "Dredge them", "Deglaze the pan"]);
+  check("so the order on screen and the order the scheduler walks agree",
+    stepsForBigIdea(plan, prep.id).map((s) => s.name), ["Pound the cutlets", "Dredge them"]);
+
+  // Crossing a boundary changes which big idea a step belongs to, rather than
+  // swapping it past one — the only reading that makes sense.
+  moveStep(plan, dredge.id, 1);
+  check("moving a step past a boundary moves it INTO the next big idea",
+    [bigIdeaForStep(plan, dredge).name, stepsForBigIdea(plan, prep.id).map((s) => s.name)],
+    ["Make the pan sauce", ["Pound the cutlets"]]);
+  check("and it lands at the near end of the group it joined",
+    stepsForBigIdea(plan, sauce.id).map((s) => s.name), ["Dredge them", "Deglaze the pan"]);
+
+  moveStep(plan, dredge.id, -1);
+  check("and back again", bigIdeaForStep(plan, dredge).name, "Prep the chicken");
+
+  // Nothing is write-once, and no delete ever takes steps with it.
+  removeBigIdea(plan, sauce.id);
+  check("deleting a big idea moves its steps to the neighbour, never deletes them",
+    [plan.steps.length, stepsForBigIdea(plan, prep.id).length], [3, 3]);
+  check("the last big idea cannot be removed", removeBigIdea(plan, prep.id), false);
+  check("so a step always has one to belong to",
+    bigIdeaForStep(plan, deglaze).name, "Prep the chicken");
+}
+
+// A step written before this layer existed — the worked example, a step built
+// straight from createStep — belongs to its recipe's first big idea. Treating
+// null as the default once, in the model, is what lets every caller ignore it.
+{
+  const plan = createPlan({ recipe: "Salsa" });
+  const recipe = plan.recipes[0];
+  const step = appendStep(plan, createStep({ recipeId: recipe.id, name: "Dice the tomatoes", mins: 4 }));
+  check("a step with no big idea falls to the first one",
+    [step.bigIdeaId, bigIdeaForStep(plan, step).id],
+    [null, bigIdeasForRecipe(plan, recipe.id)[0].id]);
+  check("and is listed under it", stepsForBigIdea(plan, bigIdeasForRecipe(plan, recipe.id)[0].id).length, 1);
+}
+
+// A second recipe brings its own big idea, and losing a recipe never strands
+// steps that were moved out of it.
+{
+  const plan = createPlan({ recipe: "Chicken" });
+  const rice = addRecipe(plan, "Rice pilaf");
+  check("each recipe gets its own", plan.bigIdeas.length, 2);
+
+  const step = appendStep(plan, createStep({
+    recipeId: rice.id, bigIdeaId: bigIdeasForRecipe(plan, rice.id)[0].id, name: "Toast the rice", mins: 5,
+  }));
+  removeRecipe(plan, rice.id, { moveTo: plan.recipes[0].id });
+  check("a moved step lands on a big idea that still exists",
+    [plan.bigIdeas.length, bigIdeaForStep(plan, step).recipeId === plan.recipes[0].id], [1, true]);
 }
 
 console.log(failures === 0 ? "\nAll checks passed." : `\n${failures} FAILED`);

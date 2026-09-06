@@ -448,6 +448,87 @@ input[type="checkbox"] {
 }
 .ingredient-list__text { flex: 1; }
 
+/* ---------- Big ideas ---------- */
+
+/* The pass that comes before any step: read the recipe, name the three or four
+   big things you have to do. Drawn as a piece of paper being filled in rather
+   than as a form, because that is what it is standing in for. */
+.big-idea-prompt {
+  border: 1px solid var(--line-strong);
+  border-left: 4px solid var(--ink);
+  border-radius: var(--radius);
+  background: #faf9f7;
+  padding: 0.9rem 1rem;
+}
+.big-idea-prompt__lead {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 0 0 0.3rem;
+  max-width: 60ch;
+}
+.big-idea-prompt__list {
+  counter-reset: idea;
+  margin: 0.7rem 0;
+  list-style: none;
+}
+.big-idea-prompt__item {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.4rem;
+}
+.big-idea-prompt__item::before {
+  counter-increment: idea;
+  content: counter(idea);
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  width: 1.1rem;
+  flex: none;
+}
+.big-idea-prompt__item input { flex: 1; min-width: 0; }
+.big-idea-prompt__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--line);
+}
+
+/* One big idea and the sub-tasks under it. The heading is an input, because it
+   stays editable — a student renames one the moment the steps show them what it
+   was really about. */
+.big-idea {
+  border-left: 3px solid var(--line-strong);
+  padding-left: 0.8rem;
+  margin-bottom: 1.1rem;
+}
+.big-idea__head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+.big-idea__name {
+  flex: 1;
+  min-width: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  border-color: transparent;
+  background: none;
+  padding-left: 0;
+}
+.big-idea__name:hover { border-color: var(--line); }
+.big-idea__name:focus { border-color: var(--focus); background: var(--paper); }
+.big-idea__count {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.big-ideas__add { margin-top: 0.3rem; }
+
 /* The step row. Everything the app needs to know about a step is on one line:
    what it is, how long, whose hands, and whether it can be done ahead. The
    previous build hid the last two behind an Edit button, so most students
@@ -1044,6 +1125,8 @@ input[type="checkbox"] {
   .hands__btn { flex: 1; }
   .shape { width: 100%; }
   .shape__btn { flex: 1; }
+  .big-idea-prompt__actions .btn { flex: 1 1 100%; }
+  .big-idea { padding-left: 0.5rem; }
 
   .mise { grid-template-columns: 1fr; }
   .assign-list__item { flex-wrap: wrap; }
@@ -1129,6 +1212,16 @@ input[type="checkbox"] {
 
   .panel, .pull-list, .recipe { break-inside: avoid; }
   .equip-list__note, .nudge, .confirm { display: none; }
+
+  /* The big-ideas pass is a question being asked, not part of the plan. Its
+     headings ARE part of the plan, so they print — as headings, not as boxes. */
+  .big-idea-prompt { display: none !important; }
+  .big-idea { border-left: none; padding-left: 0; margin-bottom: 0.5rem; }
+  .big-idea__name {
+    border: none;
+    font-weight: 700;
+    padding: 0;
+  }
 
   /* An unaccepted guess is not part of the plan, so it has no business on the
      paper. What the student kept prints as ordinary equipment, because by then

@@ -14,12 +14,23 @@
 // The shape of the step is the question the recipe does not answer, and it is
 // the hinge of the entire app: "starts, then runs by itself" is what lets
 // anything overlap at all.
+//
+// Before any of that comes the BIG IDEAS pass, which follows the teacher's own
+// handwritten workflow: read the recipe, name the three or four big things you
+// have to do, then write the sub-tasks under each. Summarising three big ideas
+// replaces transcribing nine instructions, which is where most of the typing
+// went.
+//
+// It is offered, never required. Skipping is one tap and leaves exactly the
+// flat step list this replaced — one unnamed big idea, no headings, nothing to
+// explain. A student who just wants a plan is never gated by it.
 
 import {
   createStep, appendStep, insertStepBefore, removeStep, moveStep,
   addSegment, removeSegment, moveSegment, stepMins, isUnestimated, setStatedMinutes,
   stepsForRecipe, ingredientsForRecipe, addIngredient, removeIngredient,
   addRecipe, removeRecipe,
+  bigIdeasForRecipe, stepsForBigIdea, addBigIdea, removeBigIdea, isGrouped,
 } from "../model.js";
 import { formatDuration, parseStatedMinutes } from "../time.js";
 import { h, field, button, removeButton } from "../dom.js";
@@ -31,13 +42,20 @@ const drafts = new Map();
 
 const emptyDraft = () => ({ name: "", mins: "", shape: null, prep: false });
 
-function draftFor(recipeId) {
-  if (!drafts.has(recipeId)) drafts.set(recipeId, emptyDraft());
-  return drafts.get(recipeId);
+// Keyed by BIG IDEA, because that is what an add row belongs to now. A recipe
+// that skipped the pass has exactly one, so it still has exactly one add row.
+function draftFor(scope) {
+  if (!drafts.has(scope)) drafts.set(scope, emptyDraft());
+  return drafts.get(scope);
 }
 
 // Confirmation of a delete that would take steps with it. Transient.
 let pendingDeleteRecipeId = null;
+
+// Recipes whose big-ideas pass has been reopened by hand, from "+ Group these
+// into big ideas". Transient, and deliberately not in the plan: it is where the
+// student is looking, not part of their work.
+const reopened = new Set();
 
 export function status(plan) {
   const steps = plan.steps.length;
@@ -194,19 +212,175 @@ function renderIngredients(ctx, recipe) {
 // --- The method -----------------------------------------------------------
 
 function renderMethod(ctx, recipe) {
-  const { plan } = ctx;
+  const { plan, refresh } = ctx;
   const steps = stepsForRecipe(plan, recipe.id);
+  const ideas = bigIdeasForRecipe(plan, recipe.id);
+
+  // The pass, offered once, BEFORE any step exists — which is what "big ideas
+  // come first" actually means. A plan that already has steps and never
+  // answered (the worked example, a restored file) is not ambushed by it; the
+  // only way back in is asking for it.
+  const asking = reopened.has(recipe.id) || (!recipe.bigIdeasSettled && steps.length === 0);
+  if (asking) {
+    return h("div", { class: "subsection" },
+      h("h3", { text: "Method" }),
+      renderBigIdeaPrompt(ctx, recipe, ideas));
+  }
+
+  const grouped = isGrouped(plan, recipe.id);
+  // ↑ and ↓ are disabled only at the ends of the whole RECIPE, never at the
+  // ends of a group: crossing a boundary is how a step changes big idea.
+  const position = new Map(steps.map((step, i) => [step.id, i]));
 
   return h("div", { class: "subsection" },
     h("h3", { text: "Method" }),
     h("p", { class: "subsection__intro no-print",
-      text: "Type each step as you read it, in the recipe's own order. The times come off the card — read them, don't guess them. The one thing the card won't tell you is whether your hands are busy the whole time, which is the answer that lets anything overlap." }),
+      text: grouped
+        ? "Under each big idea, write the sub-tasks it takes — in the order you'd do them. The times come off the card: read them, don't guess them. The one thing the card won't tell you is whether your hands are busy the whole time, which is the answer that lets anything overlap."
+        : "Type each step as you read it, in the recipe's own order. The times come off the card — read them, don't guess them. The one thing the card won't tell you is whether your hands are busy the whole time, which is the answer that lets anything overlap." }),
+
+    grouped
+      ? h("div", { class: "big-ideas" },
+          ideas.map((idea) => renderBigIdea(ctx, recipe, idea, position, steps.length)))
+      : h("div", null,
+          steps.length > 0 && h("ol", { class: "step-list" },
+            steps.map((step, index) => renderStepRow(ctx, step, index, steps.length))),
+          ideas[0] && renderAddStep(ctx, recipe, ideas[0])),
+
+    // Depth stays one tap away either way: name another big idea, or go back
+    // and group a list that was written flat.
+    h("div", { class: "big-ideas__add no-print" },
+      grouped
+        ? button("+ Another big idea", () => {
+            const added = addBigIdea(plan, recipe.id);
+            refresh();
+            focusById(`idea-name-${added.id}`);
+          }, { class: "btn btn--small btn--secondary" })
+        : button("+ Group these into big ideas", () => {
+            reopened.add(recipe.id);
+            refresh();
+          }, { class: "btn btn--small btn--secondary" })),
+
+    steps.length >= 3 && renderReviewNudge());
+}
+
+function focusById(id) {
+  const el = document.getElementById(id);
+  if (el) el.focus({ preventScroll: true });
+}
+
+// --- The big ideas pass ---------------------------------------------------
+
+const IDEA_PLACEHOLDERS = [
+  "e.g. Prep the chicken",
+  "e.g. Make the pan sauce",
+  "e.g. Cook the rice",
+];
+
+// Read the recipe, name the big things, then write the sub-tasks under each.
+// The teacher's own workflow, in the teacher's own order.
+//
+// Nothing here refuses anything. "Start writing steps" with nothing named
+// quietly does the same thing as skipping, because a button that does nothing
+// when you click it is indistinguishable from a broken one — the same rule the
+// add-step row follows.
+function renderBigIdeaPrompt(ctx, recipe, ideas) {
+  const { plan, save, refresh } = ctx;
+  const steps = stepsForRecipe(plan, recipe.id);
+
+  const settle = (keepNames) => {
+    for (const idea of bigIdeasForRecipe(plan, recipe.id)) {
+      if (keepNames && idea.name.trim()) continue;
+      // Refuses on the last one, which is exactly right: every recipe keeps a
+      // big idea, and an unnamed one renders as the plain list.
+      removeBigIdea(plan, idea.id);
+    }
+    const survivors = bigIdeasForRecipe(plan, recipe.id);
+    if (!keepNames && survivors.length === 1) survivors[0].name = "";
+    recipe.bigIdeasSettled = true;
+    reopened.delete(recipe.id);
+    refresh();
+  };
+
+  return h("div", { class: "big-idea-prompt" },
+    h("p", { class: "big-idea-prompt__lead",
+      text: "Read the recipe all the way through first. What are the three or four big things you actually have to do?" }),
+    h("p", { class: "subsection__intro no-print",
+      text: "Name them here, then write the steps under each. Summarising three big ideas is a lot less typing than copying nine instructions out — and naming them is what makes it obvious which things deserve to be a task at all." }),
+
+    h("ol", { class: "big-idea-prompt__list" }, ideas.map((idea, i) =>
+      h("li", { class: "big-idea-prompt__item" },
+        h("input", {
+          id: `idea-name-${idea.id}`,
+          type: "text",
+          autocomplete: "off",
+          placeholder: IDEA_PLACEHOLDERS[i] || "Another big thing…",
+          "aria-label": `Big idea ${i + 1}`,
+          value: idea.name,
+          onInput: (e) => { idea.name = e.target.value; save(); },
+          onKeyDown: (e) => {
+            if (e.key !== "Enter") return;
+            e.preventDefault();
+            const added = addBigIdea(plan, recipe.id);
+            refresh();
+            focusById(`idea-name-${added.id}`);
+          },
+        }),
+        ideas.length > 1 && removeButton(idea.name || "this big idea", () => {
+          removeBigIdea(plan, idea.id);
+          refresh();
+        })))),
+
+    button("+ Another big idea", () => {
+      const added = addBigIdea(plan, recipe.id);
+      refresh();
+      focusById(`idea-name-${added.id}`);
+    }, { class: "btn btn--small btn--secondary", id: `idea-add-${recipe.id}` }),
+
+    steps.length > 0 && h("p", { class: "hint",
+      text: `Your ${steps.length} step${steps.length === 1 ? "" : "s"} will go under the first big idea. Move ${steps.length === 1 ? "it" : "them"} with ↑ and ↓.` }),
+
+    h("div", { class: "big-idea-prompt__actions" },
+      button("Start writing steps", () => settle(true),
+        { class: "btn btn--small", id: `idea-done-${recipe.id}` }),
+      button("Skip — just list the steps", () => settle(false),
+        { class: "btn btn--small btn--secondary", id: `idea-skip-${recipe.id}` })),
+
+    h("p", { class: "hint",
+      text: "Skipping is completely fine. You'll get one plain list of steps, exactly as before, and you can group them later if you want to." }));
+}
+
+// One big idea, with its sub-tasks under it and its own add row — so a step
+// always lands in the group you were looking at.
+function renderBigIdea(ctx, recipe, idea, position, total) {
+  const { plan, save, refresh } = ctx;
+  const steps = stepsForBigIdea(plan, idea.id);
+  const only = bigIdeasForRecipe(plan, recipe.id).length === 1;
+
+  return h("section", { class: "big-idea" },
+    h("div", { class: "big-idea__head" },
+      h("input", {
+        id: `idea-name-${idea.id}`,
+        type: "text",
+        class: "big-idea__name",
+        autocomplete: "off",
+        placeholder: "Name this big idea",
+        "aria-label": "Big idea",
+        value: idea.name,
+        onInput: (e) => { idea.name = e.target.value; save(); },
+      }),
+      h("span", { class: "big-idea__count no-print",
+        text: `${steps.length} step${steps.length === 1 ? "" : "s"}` }),
+      !only && removeButton(idea.name || "this big idea", () => {
+        // Its steps move to the neighbouring big idea; nothing is lost.
+        removeBigIdea(plan, idea.id);
+        refresh();
+      })),
 
     steps.length > 0 && h("ol", { class: "step-list" },
-      steps.map((step, index) => renderStepRow(ctx, step, index, steps.length))),
+      steps.map((step) => renderStepRow(ctx, step, position.get(step.id), total))),
 
-    renderAddStep(ctx, recipe),
-    steps.length >= 3 && renderReviewNudge());
+    renderAddStep(ctx, recipe, idea));
 }
 
 // A step is what you accomplish; its timed lines are what you actually do.
@@ -499,16 +673,19 @@ function shapeChoice(value, onChange, idPrefix, groupLabel) {
   }, shape.short)));
 }
 
-function renderAddStep(ctx, recipe) {
+function renderAddStep(ctx, recipe, idea) {
   const { plan, refresh } = ctx;
-  const draft = draftFor(recipe.id);
-  const steps = stepsForRecipe(plan, recipe.id);
+  // Every add row belongs to a big idea. A skipped recipe has exactly one, so
+  // it still has exactly one row — identical to what was there before.
+  const scope = idea.id;
+  const draft = draftFor(scope);
+  const steps = stepsForBigIdea(plan, scope);
 
   // Recomputed on demand, never captured. Typing into the draft does not
   // re-render — that is what keeps the caret steady — so a `missing` array read
   // at render time is stale the moment the first character is typed, and a
   // submit that checked it silently did nothing.
-  const missing = () => missingFrom(draft, recipe.id);
+  const missing = () => missingFrom(draft, scope);
 
   const submit = () => {
     // Never blocked, only told. A disabled button that does nothing when
@@ -524,6 +701,7 @@ function renderAddStep(ctx, recipe) {
     }
     appendStep(plan, createStep({
       recipeId: recipe.id,
+      bigIdeaId: scope,
       name: draft.name.trim(),
       // The top of a range, so the plan is built on the slow case.
       mins: parseStatedMinutes(draft.mins).mins,
@@ -531,10 +709,9 @@ function renderAddStep(ctx, recipe) {
       shape: draft.shape,
       prep: draft.prep,
     }));
-    drafts.set(recipe.id, emptyDraft());
+    drafts.set(scope, emptyDraft());
     refresh();
-    const again = document.getElementById(`add-name-${recipe.id}`);
-    if (again) again.focus({ preventScroll: true });
+    focusById(`add-name-${scope}`);
   };
 
   const onEnter = (e) => {
@@ -545,11 +722,13 @@ function renderAddStep(ctx, recipe) {
 
   return h("div", { class: "add-step no-print" },
     h("input", {
-      id: `add-name-${recipe.id}`,
+      id: `add-name-${scope}`,
       type: "text",
       class: "add-step__name",
       autocomplete: "off",
-      placeholder: steps.length === 0 ? "First thing the recipe tells you to do…" : "Next step…",
+      placeholder: steps.length === 0
+        ? (idea.name.trim() ? `First thing "${idea.name.trim()}" takes…` : "First thing the recipe tells you to do…")
+        : "Next step…",
       "aria-label": "What is the step?",
       value: draft.name,
       onInput: (e) => { draft.name = e.target.value; toggleAdd(); },
@@ -562,7 +741,7 @@ function renderAddStep(ctx, recipe) {
     // printed there and the app can plan on the slow end itself.
     h("div", { class: "add-step__mins" },
       h("input", {
-        id: `add-mins-${recipe.id}`,
+        id: `add-mins-${scope}`,
         type: "text",
         inputMode: "numeric",
         autocomplete: "off",
@@ -576,26 +755,26 @@ function renderAddStep(ctx, recipe) {
       h("span", { class: "step-list__unit", text: "min" })),
 
     shapeChoice(draft.shape, (value) => { draft.shape = value; refresh(); },
-      `add-shape-${recipe.id}`, "What shape is this step?"),
+      `add-shape-${scope}`, "What shape is this step?"),
 
     h("div", { class: "prep-check" },
       h("input", {
-        id: `add-prep-${recipe.id}`,
+        id: `add-prep-${scope}`,
         type: "checkbox",
         checked: draft.prep,
         onChange: (e) => { draft.prep = e.target.checked; },
       }),
-      h("label", { for: `add-prep-${recipe.id}`, text: "Prep" })),
+      h("label", { for: `add-prep-${scope}`, text: "Prep" })),
 
     h("button", {
       type: "button",
-      id: `add-step-${recipe.id}`,
+      id: `add-step-${scope}`,
       class: "btn btn--small",
       onClick: submit,
     }, "Add step"),
 
     h("p", {
-      id: `add-hint-${recipe.id}`,
+      id: `add-hint-${scope}`,
       class: "add-step__hint",
       "aria-live": "polite",
       // Silent until they have started, so an untouched row is not nagging.
@@ -606,7 +785,7 @@ function renderAddStep(ctx, recipe) {
   // that is what keeps the caret steady. Only the Add button and its hint
   // depend on the draft, so they are the only things updated in place.
   function showHint(text) {
-    const hint = document.getElementById(`add-hint-${recipe.id}`);
+    const hint = document.getElementById(`add-hint-${scope}`);
     if (hint) hint.textContent = text;
   }
 
