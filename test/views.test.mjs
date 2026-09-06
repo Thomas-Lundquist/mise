@@ -263,6 +263,32 @@ function samplePlan() {
   check("and it brings its station from the palette", added.station, "Prep");
 }
 
+// --- Short moments become notches, not slivers -----------------------------
+//
+// A one-minute hands-on line between two waiting lines of the same step is an
+// interruption of that step, not a task of its own. Drawn as a block it is an
+// illegible sliver on the cook's lane that also says nothing about which dish
+// is calling. It comes off the lane and goes onto the dish's own block.
+{
+  const plan = M.createPlan({ recipe: "Chicken", foodUp: "12:35" });
+  plan.schedule.anchor = "fixed";
+  const sear = M.createStep({ recipeId: plan.recipes[0].id, name: "Sear the chicken", mins: 1, hands: true });
+  M.appendStep(plan, sear);
+  sear.segments[0].label = "put the pan on";
+  for (const [label, mins, hands] of [["pan heats", 3, false], ["flip", 1, true], ["cooks", 3, false]]) {
+    Object.assign(M.addSegment(plan, sear.id, { mins, hands }), { label });
+  }
+  // A one-minute step of its own has nothing to interrupt, so it stays a block.
+  M.appendStep(plan, M.createStep({ recipeId: plan.recipes[0].id, name: "Taste and adjust", mins: 1, hands: true }));
+
+  const text = allText(views.board.render(ctxFor(plan))).join(" | ");
+  check("the board lists the moments as watch points", text.includes("Watch points"), true);
+  check("naming the dish that calls you back", text.includes("Sear the chicken"), true);
+  check("and what it wants", [text.includes("flip"), text.includes("put the pan on")], [true, true]);
+  check("a standalone one-minute step is still a block, not a watch point",
+    text.includes("Taste and adjust"), true);
+}
+
 // --- The board says the things it exists to say ----------------------------
 {
   const plan = samplePlan();

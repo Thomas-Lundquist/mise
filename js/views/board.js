@@ -15,17 +15,52 @@
 import { STATIONS, MAX_COOKS } from "../config.js";
 import {
   cookCount, stepsForRecipe, equipmentById, foodUpFor, claimedMinutes, ingredientsInBowl,
-  stepMins, handsMins, waitingMins,
+  stepMins, handsMins, waitingMins, hasWaiting, recipeById,
 } from "../model.js";
 import {
   resolveSchedule, computeConflicts, describeConflict, planSpan, resolvedFoodUp, laneForStep,
 } from "../schedule.js";
-import { clockToMinutes, minutesToClock, formatDuration } from "../time.js";
+import { clockToMinutes, minutesToClock, formatDuration, formatShort } from "../time.js";
 import { h, button } from "../dom.js";
 
-const SNAP = 5;            // free-placement nudge, in minutes
-const PX_PER_MIN = 9;
-const MAX_BOARD_PX = 2000; // backstop on the drawn timeline; see renderTimeline
+const SNAP = 5;              // free-placement nudge, in minutes
+const TARGET_BOARD_PX = 900; // the height the drawn timeline aims for
+const MAX_PX_PER_MIN = 24;   // so a very short plan does not become a poster
+const TINY_BLOCK_PX = 28;    // below this a block puts its label and time on one line
+// Half-minute steps are ordinary in cooking — flipping a cutlet, seasoning,
+// tasting — and at any honest scale they are a few pixels tall. Below this a
+// block stops encoding its duration in its height and just stays legible; its
+// START stays exact, which is the part the eye actually reads off a time axis,
+// and the label carries the real duration.
+const MIN_BLOCK_PX = 18;
+
+// A one-minute hands-on moment that sits between waiting stretches of its own
+// step — flipping a cutlet, stirring the rice, turning the tray — is not a task
+// so much as an interruption of one. Drawn as its own block it is an
+// illegible sliver on the cook's lane, and worse, it says nothing about WHICH
+// dish is calling. Drawn as a notch across the dish's own block, its position
+// answers that before you read a word.
+const CHECKPOINT_MAX_MINS = 1;
+
+function isCheckpoint(step, seg) {
+  if (!seg.hands || seg.mins > CHECKPOINT_MAX_MINS) return false;
+  const i = step.segments.indexOf(seg);
+  const before = step.segments[i - 1];
+  const after = step.segments[i + 1];
+  return Boolean((before && !before.hands) || (after && !after.hands));
+}
+
+// The drawn window rounds up to one of these, so a 28-minute plan is not shown
+// as 40 minutes of empty grid with everything in it squashed. Past 70 — a plan
+// that does not fit the period — it keeps stepping in quarter hours.
+const WINDOW_BANDS = [15, 30, 45, 60, 70];
+
+function windowBandFor(mins) {
+  for (const band of WINDOW_BANDS) {
+    if (mins <= band) return band;
+  }
+  return Math.ceil(mins / 15) * 15;
+}
 
 export function status(plan) {
   if (plan.steps.length === 0) return "";
@@ -65,16 +100,27 @@ export function render(ctx) {
     }
     return out;
   };
+  // Checkpoints come off the cook's lane as blocks and go back on as notches,
+  // so the lane still shows the moments without pretending they are tasks.
   const handsItems = (cook) =>
-    blocksFor((step, seg) => seg.hands && (step.cook || 0) === cook);
+    blocksFor((step, seg) => seg.hands && (step.cook || 0) === cook && !isCheckpoint(step, seg));
+  const checkpointsFor = (cook) =>
+    blocksFor((step, seg) => seg.hands && (step.cook || 0) === cook && isCheckpoint(step, seg));
 
-  const view = { plan, ctx, ranges, conflicts, span, cooks, byId, handsItems, blocksFor };
+  const checkpointsByStep = new Map();
+  for (const item of blocksFor(isCheckpoint)) {
+    if (!checkpointsByStep.has(item.step.id)) checkpointsByStep.set(item.step.id, []);
+    checkpointsByStep.get(item.step.id).push(item);
+  }
+
+  const view = { plan, ctx, ranges, conflicts, span, cooks, byId, handsItems, blocksFor, checkpointsFor, checkpointsByStep };
 
   return h("div", null,
     printIdentity(plan),
     renderControls(view),
     renderReadouts(view),
     renderTimeline(view),
+    renderWatchPoints(view),
     renderBeforeYouStart(view),
     renderConflicts(view),
     renderWhereTimeGoes(view),
@@ -193,6 +239,11 @@ function renderReadouts(view) {
     slack < 0 && h("p", { class: "board-warning",
       text: `Your plan needs ${formatDuration(needed)} but you only get ${formatDuration(available)} to cook — you're over by ${formatDuration(-slack)}. Nothing here stops you planning it this way. But look for something that could run while your hands are free.` }),
 
+    // Mise en place, stated as its own phase. The scheduler already gives prep
+    // its own block at the front with no internal order; saying so is what
+    // turns that from an accident of the timeline into the lesson.
+    renderMise(view),
+
     // The recipe's own claim against the plan they just built. Printed times
     // almost always assume the mise is already done and nothing waits on
     // anything, which is the whole reason this app exists.
@@ -204,62 +255,98 @@ function renderReadouts(view) {
         : " — you've found time the recipe didn't claim. Check nothing has been left off your steps."));
 }
 
+function renderMise(view) {
+  const { plan, ranges, cooks } = view;
+  const prep = plan.steps.filter((step) => step.prep && ranges.get(step.id));
+  if (prep.length === 0) return null;
+
+  const start = Math.min(...prep.map((step) => ranges.get(step.id).start));
+  const end = Math.max(...prep.map((step) => ranges.get(step.id).end));
+  const names = prep.map((step) => step.name).filter(Boolean);
+
+  return h("p", { class: "mise-line" },
+    h("strong", { text: `Mise en place — ${minutesToClock(start)} to ${minutesToClock(end)}, ${formatDuration(end - start)}. ` }),
+    cooks > 1
+      ? `Split these between you in any order, then start cooking: ${names.join(", ")}.`
+      : `Get all of this done before you start cooking: ${names.join(", ")}.`);
+}
+
 // --- The timeline ---------------------------------------------------------
 
 // Greedy interval packing: each block goes in the first sub-column whose
 // previous block has finished. This is what stops two steps at the same minute
 // painting over each other — which lost a step entirely from an early printout.
-function packRows(items) {
+// Packed on PIXELS, not on minutes. Once a very short block is floored to a
+// legible height it occupies more of the lane than its duration claims, and two
+// half-minute steps a minute apart would otherwise be given the same sub-column
+// and drawn on top of each other.
+function packRows(items, top, pxPerMin) {
   const sorted = [...items].sort((a, b) =>
     a.range.start - b.range.start || a.range.end - b.range.end);
   const rowEnds = [];
   for (const item of sorted) {
-    let row = rowEnds.findIndex((end) => end <= item.range.start);
+    item.topPx = (item.range.start - top) * pxPerMin;
+    item.heightPx = Math.max(
+      MIN_BLOCK_PX,
+      Math.max(item.range.end - item.range.start, 0) * pxPerMin - 2,
+    );
+    const bottomPx = item.topPx + item.heightPx;
+    let row = rowEnds.findIndex((end) => end <= item.topPx);
     if (row === -1) {
       row = rowEnds.length;
       rowEnds.push(-Infinity);
     }
-    rowEnds[row] = item.range.end;
+    rowEnds[row] = bottomPx;
     item.row = row;
   }
   return { items: sorted, rowCount: Math.max(1, rowEnds.length) };
 }
 
 function renderTimeline(view) {
-  const { plan, span, cooks, byId, handsItems } = view;
+  const { plan, span, cooks, byId, handsItems, checkpointsFor } = view;
 
-  // Both edges come from the PERIOD, not from the resolved plate-up. Under an
-  // "early" anchor the plan ends before the bell, and measuring the window off
-  // that would slide the whole grid earlier — drawing dead space above the plan
-  // and hiding the spare time below it, which is the thing finishing early
-  // actually buys.
-  const windowEnd = clockToMinutes(foodUpFor(plan));
-  const windowStart = windowEnd - plan.schedule.windowMins;
-  const top = Math.min(windowStart, span.start);
-  const bottom = Math.max(windowEnd, span.end);
-  const totalMins = Math.max(bottom - top, 1);
+  // The drawn range follows the PLAN, rounded up to the next band, rather than
+  // always showing the period's full 70 minutes. Drawing the whole window meant
+  // a 28-minute plan was mostly empty grid and every block in it was needlessly
+  // small — a 2-minute step came out 18px tall and clipped its own label.
+  // Spare time is no longer shown as empty space; the readout states it.
+  const top = span.start;
+  const totalMins = Math.max(windowBandFor(span.end - span.start), 1);
+  const bottom = Math.max(top + totalMins, span.end);
 
-  // The cap is a backstop, not a layout choice: one block with a wild start — a
-  // bad hand-placement, a plan restored from a broken backup — would otherwise
-  // stretch the grid to thousands of pixels and squeeze the real plan into a
-  // sliver. Compressing looks wrong, which is correct: something IS wrong.
-  const pxPerMin = Math.min(PX_PER_MIN, MAX_BOARD_PX / totalMins);
+  // Aim for a consistent board height, so a short plan is drawn large and a
+  // long one is drawn tighter. The cap stops a 15-minute plan becoming a
+  // poster; nothing stops a wildly long one being compressed, which is correct
+  // — a plan spanning half a day IS wrong and should look it.
+  const pxPerMin = Math.min(MAX_PX_PER_MIN, TARGET_BOARD_PX / totalMins);
   const height = totalMins * pxPerMin;
+
+  // The period's own window still decides what counts as over budget, even
+  // though it no longer decides what is drawn.
+  const periodEnd = clockToMinutes(foodUpFor(plan));
+  const periodStart = periodEnd - plan.schedule.windowMins;
 
   // Hands lanes first — one when the plan is solo, one per cook otherwise. A
   // cook with nothing to do keeps their empty lane: that is real information
   // for whoever is running the kitchen, not clutter to hide.
   const lanes = cooks === 1
-    ? [{ label: "You", station: null, items: handsItems(0) }]
+    ? [{ label: "You", station: null, items: handsItems(0), notches: checkpointsFor(0) }]
     : Array.from({ length: cooks }, (_, i) =>
-        ({ label: `Cook ${i + 1}`, station: null, items: handsItems(i) }));
+        ({ label: `Cook ${i + 1}`, station: null, items: handsItems(i), notches: checkpointsFor(i) }));
 
   // Then one lane per station, not one per step. An earlier build gave every
   // step its own lane, so two things fighting over the oven never visually
   // collided and identical lane labels repeated down the page.
+  // One block per STEP on a station lane, not one per waiting segment. The pan
+  // is occupied for the whole of "sear the chicken", including the seconds you
+  // are standing over it, so drawing the segments separately left gaps where
+  // the equipment was in fact still in use — and left the checkpoints with
+  // nothing to sit inside.
   for (const station of STATIONS) {
-    const items = view.blocksFor((step, seg) =>
-      !seg.hands && laneForStep(step, byId) === station.id);
+    const items = plan.steps
+      .filter((step) => hasWaiting(step) && laneForStep(step, byId) === station.id)
+      .map((step) => ({ step, seg: null, range: view.ranges.get(step.id) }))
+      .filter((item) => item.range);
     if (items.length > 0) lanes.push({ label: station.label, station, items });
   }
 
@@ -285,7 +372,7 @@ function renderTimeline(view) {
     }))),
 
   lanes.map((lane) => {
-    const packed = packRows(lane.items);
+    const packed = packRows(lane.items, top, pxPerMin);
     return h("div", { class: "timeline__track", style: { height: `${height}px` } },
       // Rules are drawn per lane rather than as one overlay, because the grid
       // gap breaks a single absolutely-positioned layer.
@@ -294,52 +381,75 @@ function renderTimeline(view) {
         style: { top: `${(t - top) * pxPerMin}px` },
       })),
 
-      // Anything above the cooking window is time the student does not have,
-      // and should look like it.
-      span.start < windowStart && h("div", {
+      // Time the student does not have, hatched at whichever end it falls.
+      // Under a fixed anchor an over-long plan starts before the window opens;
+      // under "finish early" it starts on time and runs past plate-up instead,
+      // so both ends have to be drawn.
+      top < periodStart && h("div", {
         class: "timeline__over",
-        style: { top: "0", height: `${Math.max(0, (windowStart - top) * pxPerMin)}px` },
+        style: { top: "0", height: `${(Math.min(periodStart, bottom) - top) * pxPerMin}px` },
+      }),
+      bottom > periodEnd && h("div", {
+        class: "timeline__over",
+        style: {
+          top: `${(Math.max(periodEnd, top) - top) * pxPerMin}px`,
+          height: `${(bottom - Math.max(periodEnd, top)) * pxPerMin}px`,
+        },
       }),
 
-      packed.items.map((item) => {
-        const blockHeight = Math.max(item.range.end - item.range.start, 1) * pxPerMin - 2;
-        return renderBlock(view, item, {
-          tiny: blockHeight < 30,
-          style: {
-            top: `${(item.range.start - top) * pxPerMin}px`,
-            height: `${blockHeight}px`,
-            left: `${(item.row / packed.rowCount) * 100}%`,
-            width: `calc(${(1 / packed.rowCount) * 100}% - 2px)`,
-          },
-        });
-      }));
+      // Unlabelled ticks on the cook's own lane, so it does not read as free
+      // when the student is in fact pinned to the stove for a moment.
+      (lane.notches || []).map((cp) => h("div", {
+        class: "timeline__tick-mark",
+        style: { top: `${(cp.range.start - top) * pxPerMin}px` },
+        title: `${minutesToClock(cp.range.start)} — ${cp.seg.label.trim() || cp.step.name}`,
+      })),
+
+      packed.items.map((item) => renderBlock(view, item, {
+        tiny: item.heightPx < TINY_BLOCK_PX,
+        style: {
+          top: `${item.topPx}px`,
+          height: `${item.heightPx}px`,
+          left: `${(item.row / packed.rowCount) * 100}%`,
+          width: `calc(${(1 / packed.rowCount) * 100}% - 2px)`,
+        },
+      })));
   }));
 
   return h("div", { class: "timeline" }, grid);
 }
 
 function renderBlock(view, item, { tiny, style }) {
-  const { plan, ctx, conflicts, cooks } = view;
-  const { step, seg, range } = item;
+  const { plan, ctx, conflicts, cooks, checkpointsByStep } = view;
+  const { step, range } = item;
   const free = plan.schedule.mode === "free";
   const reasons = conflicts.get(step.id);
 
+  // A station-lane block stands for the whole step and carries no segment of
+  // its own; a cook-lane block is one hands-on line. Resizing a station block
+  // therefore acts on the step's last waiting line, which is the one a student
+  // means when they decide something needs longer in the pan.
+  const seg = item.seg
+    || [...step.segments].reverse().find((x) => !x.hands)
+    || step.segments[step.segments.length - 1];
+
   // A line's own label when it has one, the step's name when it does not —
   // which is the single-line case, and reads exactly as it did before.
-  const label = seg.label.trim() || step.name;
+  const label = item.seg ? (item.seg.label.trim() || step.name) : step.name;
   const mins = range.end - range.start;
-  const timeText = `${minutesToClock(range.start)} · ${mins}m`;
+  const notches = item.seg ? [] : (checkpointsByStep.get(step.id) || []);
+  const timeText = `${minutesToClock(range.start)} · ${formatShort(mins)}`;
   const detail = [
     label === step.name ? label : `${step.name}: ${label}`,
     timeText,
-    seg.hands ? "hands on" : "runs by itself",
+    item.seg ? (item.seg.hands ? "hands on" : "runs by itself") : "runs by itself",
     reasons ? describeConflict(reasons, cooks) : "",
   ].filter(Boolean).join(" — ");
 
   const props = {
     class: [
       "block",
-      seg.hands ? "block--hands" : "block--unattended",
+      (item.seg ? item.seg.hands : false) ? "block--hands" : "block--unattended",
       reasons ? "block--conflict" : "",
       tiny ? "block--tiny" : "",
     ].filter(Boolean).join(" "),
@@ -360,11 +470,23 @@ function renderBlock(view, item, { tiny, style }) {
     props["aria-label"] = detail;
   }
 
-  // Short blocks clip their label, so the full story lives in the title and the
-  // accessible name too.
+  // A short block cannot hold two stacked lines, so it says both on one — the
+  // name truncating with an ellipsis and the time held at full width, since the
+  // time is the thing you need at the stove. The whole story stays in the title
+  // and the accessible name either way.
   return h(free ? "button" : "div", props,
     h("span", { class: "block__label", text: label }),
-    h("span", { class: "block__time", text: timeText }));
+    h("span", { class: "block__time", text: timeText }),
+
+    // The moments this dish calls you back for, drawn where they happen inside
+    // its own block. Position is what says which dish, before any label is
+    // read — which was the whole reason for not putting them on the cook lane.
+    notches.map((cp) => h("span", {
+      class: "block__notch",
+      style: { top: `${((cp.range.start - range.start) / Math.max(mins, 1)) * 100}%` },
+      title: `${minutesToClock(cp.range.start)} — ${cp.seg.label.trim() || step.name}`,
+    }, h("span", { class: "block__notch-label",
+      text: `${cp.seg.label.trim() || "check"} · ${minutesToClock(cp.range.start)}` }))));
 }
 
 // Moving drags the whole step, because its lines are consecutive — the pan
@@ -381,6 +503,29 @@ function onBlockKey(event, step, seg, ctx) {
   // to it on every keypress.
   const again = document.getElementById(`block-${seg.id}`);
   if (again) again.focus({ preventScroll: true });
+}
+
+// Every moment a dish calls you back for, in time order. The notches say which
+// dish at a glance; this says it in words, which is what survives onto paper.
+function renderWatchPoints(view) {
+  const { plan, checkpointsByStep } = view;
+  const all = [...checkpointsByStep.values()].flat()
+    .sort((a, b) => a.range.start - b.range.start);
+  if (all.length === 0) return null;
+
+  const many = plan.recipes.length > 1;
+  return h("div", { class: "panel" },
+    h("h3", { text: "Watch points" }),
+    h("p", { class: "hint",
+      text: "Short moments where a dish needs you back. They interrupt whatever else you're doing." }),
+    h("ul", { class: "watch" }, all.map((cp) => {
+      const recipe = many ? recipeById(plan, cp.step.recipeId) : null;
+      const what = cp.seg.label.trim();
+      return h("li", null,
+        h("span", { class: "watch__time", text: minutesToClock(cp.range.start) }),
+        h("span", { class: "watch__what",
+          text: [recipe && recipe.name, cp.step.name, what].filter(Boolean).join(" · ") }));
+    })));
 }
 
 // --- Before you start -----------------------------------------------------

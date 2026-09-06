@@ -45,7 +45,7 @@ comes out:
   collisions the app then warned about
 - one pair of hands is global — hands-on steps never overlap each other — while
   searing during the simmer is left alone
-- steps marked "do ahead" front-load into a prep block, and the plan gets longer
+- steps marked Prep front-load into an unordered block a team can split, and
   for it, which is the trade being made deliberately
 - both anchors: same plan length, different place on the clock
 - the oven serialises itself in guided mode, so there is nothing to warn about

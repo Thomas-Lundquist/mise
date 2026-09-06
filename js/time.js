@@ -24,6 +24,14 @@ export function formatDuration(mins) {
   return m === 0 ? `${h}h` : `${h}h ${m}m`;
 }
 
+// Durations on a block, where space is scarce and half-minutes are ordinary:
+// flipping a cutlet is 30 seconds and belongs on the plan like anything else.
+export function formatShort(mins) {
+  if (mins < 1) return `${Math.round(mins * 60)}s`;
+  const rounded = Math.round(mins * 2) / 2;
+  return Number.isInteger(rounded) ? `${rounded}m` : `${rounded}m`;
+}
+
 export function todayISO(now = new Date()) {
   const mm = String(now.getMonth() + 1).padStart(2, "0");
   const dd = String(now.getDate()).padStart(2, "0");

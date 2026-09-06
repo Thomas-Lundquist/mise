@@ -17,7 +17,7 @@ import {
 } from "./config.js";
 import { clockToMinutes, todayISO } from "./time.js";
 
-export const PLAN_VERSION = 7;
+export const PLAN_VERSION = 8;
 
 export function newId(prefix = "id") {
   if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
@@ -137,11 +137,11 @@ export function createIngredient(recipeId, text = "") {
 //
 // `label` is optional. Blank means "this is just the step", which is the normal
 // case, and the board falls back to the step's own name.
-export function createSegment({ label = "", mins = 0, hands = true } = {}) {
+export function createSegment({ label = "", mins = 1, hands = true } = {}) {
   return { id: newId("seg"), label, mins, hands };
 }
 
-export function createStep({ recipeId, name = "", mins = 0, hands = true, ahead = false } = {}) {
+export function createStep({ recipeId, name = "", mins = 0, hands = true, prep = false } = {}) {
   return {
     id: newId("step"),
     recipeId,
@@ -149,10 +149,17 @@ export function createStep({ recipeId, name = "", mins = 0, hands = true, ahead 
     // What you accomplish, broken into what you actually do. One segment is the
     // normal case and reads exactly like a plain step.
     segments: [createSegment({ mins, hands })],
-    // "Can be done ahead" — the mise en place judgement the app is named for.
-    // True pulls the step into a prep block that runs before any cooking.
-    // A step goes ahead as a whole; you cannot leave half a sear until later.
-    ahead,
+    // Prep: cutting, measuring, portioning. Deliberately a category a student
+    // recognises rather than a question about ordering — "is this prep?" is a
+    // word they already use, where "can this be done earlier?" asks them to
+    // reason about dependencies, which is the thing the app is meant to work
+    // out for them.
+    //
+    // Ticking it moves the step into a block at the start of the cooking window
+    // with no fixed order relative to the other prep, which is what lets a team
+    // split the mise between them. A step is prep as a whole; you cannot leave
+    // half a sear until later.
+    prep,
     equipmentIds: [],
     // Distinguishes "answered: nothing" from "not answered yet". An unattended
     // step should be asked where it sits, but "it just sits" is a real answer.
@@ -335,7 +342,7 @@ export function moveStep(plan, stepId, direction) {
 // Segments can be added anywhere, at any time — including into a step typed ten
 // minutes ago, which is when a student usually realises the pan had to heat up
 // first. `afterSegmentId` is null to append.
-export function addSegment(plan, stepId, { afterSegmentId = null, mins = 0, hands = true } = {}) {
+export function addSegment(plan, stepId, { afterSegmentId = null, mins = 1, hands = true } = {}) {
   const step = stepById(plan, stepId);
   if (!step) return null;
   const segment = createSegment({ mins, hands });

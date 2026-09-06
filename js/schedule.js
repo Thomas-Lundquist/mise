@@ -13,7 +13,7 @@
 import { STATIONS, NO_EQUIPMENT_STATION } from "./config.js";
 import { clockToMinutes } from "./time.js";
 import {
-  equipmentById, cookCount, foodUpFor, stepMins, segmentOffsets, hasWaiting,
+  equipmentById, cookCount, foodUpFor, stepMins, segmentOffsets, hasWaiting, handsMins,
 } from "./model.js";
 
 const STATION_ORDER = STATIONS.map((s) => s.id);
@@ -134,24 +134,34 @@ function commit(step, end, cookBusy, stationBusies) {
 // be: the oven is one oven however many people are standing at it.
 //
 // Returns { starts, cookOf } in the same units as `endAt`.
-function scheduleBackward(steps, plan, endAt) {
+function scheduleBackward(steps, plan, endAt, { chained = true } = {}) {
   const byId = equipmentById(plan);
   const starts = new Map();
   const cookOf = new Map();
   if (steps.length === 0) return { starts, cookOf };
 
-  // One queue per recipe, walked from its last step toward its first. Keyed off
-  // the steps themselves so a step orphaned from its recipe still schedules.
+  // One queue per recipe, walked from its last step toward its first, so a
+  // recipe's steps stay in order. Keyed off the steps themselves so a step
+  // orphaned from its recipe still schedules.
+  //
+  // Unchained, every step is its own queue and therefore free to be placed
+  // wherever it fits — which is what prep is (see applyGuidedSchedule).
   const queues = new Map();
   for (const step of steps) {
-    if (!queues.has(step.recipeId)) queues.set(step.recipeId, { steps: [], i: 0, deadline: endAt });
-    queues.get(step.recipeId).steps.push(step);
+    const key = chained ? step.recipeId : step.id;
+    if (!queues.has(key)) queues.set(key, { steps: [], i: 0, deadline: endAt });
+    queues.get(key).steps.push(step);
   }
   for (const queue of queues.values()) queue.i = queue.steps.length - 1;
 
   const cooks = cookCount(plan);
   const cookBusy = Array.from({ length: cooks }, () => []);
   const load = new Array(cooks).fill(0);
+  // The recipe of the last step given to each cook. The pass runs backward, so
+  // "last given" is the step that happens LATER on the clock, and matching it
+  // produces an unbroken run on one recipe rather than a cook who is handed the
+  // rice, then the chicken, then the rice again.
+  const lastRecipe = new Array(cooks).fill(null);
   const stationBusy = new Map();
   for (const station of EXCLUSIVE_STATIONS) stationBusy.set(station, []);
 
@@ -172,9 +182,18 @@ function scheduleBackward(steps, plan, endAt) {
       .map((station) => stationBusy.get(station));
 
     // Whichever cook can take it latest gets it, so the step lands as close to
-    // its deadline as possible. Ties go to whoever has done least — otherwise
-    // one person quietly ends up doing the whole dish, which is a bad plan even
-    // when the arithmetic works out.
+    // its deadline as possible. That is the only criterion allowed to affect
+    // WHEN anything happens; the two below decide only whose name is on it, and
+    // are consulted solely when the timing is identical.
+    //
+    //   1. the cook already on this recipe, so somebody follows a dish through
+    //      instead of being handed a step of the rice, a step of the chicken,
+    //      and then the rice again
+    //   2. failing that, whoever has done least, so one person does not quietly
+    //      end up carrying the whole dish
+    //
+    // Because every cook is assumed able to do every task, choosing between
+    // cooks that tie on timing cannot change the length of the plan.
     let chosen = 0;
     let end = pick.deadline;
     if (cooks === 1) {
@@ -183,8 +202,17 @@ function scheduleBackward(steps, plan, endAt) {
       let best = -Infinity;
       for (let i = 0; i < cooks; i++) {
         const candidate = latestFit(step, pick.deadline, cookBusy[i], busies);
-        if (candidate > best || (candidate === best && load[i] < load[chosen])) {
+        if (candidate > best) {
           best = candidate;
+          chosen = i;
+          continue;
+        }
+        if (candidate < best) continue;
+        const onRecipe = lastRecipe[i] === step.recipeId;
+        const chosenOnRecipe = lastRecipe[chosen] === step.recipeId;
+        if (onRecipe !== chosenOnRecipe) {
+          if (onRecipe) chosen = i;
+        } else if (load[i] < load[chosen]) {
           chosen = i;
         }
       }
@@ -196,6 +224,10 @@ function scheduleBackward(steps, plan, endAt) {
     cookOf.set(step.id, chosen);
     commit(step, end, cookBusy[chosen], busies);
     for (const seg of step.segments) if (seg.hands) load[chosen] += seg.mins;
+    // Only a step that actually occupies a cook's hands makes that cook "on"
+    // its recipe. A step that is nothing but waiting is assigned a cook by
+    // convention and should not claim their attention.
+    if (handsMins(step) > 0) lastRecipe[chosen] = step.recipeId;
 
     // The rest of this recipe has to finish before this step starts. Its
     // waiting time counts: the pan cannot be heating before you put it on.
@@ -221,17 +253,23 @@ function earliestStart(steps, starts, fallback) {
 // Scheduled against a plate-up of 0 (so every start is negative), then shifted
 // once at the end to wherever the anchor says plate-up actually is.
 export function applyGuidedSchedule(plan) {
-  const cooking = plan.steps.filter((s) => !s.ahead);
-  const prep = plan.steps.filter((s) => s.ahead);
+  const cooking = plan.steps.filter((s) => !s.prep);
+  const prep = plan.steps.filter((s) => s.prep);
 
   const cookPass = scheduleBackward(cooking, plan, 0);
   const cookStart = earliestStart(cooking, cookPass.starts, 0);
 
-  // Prep front-loads: everything marked "do ahead" runs before any cooking
-  // starts. It costs elapsed time — you cannot fill a simmer window with prep
-  // that is already done — and that is the trade the doctrine is worth. The
-  // idle gaps it opens are where cleaning down goes.
-  const prepPass = scheduleBackward(prep, plan, cookStart);
+  // Prep front-loads: everything marked prep runs before any cooking starts.
+  // It costs elapsed time — you cannot fill a simmer window with prep that is
+  // already done — and that is the trade the doctrine is worth. The idle gaps
+  // it opens are where cleaning down goes.
+  //
+  // Scheduled UNCHAINED. Cooking steps follow their recipe in order, because
+  // you cannot sear before you dredge, but prep has no such order: juicing a
+  // lemon and dicing an onion have nothing to do with each other. Chaining them
+  // per recipe was what capped the prep block at the length of one recipe's
+  // prep and left extra cooks with nothing to do.
+  const prepPass = scheduleBackward(prep, plan, cookStart, { chained: false });
   const planStart = earliestStart(prep, prepPass.starts, cookStart);
 
   const target = clockToMinutes(foodUpFor(plan));

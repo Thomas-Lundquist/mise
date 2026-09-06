@@ -106,7 +106,7 @@ plan
 ├─ readToEnd    bool
 ├─ recipes[]    { id, name, serves, prepMins, cookMins }
 ├─ ingredients[]{ id, recipeId, text, bowlId }
-├─ steps[]      { id, recipeId, name, mins, hands, ahead,
+├─ steps[]      { id, recipeId, name, prep, segments[],
 │                 equipmentIds[], noEquipment, note, start, cook }
 ├─ equipment[]  { id, name, station, custom, pulled }
 ├─ bowls[]      { id, label, stepId }
@@ -214,8 +214,23 @@ field, a dropdown, a board marker and a print marker to do it.
   Searing while the rice simmers is competence, not a clash. Scheduling each
   recipe independently against the same plate-up manufactured the very conflicts
   the app then flagged.
-- **Prep front-loads.** Any step marked "do ahead" (`step.ahead`) runs in a prep
-  block before cooking starts. This costs elapsed time — a simmer window cannot
+- **Prep front-loads, and has no internal order.** Any step ticked **Prep**
+  (`step.prep`) runs in a block before cooking starts, and the steps in that
+  block are unordered relative to each other, so a team can split them. Cooking
+  steps stay chained to their recipe — you cannot sear before you dredge — but
+  juicing a lemon and dicing an onion have nothing to do with each other.
+  Chaining prep per recipe capped the block at the length of one recipe's prep
+  and left extra cooks with nothing to do.
+
+  The label is deliberately the single word **Prep**, not "can be done earlier".
+  "Is this prep?" is a word a culinary student already uses and answers by
+  recognition; asking whether a step could happen earlier asks them to reason
+  about ordering, which is the app's job. The cost is that two prep steps that
+  genuinely depend on each other — toast the nuts, then chop them — will be
+  scheduled at the same time. Accepted, rather than adding a dependency editor
+  to a ten-minute activity.
+
+  Any step marked prep runs in a prep block before cooking starts. This costs elapsed time — a simmer window cannot
   absorb prep that is already done — and that is the trade the doctrine is worth.
   The idle gaps it opens are where cleaning down goes.
 - **The anchor is a shift, not a direction.** `schedule.anchor` is `early` (plan
@@ -271,14 +286,46 @@ recipe times assume the mise is already done and nothing waits on anything.
 `schedule.cooks` (1–`MAX_COOKS`) is how many pairs of hands the scheduler may
 assume. Same steps, same durations, same backward pass — only the hands
 constraint relaxes, so a student keeps one solo plan and whoever is managing the
-kitchen flips it up for the day. Each hands-on step is assigned a `cook`, given
-to whoever can take it latest and breaking ties toward whoever has done least;
-one person quietly doing the whole dish is a bad plan even when the arithmetic
-works. Hands conflicts are then checked **per cook**. Stations don't relax: four
+kitchen flips it up for the day.
+
+Each hands-on step is assigned a `cook` by three rules, in order. Only the first
+may affect the timing:
+
+1. **Who can take it latest**, so the step lands as close to its deadline as
+   possible. This is the only rule that decides *when* work happens.
+2. **The cook already on that recipe**, when more than one ties on rule 1.
+   Because every cook is assumed able to do every task, choosing between cooks
+   that tie cannot change the length of the plan — it decides only whose name is
+   on the block. Without this rule a cook is handed a step of the rice, then a
+   step of the chicken, then the rice again: a correct schedule and a nonsense
+   assignment.
+3. **Whoever has done least**, when the first two still tie, so one person does
+   not quietly carry the whole dish.
+
+A step made only of waiting does not put a cook "on" its recipe; it is assigned
+a cook by convention and should not claim anyone's attention.
+
+Rule 2 stops short of the version it was taken from, which also let the
+scheduler choose a *less urgent* task from the cook's current recipe within a
+tolerance measured in minutes. That variant can make a plan longer and needs a
+value tuned against real recipes, so it was not taken.
+
+Hands conflicts are then checked **per cook**. Stations don't relax: four
 cooks still share one oven, and the board says plainly when someone has been
 given nothing to do.
 
 ## 7. The printed artifact
+
+> **Reopened 2026-09-05, and the question is purpose, not layout.** What the
+> paper is *for* was inherited from the original spec and never re-examined: a
+> gate to hand in, a working sheet at the stove, and a permanent record are
+> three different documents. Nothing below is being built against until that is
+> settled — see the beads issue "Rethink the printout".
+>
+> One thing is already known to be wrong whatever the answer: print is the input
+> form with its chrome hidden, so sheet one prints the ingredients twice (the
+> list in §2 and the bowl assignment in §4) and the steps twice (the method in
+> §2 and the equipment pass in §3).
 
 The PDF is the deliverable and it goes in a recipe book.
 
@@ -303,6 +350,7 @@ Set once per assignment, via URL parameters on the Canvas embed:
 | `period` | Preselects a period by id | nearest by time of day |
 | `mode` | `guided` or `free` **starting** state — student may change it | `guided` |
 | `timer` | Planning countdown, minutes | **off** |
+| `demo` | Load the worked example in `js/demo.js` instead of a blank plan | off |
 
 The equipment palette, the stations, the cooking window and the bell schedule
 stay teacher-editable in `js/config.js` with no code changes elsewhere.
@@ -388,3 +436,9 @@ Worth revisiting once students have used it, but not holding anything up:
 - Whether the one bottom-up review pass catches as much as the old backward
   elicitation did.
 - Whether one oven warning is too few in practice.
+- **What the printout is for** (§7), which decides what goes on it.
+- Whether the board should explain when extra cooks cannot help. Rule 2 above
+  means a third cook on a two-recipe plan now gets an empty lane. That is
+  truthful — the plan has only two independent chains, and a serial chain cannot
+  be shortened by adding people — but the board states it flatly rather than
+  explaining why.

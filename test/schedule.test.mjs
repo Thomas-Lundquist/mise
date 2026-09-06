@@ -95,11 +95,11 @@ function buildPlan({ anchor = "fixed" } = {}) {
 // --- Prep front-loads ------------------------------------------------------
 {
   const { plan, steps } = buildPlan();
-  steps.dredge.ahead = true;   // the student says the dredging can be done in advance
+  steps.dredge.prep = true;   // the student says the dredging can be done in advance
   const info = applyGuidedSchedule(plan);
   const ranges = resolveSchedule(plan);
 
-  check("the do-ahead step becomes the prep block", info.prepMins, 7);
+  check("the prep step becomes the prep block", info.prepMins, 7);
   check("and it runs before any cooking starts",
     ranges.get(steps.dredge.id).end <= ranges.get(steps.toast.id).start, true);
   check("prep-first costs elapsed time: 33 -> 39 min", info.span, 39);
@@ -372,6 +372,121 @@ function buildPlan({ anchor = "fixed" } = {}) {
     range.segments.map((x) => [x.start - range.start, x.end - range.start]),
     [[0, 1], [1, 6], [6, 7]]);
   check("and the step's span is their total", range.end - range.start, 7);
+}
+
+// --- Which cook gets the work ----------------------------------------------
+//
+// Cook selection has one rule that may affect timing — take the cook who can
+// start it latest — and two that may not. Being handed a step of the rice, then
+// a step of the chicken, then the rice again is a fine schedule and a nonsense
+// assignment, so a tie goes to whoever is already on that recipe.
+//
+// The point of the test is the second check: the plan is exactly as long as it
+// was before. Preferring a cook cannot cost time, because any cook can do any
+// task; it only decides whose name is on the block.
+{
+  const recipeRuns = (plan, cook) => {
+    const mine = plan.steps
+      .filter((s) => s.cook === cook && handsMins(s) > 0)
+      .sort((a, b) => a.start - b.start)
+      .map((s) => s.recipeId);
+    let switches = 0;
+    for (let i = 1; i < mine.length; i++) if (mine[i] !== mine[i - 1]) switches++;
+    return { count: mine.length, switches };
+  };
+
+  for (const cooks of [2, 3]) {
+    const { plan } = buildPlan();
+    plan.schedule.cooks = cooks;
+    const span = planSpan(plan, resolveSchedule(plan));
+
+    // 30 minutes is what this plan took before cook selection knew about
+    // recipes at all. It is the number that must not move.
+    check(`${cooks} cooks: the plan is the same length as before affinity`,
+      span.end - span.start, 30);
+
+    let switches = 0;
+    for (let c = 0; c < cooks; c++) switches += recipeRuns(plan, c).switches;
+    check(`${cooks} cooks: nobody is bounced between recipes`, switches, 0);
+  }
+}
+
+// One recipe's steps are a chain — you cannot shape it before you mix it — so a
+// second cook cannot start anything sooner. Handing the whole run to one person
+// is therefore the right answer, not hoarding: splitting it would only mean two
+// people taking turns at the same pot.
+{
+  const build = (cooks) => {
+    const plan = createPlan({ recipe: "One dish", foodUp: "12:35" });
+    plan.schedule.anchor = "fixed";
+    plan.schedule.cooks = cooks;
+    for (const name of ["Chop", "Mix", "Shape", "Finish"]) {
+      appendStep(plan, createStep({ recipeId: plan.recipes[0].id, name, mins: 4, hands: true }));
+    }
+    return plan;
+  };
+
+  const lengths = [1, 2, 3].map((cooks) => {
+    const plan = build(cooks);
+    const span = planSpan(plan, resolveSchedule(plan));
+    return span.end - span.start;
+  });
+  check("extra cooks cannot shorten a single chain of steps", lengths, [16, 16, 16]);
+
+  const plan = build(2);
+  resolveSchedule(plan);
+  check("so the whole run stays with one of them",
+    new Set(plan.steps.map((s) => s.cook)).size, 1);
+}
+
+// --- Prep has no order, and that is what lets a team split it ---------------
+//
+// Cooking steps follow their recipe: you cannot sear before you dredge. Prep
+// does not — juicing a lemon and dicing an onion have nothing to do with each
+// other. Chaining prep per recipe capped the prep block at the length of one
+// recipe's prep, so a third cook had nothing to do no matter how much mise
+// there was.
+{
+  const build = (cooks) => {
+    const plan = createPlan({ recipe: "Chicken piccata", foodUp: "12:35" });
+    plan.schedule.anchor = "fixed";
+    plan.schedule.cooks = cooks;
+    const chicken = plan.recipes[0];
+    const rice = addRecipe(plan, "Rice pilaf");
+    const add = (r, name, mins, hands, prep = false) =>
+      appendStep(plan, createStep({ recipeId: r.id, name, mins, hands, prep }));
+
+    add(chicken, "Pound the cutlets", 5, true, true);
+    add(chicken, "Dredge station", 4, true, true);
+    add(chicken, "Juice the lemons", 3, true, true);
+    add(chicken, "Chop the parsley", 3, true, true);
+    add(rice, "Dice the onion", 4, true, true);
+    add(rice, "Measure the stock", 2, true, true);
+
+    add(chicken, "Sear the cutlets", 8, true);
+    add(chicken, "Reduce the sauce", 6, false);
+    add(chicken, "Plate", 2, true);
+    add(rice, "Toast the rice", 5, true);
+    add(rice, "Simmer covered", 18, false);
+    add(rice, "Fluff and season", 2, true);
+    return plan;
+  };
+
+  const prepBlocks = [1, 2, 3, 4].map((n) => applyGuidedSchedule(build(n)).prepMins);
+  check("21 min of mise, and more hands clears it faster", prepBlocks, [21, 11, 8, 7]);
+
+  // The solo sheet is the one a student keeps, so it must not move.
+  const solo = build(1);
+  const soloSpan = planSpan(solo, resolveSchedule(solo));
+  check("one cook is unaffected — a single pair of hands is serial anyway",
+    soloSpan.end - soloSpan.start, 48);
+
+  // The point of the change: nobody is left standing about.
+  const four = build(4);
+  resolveSchedule(four);
+  const perCook = [0, 1, 2, 3].map((c) =>
+    four.steps.filter((s) => s.cook === c).reduce((n, s) => n + handsMins(s), 0));
+  check("with four cooks every one of them has work", perCook.every((m) => m > 0), true);
 }
 
 console.log(failures === 0 ? "\nAll checks passed." : `\n${failures} FAILED`);

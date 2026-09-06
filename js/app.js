@@ -73,7 +73,13 @@ function openingPlan() {
   return (recent && loadPlan(recent)) || freshPlan();
 }
 
-let plan = openingPlan();
+// ?demo loads a worked example instead of a blank slate — for showing a class
+// what a finished plan looks like, and for not retyping a recipe on every
+// reload while working on the app. Imported dynamically, so the example costs
+// nothing when it is not asked for.
+let plan = params.has("demo")
+  ? (await import("./demo.js")).buildDemoPlan()
+  : openingPlan();
 savePlan(plan);
 
 // --- The sections ---------------------------------------------------------

@@ -25,7 +25,7 @@ import { h, field, button, removeButton } from "../dom.js";
 const drafts = new Map();
 
 function draftFor(recipeId) {
-  if (!drafts.has(recipeId)) drafts.set(recipeId, { name: "", mins: "", hands: null, ahead: false });
+  if (!drafts.has(recipeId)) drafts.set(recipeId, { name: "", mins: "", hands: null, prep: false });
   return drafts.get(recipeId);
 }
 
@@ -214,7 +214,7 @@ function renderStepRow(ctx, step, index, total) {
   const single = step.segments.length === 1;
 
   const addLine = (afterSegmentId) => {
-    const seg = addSegment(plan, step.id, { afterSegmentId, mins: 0, hands: !afterSegmentId });
+    const seg = addSegment(plan, step.id, { afterSegmentId, mins: 1, hands: !afterSegmentId });
     refresh();
     const again = document.getElementById(`seg-mins-${seg.id}`);
     if (again) again.focus({ preventScroll: true });
@@ -239,7 +239,7 @@ function renderStepRow(ctx, step, index, total) {
           `hands-${step.segments[0].id}`, `Are your hands on "${step.name}"?`)
       : h("span"),
 
-    aheadCheck(step, refresh),
+    prepCheck(step, refresh),
 
     h("div", { class: "step-row__controls no-print" },
       iconButton("↑", `Move ${step.name} earlier`, index === 0,
@@ -295,7 +295,7 @@ function renderSegmentRow(ctx, step, seg, index) {
       iconButton("↓", "Move this line later", index === step.segments.length - 1,
         () => { if (moveSegment(plan, step.id, seg.id, 1)) refresh(); }),
       iconButton("+", "Add a line after this one", false, () => {
-        const added = addSegment(plan, step.id, { afterSegmentId: seg.id, mins: 0, hands: !seg.hands });
+        const added = addSegment(plan, step.id, { afterSegmentId: seg.id, mins: 1, hands: !seg.hands });
         refresh();
         const again = document.getElementById(`seg-mins-${added.id}`);
         if (again) again.focus({ preventScroll: true });
@@ -309,14 +309,18 @@ function minsField(ctx, seg, label) {
     h("input", {
       id: `seg-mins-${seg.id}`,
       type: "number",
-      min: "0",
-      step: "0.5",
-      inputMode: "decimal",
+      // One minute is the floor everywhere. Half-minutes are real in a kitchen
+      // — a cutlet is flipped in about ten seconds — but they are fiddly to
+      // type, they inflate nothing when rounded up, and rounding up buys a
+      // little honest slack in a plan built by a fifteen-year-old.
+      min: "1",
+      step: "1",
+      inputMode: "numeric",
       "aria-label": label,
       value: String(seg.mins),
       onInput: (e) => {
         const value = Number(e.target.value);
-        if (Number.isFinite(value) && value >= 0) { seg.mins = value; save(); }
+        if (Number.isFinite(value) && value >= 1) { seg.mins = value; save(); }
       },
       onChange: refresh,
     }),
@@ -349,16 +353,19 @@ function handsToggle(value, onChange, idPrefix, groupLabel) {
   }, option(true, "Hands on"), option(false, "Runs itself"));
 }
 
-function aheadCheck(step, refresh) {
-  const id = `step-ahead-${step.id}`;
-  return h("div", { class: "ahead" },
+// One word, no hint. "Is this prep?" is a word a culinary student already
+// uses; asking whether a step could be done earlier would make them reason
+// about ordering, which is the app's job rather than theirs.
+function prepCheck(step, refresh) {
+  const id = `step-prep-${step.id}`;
+  return h("div", { class: "prep-check" },
     h("input", {
       id,
       type: "checkbox",
-      checked: Boolean(step.ahead),
-      onChange: (e) => { step.ahead = e.target.checked; refresh(); },
+      checked: Boolean(step.prep),
+      onChange: (e) => { step.prep = e.target.checked; refresh(); },
     }),
-    h("label", { for: id, text: "Do ahead", title: "Can this be ready before you start cooking?" }));
+    h("label", { for: id, text: "Prep", title: "Cutting, measuring, portioning — anything you get ready before you cook" }));
 }
 
 // What a draft step still needs before it can be added. One definition, used by
@@ -411,9 +418,9 @@ function renderAddStep(ctx, recipe) {
       name: draft.name.trim(),
       mins: Number(draft.mins),
       hands: draft.hands,
-      ahead: draft.ahead,
+      prep: draft.prep,
     }));
-    drafts.set(recipe.id, { name: "", mins: "", hands: null, ahead: false });
+    drafts.set(recipe.id, { name: "", mins: "", hands: null, prep: false });
     refresh();
     const again = document.getElementById(`add-name-${recipe.id}`);
     if (again) again.focus({ preventScroll: true });
@@ -455,14 +462,14 @@ function renderAddStep(ctx, recipe) {
     handsToggle(draft.hands, (value) => { draft.hands = value; refresh(); },
       `add-hands-${recipe.id}`, "Are your hands on this step?"),
 
-    h("div", { class: "ahead" },
+    h("div", { class: "prep-check" },
       h("input", {
-        id: `add-ahead-${recipe.id}`,
+        id: `add-prep-${recipe.id}`,
         type: "checkbox",
-        checked: draft.ahead,
-        onChange: (e) => { draft.ahead = e.target.checked; },
+        checked: draft.prep,
+        onChange: (e) => { draft.prep = e.target.checked; },
       }),
-      h("label", { for: `add-ahead-${recipe.id}`, text: "Do ahead" })),
+      h("label", { for: `add-prep-${recipe.id}`, text: "Prep" })),
 
     h("button", {
       type: "button",

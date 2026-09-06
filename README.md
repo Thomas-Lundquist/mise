@@ -134,6 +134,7 @@ Per-assignment settings go on the embed URL:
 | `?period=` | Preselects a period by id |
 | `?timer=` | Planning countdown in minutes (off by default) |
 | `?mode=free` | Start on free placement instead of guided |
+| `?demo` | Load a worked example plan instead of a blank one |
 
 ## Deployment
 
