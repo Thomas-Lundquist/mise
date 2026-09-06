@@ -60,18 +60,11 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 
 ## Build & Test
 
-_Add your build and test commands here_
+No build step and no dependencies. Tests: `node test/run.mjs`.
 
-```bash
-# Example:
-# npm install
-# npm test
-```
+Serve locally with any static file server; opening `index.html` over `file://`
+will not work, because the app uses ES modules.
 
-## Architecture Overview
+## Architecture
 
-_Add a brief overview of your project architecture_
-
-## Conventions & Patterns
-
-_Add your project-specific conventions here_
+See `docs/spec.md` §10.
