@@ -453,23 +453,48 @@ assignment in §4) and the steps twice (the method in §2 and the equipment pass
 in §3), printed form controls as underlined blanks, and needed a `beforeprint`
 listener to force the folded sections open. That listener is gone.
 
-### The two sheets
+### Two pages, always
 
-**Sheet one — Before you start.** The gathering sheet, in the order decided
-2026-09-04: the full ingredient list as a tick-off checklist, then the pull list
-grouped by station, then the bowls with what goes in each and which step it has
-to be ready before. Headed by the one-line readiness summary (§5), because
-whatever else the paper is, a teacher wants to see at a glance that the thinking
-happened.
+> **Settled 2026-09-07: it is two pages.** Gathering and cooking were a sheet
+> each and neither filled one — a checklist and a list, both mostly whitespace —
+> so a student carried three pages to a bench that already had a chopping board
+> on it. They are now two halves of one page, and the timeline is the other.
 
-**Sheet two — At the stove.** A **running order**: one pass down the clock
-carrying every step and every stretch where a pair of hands is free, then the
-clashes in words, then the notes. This answers *what do I do next*.
+**Page one, top half — Before you start.** The gathering half, in the order
+decided 2026-09-04: the full ingredient list as a tick-off checklist, then the
+pull list grouped by station, then the bowls with what goes in each and which
+step it has to be ready before. The three run as a **three-column flow** rather
+than three fixed columns, so they balance themselves: a plan with no equipment
+does not print a third of a page of nothing. Bowls are a tick list, not the
+four-column table they were — that table wanted the full width of the page to
+say three things about three bowls. Headed by the one-line readiness summary
+(§5), because whatever else the paper is, a teacher wants to see at a glance
+that the thinking happened.
 
-**Sheet three — The whole plan.** The timeline, on a page of its own, answering
+**Page one, bottom half — At the stove.** A **running order**: one pass down the
+clock carrying every step and every stretch where a pair of hands is free, then
+the clashes in words, then the notes. This answers *what do I do next*. Where a
+time came from still prints on every row, but beside the number rather than
+under it, which is a line per step back across the whole page.
+
+The clock line — *start cooking 11:50 · food up 12:35* — is the page's headline
+rather than a line inside it. At a stove it is the first thing you look for, and
+the thing you look for again after every interruption.
+
+**Page two — The whole plan.** The timeline, on a page of its own, answering
 *what does this look like* — the page you would tape inside a cabinet door.
 Added 2026-09-06 by teacher decision, reversing an earlier inference that left
 it off.
+
+**Making page one be one page.** The sheet cannot measure itself: nothing is laid
+out at print sizes until the print dialog opens, and by then no code of ours
+runs. So `estimateMm()` counts what the sheet is about to hold — millimetre
+costs read off a rendered sheet, deliberately a shade generous — and picks one of
+three ink densities. The tightening is a single CSS custom property, `--ink`,
+that every size on the sheet is written as a multiple of, so nothing is dropped
+or reworded at any density; the same sheet is simply set smaller. A plan too big
+for even the tightest setting spills to a third page, which is the right failure:
+losing a step to save paper is not on the table.
 
 > It obeys the toner rule by drawing **outlines, not fills**: hands-on is a
 > solid hairline box, unattended is dashed over a whisper of grey, and every

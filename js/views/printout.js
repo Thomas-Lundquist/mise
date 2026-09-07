@@ -13,6 +13,20 @@
 // So the printout is COMPOSED, not filtered. It shares the plan and the
 // scheduler with the screen and nothing else.
 //
+// TWO PAGES, ALWAYS (teacher, 2026-09-07). Gathering and cooking were two
+// sheets; they are now two halves of ONE sheet, and the timeline is the other
+// page. Three sheets was one more than a student will carry to a bench that
+// already has a chopping board on it, and the first two were never full — the
+// gather sheet is a checklist and the stove sheet is a list, so each wasted
+// most of a page in whitespace. Folded together they run about two thirds of a
+// page for an ordinary lab.
+//
+// "Almost always" is the honest claim, so this file makes it true rather than
+// hoping: estimateMm() adds up what the sheet is about to hold, and a plan too
+// big for a page prints at a tighter ink density instead of spilling. A plan
+// bigger than even the tightest density does spill to a third page, which is
+// the right failure — dropping a step to save paper is not on the table.
+//
 // Written for a black-and-white school printer, read from three feet away by
 // someone with flour on their hands:
 //
@@ -22,11 +36,11 @@
 //   • checkboxes, because it is a working document and not a receipt
 //   • nothing that addresses a cursor: no "click", no "tap", no buttons
 //
-// THE TIMELINE IS ON SHEET 3, on a page of its own (teacher, 2026-09-06,
+// THE TIMELINE IS THE SECOND PAGE, on a page of its own (teacher, 2026-09-06,
 // reversing an inference this file originally made the other way). The running
-// order on sheet 2 answers "what do I do next"; the timeline answers "what does
-// the whole thing look like", and it is the one page you would tape inside a
-// cabinet door.
+// order on page one answers "what do I do next"; the timeline answers "what
+// does the whole thing look like", and it is the one page you would tape inside
+// a cabinet door.
 //
 // It obeys the toner rule by drawing OUTLINES, not fills: hands-on is a solid
 // hairline box, unattended is a dashed one over a whisper of grey. That is also
@@ -71,11 +85,13 @@ export function render(plan) {
     lanes: timelineLanes(plan, ranges, cooks),
     checkpoints: checkpointsByStep(plan, ranges),
   };
+  // Built once, because the running order prints these and the height estimate
+  // counts them, and those two have to be looking at the same sheet.
+  view.rows = runningOrderRows(view);
 
   return h("div", null,
-    sheetOne(view),
-    sheetTwo(view),
-    sheetThree(view));
+    planSheet(view),
+    timelineSheet(view));
 }
 
 // --- Shared furniture -----------------------------------------------------
@@ -104,6 +120,15 @@ function sheetHead(plan, title, subtitle) {
     subtitle && h("p", { class: "sheet__sub", text: subtitle }));
 }
 
+// The two halves of page one still say what they are. The old sheet titles
+// became these: one rule across the page, with the instruction on the same line
+// so naming the half costs nothing but the rule.
+function sectionHead(title, aside) {
+  return h("h3", { class: "sheet__section" },
+    title,
+    aside && h("span", { text: aside }));
+}
+
 // A tick box drawn in CSS rather than typed as ☐, which not every printer font
 // has and which silently becomes a blank square when it is missing.
 function tick(label, extra = "") {
@@ -112,26 +137,40 @@ function tick(label, extra = "") {
     h("span", { class: "ticklist__text", text: label }));
 }
 
-// --- Sheet one: before you start ------------------------------------------
+// --- Page one: gather, then cook ------------------------------------------
 //
-// The gathering sheet, in the order decided 2026-09-04: the full ingredient
-// list as a checklist, then the pull list grouped by station, then the bowls
-// with what goes in each and which step it has to be ready before.
+// Gathering above, cooking below. The clock line is the page's headline rather
+// than a line inside it: at a stove it is the first thing you look for, and the
+// thing you look for again after every interruption.
 
-function sheetOne(view) {
-  const { plan, span, conflicts } = view;
+function planSheet(view) {
+  const { plan, span, conflicts, cooks } = view;
   const result = readiness(plan, { span, conflicts });
+  const shape = `${formatDuration(span.end - span.start)} of work in a ${formatDuration(plan.schedule.windowMins)} window`;
 
-  return h("section", { class: "sheet sheet--prep" },
-    sheetHead(plan, "Before you start", "Gather it all before the clock starts. Tick as you go."),
+  return h("section", { class: `sheet sheet--plan${inkClass(estimateMm(view))}` },
+    sheetHead(plan,
+      `Start cooking ${minutesToClock(span.start)}  ·  food up ${minutesToClock(resolvedFoodUp(plan))}`,
+      cooks > 1 ? `${shape}  ·  ${cooks} cooks` : shape),
 
     // The teacher wants to see at a glance that the thinking happened,
     // whatever else the paper is for.
     h("p", { class: "sheet__readiness", text: sayReadiness(result) }),
 
-    ingredientList(plan),
-    pullList(plan),
-    bowlList(plan));
+    sectionHead("Before you start", "Gather it all before the clock starts. Tick as you go."),
+    // A three-column flow rather than three fixed columns: the blocks balance
+    // themselves, so a plan with no equipment does not print a third of a page
+    // of nothing, and a long ingredient list uses the width instead of running
+    // down one edge.
+    h("div", { class: "gather" },
+      ingredientList(plan),
+      pullList(plan),
+      bowlList(plan)),
+
+    sectionHead("At the stove", "Running order — in the order it happens."),
+    runningOrder(view),
+    clashes(view),
+    notes(plan));
 }
 
 function ingredientList(plan) {
@@ -145,65 +184,56 @@ function ingredientList(plan) {
       if (items.length === 0) return null;
       return h("div", { class: "sheet__group" },
         many && h("h4", { class: "sheet__h4", text: recipe.name || "Untitled recipe" }),
-        h("ul", { class: "ticklist ticklist--cols" },
+        h("ul", { class: "ticklist" },
           items.map((ing) => tick(ing.text))));
     }));
 }
 
 function pullList(plan) {
   if (plan.equipment.length === 0) return null;
-  const groups = STATIONS
-    .map((station) => ({ station, items: plan.equipment.filter((e) => e.station === station.id) }))
-    .filter((g) => g.items.length > 0);
 
-  return h("div", { class: "sheet__block" },
+  return h("div", { class: "sheet__block sheet__block--pull" },
     h("h3", { class: "sheet__h", text: "Pull this equipment" }),
-    h("div", { class: "sheet__stations" }, groups.map((group) =>
+    equipmentGroups(plan).map((group) =>
       h("div", { class: "sheet__group" },
         h("h4", { class: "sheet__h4", text: group.station.label }),
-        h("ul", { class: "ticklist" }, group.items.map((item) => tick(item.name)))))));
+        h("ul", { class: "ticklist" }, group.items.map((item) => tick(item.name))))));
 }
 
+function equipmentGroups(plan) {
+  return STATIONS
+    .map((station) => ({ station, items: plan.equipment.filter((e) => e.station === station.id) }))
+    .filter((g) => g.items.length > 0);
+}
+
+function filledBowls(plan) {
+  return plan.bowls.filter((b) => ingredientsInBowl(plan, b.id).length > 0 || b.label.trim());
+}
+
+// A tick list, where this used to be a four-column table. The table wanted the
+// full width of the page to say three things about three bowls, and that
+// wastefulness is exactly why gathering used to need a sheet of its own.
 function bowlList(plan) {
-  const filled = plan.bowls.filter((b) => ingredientsInBowl(plan, b.id).length > 0 || b.label.trim());
+  const filled = filledBowls(plan);
   if (filled.length === 0) return null;
 
   return h("div", { class: "sheet__block" },
     h("h3", { class: "sheet__h", text: "Measure these out into bowls" }),
-    h("table", { class: "sheet__table" },
-      h("thead", null, h("tr", null,
-        h("th", { text: "" }),
-        h("th", { text: "Bowl" }),
-        h("th", { text: "What goes in it" }),
-        h("th", { text: "Ready before" }))),
-      h("tbody", null, filled.map((bowl, i) => {
-        const step = bowl.stepId ? plan.steps.find((s) => s.id === bowl.stepId) : null;
-        return h("tr", null,
-          h("td", null, h("span", { class: "tickbox" })),
-          h("td", { class: "sheet__bowlname", text: bowl.label.trim() || `Bowl ${i + 1}` }),
-          h("td", { text: ingredientsInBowl(plan, bowl.id).map((ing) => ing.text).join(" · ") }),
-          h("td", { text: step ? step.name : "—" }));
-      }))));
+    h("ul", { class: "ticklist" }, filled.map((bowl, i) => {
+      const step = bowl.stepId ? plan.steps.find((s) => s.id === bowl.stepId) : null;
+      const contents = ingredientsInBowl(plan, bowl.id).map((ing) => ing.text).join(" · ");
+      return h("li", { class: "ticklist__item" },
+        h("span", { class: "tickbox" }),
+        h("span", { class: "ticklist__text" },
+          h("span", { class: "sheet__bowlname", text: bowl.label.trim() || `Bowl ${i + 1}` }),
+          contents && ` — ${contents}`,
+          // A bowl is a moment, not a container: the step it has to be ready
+          // before is the only reason it gets measured out early at all.
+          step && h("span", { class: "bowl__when", text: `ready before ${step.name}` })));
+    })));
 }
 
-// --- Sheet two: at the stove ----------------------------------------------
-
-function sheetTwo(view) {
-  const { plan, span, cooks } = view;
-
-  return h("section", { class: "sheet sheet--stove" },
-    sheetHead(plan, "At the stove"),
-
-    h("p", { class: "sheet__numbers" },
-      h("strong", { text: `Start cooking ${minutesToClock(span.start)}` }),
-      `  ·  food up ${minutesToClock(resolvedFoodUp(plan))}  ·  `,
-      `${formatDuration(span.end - span.start)} of work in a ${formatDuration(plan.schedule.windowMins)} window`,
-      cooks > 1 ? `  ·  ${cooks} cooks` : ""),
-
-    runningOrder(view),
-    clashes(view),
-    notes(plan));
-}
+// --- The running order ----------------------------------------------------
 
 // A time that the STUDENT supplied rather than read off the card. Only these
 // get an "actual ____" blank beside them.
@@ -227,17 +257,23 @@ function timing(step) {
   return { plan: total, source: `recipe says ${stated}` };
 }
 
+// Said only when there is something to say. A step you stand over from start to
+// finish is the default and prints as nothing; the line earns its place when the
+// pan is going to let you go, because that is the sentence you act on — it is
+// the difference between standing there and getting the plates down.
 function shapeWords(step) {
-  if (!hasWaiting(step)) return "hands on";
+  if (!hasWaiting(step)) return "";
   if (handsMins(step) === 0) return "runs by itself";
   return `${formatDuration(handsMins(step))} hands on, then ${formatDuration(waitingMins(step))} by itself`;
 }
 
 // One pass down the clock: every step, and every stretch where a pair of hands
-// is free, in the order they happen. This is the sheet's whole reason to exist
-// — it answers "what do I do next" without being read as a diagram.
-function runningOrder(view) {
+// is free, in the order they happen. This is the half of the page that answers
+// "what do I do next" without being read as a diagram.
+function runningOrderRows(view) {
   const { plan, ranges, span, cooks } = view;
+  const grouped = plan.recipes.some((r) => isGrouped(plan, r.id));
+  const manyRecipes = plan.recipes.length > 1;
 
   // Prep is scheduled with NO internal order — that is the whole point of the
   // mise block, and it is what lets a team split it between them. Printing six
@@ -250,7 +286,26 @@ function runningOrder(view) {
   for (const step of plan.steps) {
     if (step.prep) continue;
     const range = ranges.get(step.id);
-    if (range) rows.push({ at: range.start, kind: "step", step, range });
+    if (!range) continue;
+
+    // Everything the row will actually say, worked out here rather than in the
+    // cell that prints it, because estimateMm() has to count the lines this row
+    // will take and the two must not be able to disagree about them.
+    const context = [
+      manyRecipes ? (recipeById(plan, step.recipeId) || {}).name : "",
+      grouped ? (bigIdeaForStep(plan, step) || {}).name : "",
+    ].filter((t) => t && t.trim()).join(" · ");
+
+    // Where a step calls you back partway through. On screen these are notches
+    // drawn inside the dish's own block; on paper they have to be words.
+    const checks = range.segments
+      .filter(({ seg }, i) => seg.hands && seg.mins <= 1 && i > 0 && !range.segments[i - 1].seg.hands)
+      .map((part) => `${minutesToClock(part.start)} ${part.seg.label.trim() || "check it"}`);
+
+    rows.push({
+      at: range.start, kind: "step", step, range,
+      context, checks, shape: shapeWords(step), time: timing(step),
+    });
   }
   for (let cook = 0; cook < cooks; cook++) {
     for (const gap of idleGaps(plan, ranges, span, cook)) {
@@ -260,14 +315,18 @@ function runningOrder(view) {
   }
   // Steps before gaps at the same minute: you finish the job, then you are free.
   rows.sort((a, b) => a.at - b.at || (a.kind === "gap" ? 1 : -1));
+  return rows;
+}
 
-  const grouped = plan.recipes.some((r) => isGrouped(plan, r.id));
-  const manyRecipes = plan.recipes.length > 1;
+function runningOrder(view) {
+  const { rows, cooks } = view;
 
-  return h("div", { class: "sheet__block" },
-    h("h3", { class: "sheet__h", text: "Running order" }),
+  // No heading of its own: the section rule above already says "At the stove ·
+  // Running order", and a second line saying it again is a line the sheet has
+  // to buy from somewhere.
+  return h("div", { class: "sheet__block sheet__block--run" },
     h("p", { class: "sheet__note",
-      text: "Every time here says where it came from. Where you guessed rather than read it off the recipe there's a blank — write down what it actually took, because that is how next week's guesses get better." }),
+      text: "Every time says where it came from. Where you guessed, write down what it actually took — that is how the guesses get better." }),
 
     h("table", { class: "sheet__table sheet__table--run" },
       h("thead", null, h("tr", null,
@@ -278,7 +337,7 @@ function runningOrder(view) {
       h("tbody", null, rows.map((row) => {
         if (row.kind === "mise") return miseRow(view, row);
         if (row.kind === "gap") return gapRow(row, cooks);
-        return stepRow(view, row, { grouped, manyRecipes });
+        return stepRow(view, row);
       }))));
 }
 
@@ -299,9 +358,10 @@ function miseRow(view, row) {
         text: cooks > 1 ? "Split these between you, then start cooking." : "All of this before you start cooking." }),
       h("span", { class: "run__checks", text: names.join(" · " ) })),
     h("td", { class: "run__long" },
-      h("span", { text: formatDuration(end - start) }),
-      h("span", { class: "run__shape", text: `until ${minutesToClock(end)}` }),
-      h("span", { class: "run__source", text: "your estimate" })),
+      h("span", { class: "run__span" },
+        formatDuration(end - start),
+        h("span", { class: "run__source", text: "your estimate" })),
+      h("span", { class: "run__shape", text: `until ${minutesToClock(end)}` })),
     h("td", { class: "run__actual" }, h("span", { class: "blank" })));
 }
 
@@ -313,21 +373,9 @@ function gapRow(row, cooks) {
       text: `${who}hands free until ${minutesToClock(row.gap.end)} — ${formatDuration(row.gap.end - row.gap.start)}. Wash up, wipe down, get plates ready.` }));
 }
 
-function stepRow(view, row, { grouped, manyRecipes }) {
-  const { plan, ranges, cooks, conflicts } = view;
-  const { step, range } = row;
-  const time = timing(step);
-
-  // Where a step calls you back partway through. On screen these are notches
-  // drawn inside the dish's own block; on paper they have to be words.
-  const checks = range.segments
-    .filter(({ seg }, i) => seg.hands && seg.mins <= 1 && i > 0 && !range.segments[i - 1].seg.hands)
-    .map((part) => `${minutesToClock(part.start)} ${part.seg.label.trim() || "check it"}`);
-
-  const context = [
-    manyRecipes ? (recipeById(plan, step.recipeId) || {}).name : "",
-    grouped ? (bigIdeaForStep(plan, step) || {}).name : "",
-  ].filter((s) => s && s.trim());
+function stepRow(view, row) {
+  const { cooks, conflicts } = view;
+  const { step, range, context, checks, shape, time } = row;
 
   return h("tr", { class: `run__step${step.prep ? " run__step--prep" : ""}` },
     h("td", { class: "run__time", text: minutesToClock(range.start) }),
@@ -337,23 +385,35 @@ function stepRow(view, row, { grouped, manyRecipes }) {
       step.prep && h("span", { class: "run__tag", text: "prep" }),
       cooks > 1 && h("span", { class: "run__tag", text: `cook ${(step.cook || 0) + 1}` }),
       conflicts.has(step.id) && h("span", { class: "run__tag run__tag--warn", text: "clash" }),
-      context.length > 0 && h("span", { class: "run__context", text: context.join(" · ") }),
+      context && h("span", { class: "run__context", text: context }),
       checks.length > 0 && h("span", { class: "run__checks", text: `back at ${checks.join(", ")}` })),
 
+    // Two lines rather than three. Where the number came from used to have a
+    // line to itself; sat beside the number it still prints on every row — a
+    // guess never prints as a fact — and the page gets a line per step back.
     h("td", { class: "run__long" },
-      h("span", { text: time.plan }),
-      h("span", { class: "run__shape", text: shapeWords(step) }),
-      // The provenance of the number, always, so a guess never prints as a fact.
-      h("span", { class: "run__source", text: time.source })),
+      h("span", { class: "run__span" },
+        time.plan,
+        h("span", { class: "run__source", text: time.source })),
+      shape && h("span", { class: "run__shape", text: shape })),
 
     h("td", { class: "run__actual" },
       isStudentEstimate(step) ? h("span", { class: "blank" }) : h("span", { text: "" })));
 }
 
 function clashes(view) {
-  const { plan, conflicts, ranges, cooks } = view;
-  if (conflicts.size === 0) return null;
+  const lines = clashLines(view);
+  if (lines.length === 0) return null;
 
+  return h("div", { class: "sheet__block" },
+    h("h3", { class: "sheet__h", text: "Watch out for" }),
+    h("ul", { class: "sheet__list" }, lines.map((line) => h("li", { text: line }))),
+    view.plan.conflictsAccepted && h("p", { class: "sheet__note",
+      text: "You decided to do these one after the other." }));
+}
+
+function clashLines(view) {
+  const { plan, conflicts, ranges, cooks } = view;
   const lines = [];
   const seen = new Set();
   for (const [stepId, reasons] of conflicts) {
@@ -370,17 +430,11 @@ function clashes(view) {
       lines.push(`"${step.name}" and "${otherStep.name}" — ${describeConflict(reasons, cooks)}.`);
     }
   }
-  if (lines.length === 0) return null;
-
-  return h("div", { class: "sheet__block" },
-    h("h3", { class: "sheet__h", text: "Watch out for" }),
-    h("ul", { class: "sheet__list" }, lines.map((line) => h("li", { text: line }))),
-    plan.conflictsAccepted && h("p", { class: "sheet__note",
-      text: "You decided to do these one after the other." }));
+  return lines;
 }
 
 function notes(plan) {
-  const withNotes = plan.steps.filter((s) => s.note && s.note.trim());
+  const withNotes = stepsWithNotes(plan);
   if (withNotes.length === 0) return null;
   return h("div", { class: "sheet__block" },
     h("h3", { class: "sheet__h", text: "Don't forget" }),
@@ -388,14 +442,116 @@ function notes(plan) {
       h("li", null, h("strong", { text: `${step.name}: ` }), step.note))));
 }
 
-// --- Sheet three: the timeline --------------------------------------------
+function stepsWithNotes(plan) {
+  return plan.steps.filter((s) => s.note && s.note.trim());
+}
+
+// --- Keeping page one to one page -----------------------------------------
+//
+// The sheet cannot measure itself. Nothing is laid out at print sizes until the
+// print dialog opens, and by then no code of ours runs — so it counts what it
+// is about to draw instead. These millimetre costs were read off a rendered
+// sheet at full density and are deliberately a shade generous: the failure that
+// matters is a plan spilling onto a third page, not one printing a little
+// smaller than it strictly had to.
+//
+// The tightening itself is one CSS custom property, --ink, which every size on
+// this sheet is written as a multiple of. Nothing is dropped and nothing is
+// reworded at any density; the same sheet is simply set smaller.
+
+// Measured in Chrome with print media emulated at the letter content width.
+// They are millimetres of paper, and they only have to be right enough to
+// choose between three densities; if the sheet is ever redrawn, remeasure them.
+const PAGE_MM = 246;        // letter at 12mm margins, less a margin for error
+const DENSE = 0.9;          // how far --ink takes the sheet in at each step
+const DENSER = 0.8;
+
+const HEAD_MM = 56;         // the sheet head, the readiness line, the two section
+                            // rules, and the margins between every part of it
+const BLOCK_MM = 7;         // a block heading and the rule under it
+const GROUP_MM = 5;         // a recipe name or a station name inside one
+const TICK_MM = 4.5;        // one line with a tick box beside it
+const BOWL_LINES = 3;       // a bowl wraps: its contents, then what it precedes
+const GATHER_COLS = 2.55;   // three columns, less what imperfect balancing wastes
+const RUN_MM = 14;          // the note above the table, and the table's head row
+const ROW_LINE_MM = 3.7;    // one line inside a row of the running order
+const ROW_PAD_MM = 2.7;     // and the padding above and below it
+const GAP_ROW_MM = 6;       // a stretch of free hands is always one line
+const TAIL_MM = 6;          // a heading over the clashes or over the notes
+const TAIL_LINE_MM = 4.5;   // and one of their lines
+
+// How many lines a string takes in a column holding about `chars` of them.
+// Crude on purpose: this is choosing a density, not typesetting.
+function lineCount(text, chars) {
+  return Math.max(1, Math.ceil((text || "").length / chars));
+}
+
+const GATHER_CHARS = 32;    // a tick line in one of the three gather columns
+const RUN_CHARS = 62;       // the "what" column of the running order
+
+// What a row of the running order will stand: the taller of its two full cells,
+// each counted in lines. Everything it reads was worked out in
+// runningOrderRows(), so this cannot drift from what actually prints.
+function rowMm(row) {
+  if (row.kind === "gap") return GAP_ROW_MM;
+
+  const lines = row.kind === "mise"
+    // Name and tag, then the "split these between you" line, then every task in
+    // the block on one wrapping line.
+    ? 2 + lineCount(row.prep.map((s) => s.name).filter(Boolean).join(" · "), RUN_CHARS)
+    : Math.max(
+      lineCount(row.step.name, RUN_CHARS)
+        + (row.context ? 1 : 0)
+        + (row.checks.length > 0 ? lineCount(row.checks.join(", "), RUN_CHARS) : 0),
+      1 + (row.shape ? 1 : 0));
+
+  return lines * ROW_LINE_MM + ROW_PAD_MM;
+}
+
+function estimateMm(view) {
+  const { plan, rows } = view;
+  const bowls = filledBowls(plan);
+
+  const blocks = [plan.ingredients.length > 0, plan.equipment.length > 0, bowls.length > 0]
+    .filter(Boolean).length;
+  const groups = plan.recipes.filter((r) => ingredientsForRecipe(plan, r.id).length > 0).length
+    + equipmentGroups(plan).length;
+  const ticks = [
+    ...plan.ingredients.map((i) => i.text),
+    ...plan.equipment.map((e) => e.name),
+  ].reduce((n, text) => n + lineCount(text, GATHER_CHARS), 0);
+
+  // The gather band is a three-column flow, so what it holds is divided about
+  // three ways — with a floor, because two ingredients still cost a heading and
+  // a rule, and columns cannot balance below one line.
+  const gatherInk = blocks * BLOCK_MM + groups * GROUP_MM
+    + (ticks + bowls.length * BOWL_LINES) * TICK_MM;
+  const gather = gatherInk === 0 ? 0 : Math.max(gatherInk / GATHER_COLS, 18);
+
+  const run = rows.reduce((mm, row) => mm + rowMm(row), RUN_MM);
+
+  const clash = clashLines(view).length;
+  const note = stepsWithNotes(plan).length;
+  const tail = (clash > 0 ? TAIL_MM + clash * TAIL_LINE_MM : 0)
+    + (note > 0 ? TAIL_MM + note * TAIL_LINE_MM : 0);
+
+  return HEAD_MM + gather + run + tail;
+}
+
+function inkClass(mm) {
+  if (mm <= PAGE_MM) return "";
+  if (mm <= PAGE_MM / DENSE) return " sheet--dense";
+  return " sheet--denser";
+}
+
+// --- Page two: the timeline -----------------------------------------------
 //
 // Scaled to its own page: minutes become millimetres at whatever rate makes the
 // plan fill the sheet, capped so a short plan is drawn large but not absurd.
 // The screen board's px-per-minute is irrelevant here — paper has a fixed
 // height and that is the constraint that sets the scale.
 
-function sheetThree(view) {
+function timelineSheet(view) {
   const { plan, span, lanes } = view;
 
   const top = span.start;
@@ -456,7 +612,7 @@ function sheetThree(view) {
           }),
 
           // The moments this cook is pinned to a pan for a minute. Unlabelled
-          // here — sheet 2 says what each one is — but the lane must not read
+          // here — page one says what each one is — but the lane must not read
           // as free when it is not.
           (lane.notches || []).map((cp) => h("div", {
             class: "pt__notch",

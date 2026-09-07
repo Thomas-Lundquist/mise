@@ -539,9 +539,34 @@ function samplePlan() {
   check("it carries clock times, which is the one thing needed at a stove",
     /\d\d:\d\d/.test(text), true);
   check("identity leads every sheet, so a separated page is never anonymous",
-    countClass(tree, "sheet__identity"), 3);
-  check("and it is three sheets: gather, run, and the whole plan",
-    countClass(tree, "sheet"), 3);
+    countClass(tree, "sheet__identity"), 2);
+  // TWO PAGES, ALWAYS (teacher, 2026-09-07). Gathering and cooking share page
+  // one — neither filled a sheet on its own — and the timeline is page two.
+  check("and it is two sheets: the plan, and the whole plan drawn",
+    countClass(tree, "sheet"), 2);
+  check("gathering and cooking are two halves of one page",
+    countClass(tree, "sheet--plan"), 1);
+}
+
+// The sheet cannot measure itself — nothing is laid out at print sizes until
+// the print dialog opens — so it counts what it is about to draw and comes in
+// tighter when that will not fit. Nothing is dropped at any density.
+{
+  const small = printout.render(samplePlan());
+  check("an ordinary lab prints at full size",
+    countClass(small, "sheet--dense") + countClass(small, "sheet--denser"), 0);
+
+  const big = samplePlan();
+  for (let i = 0; i < 40; i++) {
+    M.appendStep(big, M.createStep({
+      recipeId: big.recipes[0].id, name: `Filler ${i}`, mins: 3, shape: "hands", stated: "3",
+    }));
+  }
+  const tree = printout.render(big);
+  check("a plan too big for a page comes in rather than spilling",
+    countClass(tree, "sheet--dense") + countClass(tree, "sheet--denser"), 1);
+  check("and still carries every step it was given",
+    allText(tree).join(" | ").includes("Filler 39"), true);
 }
 
 // --- The timeline, on a page of its own ------------------------------------

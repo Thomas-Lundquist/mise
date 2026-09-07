@@ -1154,6 +1154,11 @@ input[type="checkbox"] {
     background: #fff;
     color: #000;
     font-size: 10pt;
+    /* The screen's 1.45 is set for a Chromebook at arm's length. On paper it
+       costs most of a millimetre on every one of the sixty-odd lines this sheet
+       carries, which is a page's worth of air across a class set. 1.3 is still
+       loose enough to read from three feet with flour on your hands. */
+    line-height: 1.3;
   }
 
   /* The entire screen app. */
@@ -1165,70 +1170,147 @@ input[type="checkbox"] {
 
   .printout { display: block; }
 
-  /* Two sheets: gather, then cook. Both go to the station. */
-  .sheet { break-after: page; }
+  /* TWO PAGES, ALWAYS (teacher, 2026-09-07). Page one is gathering and cooking
+     together; page two is the timeline. Gathering and cooking were a sheet each
+     and neither filled one, so a student carried three pages to a bench that
+     already had a chopping board on it.
+
+     --ink is how page one is kept to a page. Every size on this sheet is a
+     multiple of it, so js/views/printout.js can set one class and have the
+     whole sheet come in without a word of it being dropped or reworded. A plan
+     too big for even the tightest setting spills to a third page rather than
+     losing a step, which is the right way round. */
+  .sheet { break-after: page; --ink: 1; }
   .sheet:last-child { break-after: auto; }
+  .sheet--dense { --ink: 0.9; }
+  .sheet--denser { --ink: 0.8; }
 
   .sheet__head {
     border-bottom: 1pt solid #000;
-    padding-bottom: 2mm;
-    margin-bottom: 4mm;
+    padding-bottom: calc(2mm * var(--ink));
+    margin-bottom: calc(3mm * var(--ink));
   }
   /* Identity leads every sheet. Once they are separated the second one is
      anonymous otherwise, and a class set produces thirty of them. */
-  .sheet__identity { font-family: var(--mono); font-size: 8.5pt; margin: 0 0 1.5mm; }
-  .sheet__title { font-size: 15pt; margin: 0; }
-  .sheet__sub { font-size: 9pt; margin: 1mm 0 0; }
+  .sheet__identity { font-family: var(--mono); font-size: calc(8.5pt * var(--ink)); margin: 0 0 1mm; }
+  .sheet__title { font-size: calc(13pt * var(--ink)); margin: 0; }
+  .sheet__sub { font-size: calc(9pt * var(--ink)); margin: 1mm 0 0; }
 
   .sheet__readiness {
     font-family: var(--mono);
-    font-size: 9pt;
+    font-size: calc(9pt * var(--ink));
     border: 0.5pt solid #000;
-    padding: 1.5mm 2mm;
-    margin: 0 0 4mm;
+    padding: calc(1.2mm * var(--ink)) 2mm;
+    margin: 0 0 calc(4mm * var(--ink));
   }
-  .sheet__numbers { font-size: 11pt; margin: 0 0 4mm; }
 
-  .sheet__block { margin-bottom: 5mm; break-inside: avoid; }
+  /* The two halves of page one. They were sheet titles until the sheets were
+     folded together; a rule across the page keeps the names, and the
+     instruction rides on the same line so naming a half costs only the rule. */
+  .sheet__section {
+    font-size: calc(10pt * var(--ink));
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    border-bottom: 1pt solid #000;
+    padding-bottom: 1mm;
+    margin: 0 0 calc(2.5mm * var(--ink));
+    break-after: avoid;
+  }
+  .sheet__section span {
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 400;
+    font-style: italic;
+    font-size: calc(8.5pt * var(--ink));
+    margin-left: 2.5mm;
+  }
+
+  .sheet__block { margin-bottom: calc(4mm * var(--ink)); break-inside: avoid; }
+  /* The one block that must be allowed to break. It holds the whole running
+     order, so keeping it whole would throw the entire table onto a page of its
+     own the moment it did not fit under the gathering half — which is exactly
+     the third page this sheet exists to avoid. Rows hold together instead. */
+  .sheet__block--run { break-inside: auto; }
+  .sheet__table--run tr { break-inside: avoid; }
   .sheet__h {
-    font-size: 8.5pt;
+    font-size: calc(8.5pt * var(--ink));
     text-transform: uppercase;
     letter-spacing: 0.08em;
     border-bottom: 0.5pt solid #000;
     padding-bottom: 0.8mm;
-    margin: 0 0 2mm;
+    margin: 0 0 calc(1.5mm * var(--ink));
+    break-after: avoid;
   }
-  .sheet__h4 { font-size: 8.5pt; margin: 0 0 1mm; }
-  .sheet__group { break-inside: avoid; margin-bottom: 2.5mm; }
-  .sheet__stations { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3mm; }
-  .sheet__list { margin-left: 5mm; list-style: disc; font-size: 9.5pt; }
+  .sheet__h4 { font-size: calc(8.5pt * var(--ink)); margin: 0 0 1mm; break-after: avoid; }
+  .sheet__group { break-inside: avoid; margin-bottom: calc(2.5mm * var(--ink)); }
+  .sheet__list { margin-left: 5mm; list-style: disc; font-size: calc(9.5pt * var(--ink)); }
   .sheet__list li { margin-bottom: 0.8mm; }
-  .sheet__note { font-size: 8.5pt; font-style: italic; margin: 0 0 2mm; max-width: 80%; }
+  .sheet__note { font-size: calc(8.5pt * var(--ink)); font-style: italic; margin: 0 0 2mm; max-width: 80%; }
+  /* The one over the running order is written to be a single line, so it gets
+     the full measure rather than the 80% that keeps prose readable. */
+  .sheet__block--run .sheet__note { max-width: none; }
+
+  /* Gathering, as a three-column flow rather than three fixed columns: the
+     blocks balance themselves, so a plan with no equipment does not print a
+     third of a page of nothing and a long ingredient list uses the width
+     instead of running down one edge. The blocks themselves may break across
+     columns here — only groups and headings hold together — because a
+     fourteen-line ingredient list that refuses to break defeats the point. */
+  .gather {
+    columns: 3;
+    column-gap: 6mm;
+    margin-bottom: calc(4mm * var(--ink));
+  }
+  .gather .sheet__block { break-inside: auto; margin-bottom: calc(4mm * var(--ink)); }
+  /* Groups may break here too. Holding a ten-line ingredient list together is
+     what stops three columns from balancing: the tallest unbreakable lump sets
+     the height of the band, and the band is then most of a page for no reason.
+     Only the tick lines themselves, and a heading with its first line, hold.
+
+     Except the stations. An ingredient list running into the next column is
+     obviously still ingredients, but four tick boxes at the top of a column with
+     "Prep" left behind in the last one could be anything at all — and station
+     groups are two or three lines each, so keeping them whole costs almost
+     nothing. */
+  .gather .sheet__group { break-inside: auto; }
+  .gather .sheet__block--pull .sheet__group { break-inside: avoid; }
 
   /* Checkboxes, because the paper is a working document and not a receipt.
      Drawn in CSS rather than typed as ☐, which not every printer font carries
      and which silently becomes a blank square when it is missing. */
-  .ticklist { list-style: none; margin: 0; font-size: 9.5pt; }
-  .ticklist--cols { columns: 2; column-gap: 6mm; }
+  /* Tighter than the body leading. These are short lines with a box beside
+     them, not prose, and the box already gives each one its own gap to sit in
+     — so 1.15 reads as a list rather than as a cramped paragraph, and it buys
+     back most of a column across a full checklist. */
+  .ticklist {
+    list-style: none;
+    margin: 0;
+    font-size: calc(9pt * var(--ink));
+    line-height: 1.15;
+  }
   .ticklist__item {
     display: flex;
     gap: 2mm;
     align-items: baseline;
     break-inside: avoid;
-    padding: 0.5mm 0;
+    padding: calc(0.25mm * var(--ink)) 0;
   }
+  /* 3mm, not 3.5: sitting on the baseline the box is what sets the height of
+     the line it is on, so every half-millimetre here is a half-millimetre on
+     every ingredient, every piece of equipment and every bowl. Still a box you
+     can put a pencil through. */
   .tickbox {
     border: 0.5pt solid #000;
-    width: 3.5mm;
-    height: 3.5mm;
+    width: 3mm;
+    height: 3mm;
     flex: none;
     display: inline-block;
   }
 
-  .sheet__table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+  .sheet__table { width: 100%; border-collapse: collapse; font-size: calc(9.5pt * var(--ink)); }
   .sheet__table th {
     text-align: left;
-    font-size: 7.5pt;
+    font-size: calc(7.5pt * var(--ink));
     text-transform: uppercase;
     letter-spacing: 0.06em;
     border-bottom: 0.5pt solid #000;
@@ -1236,10 +1318,13 @@ input[type="checkbox"] {
   }
   .sheet__table td {
     vertical-align: top;
-    padding: 1.3mm 2mm 1.3mm 0;
+    padding: calc(0.9mm * var(--ink)) 2mm calc(0.9mm * var(--ink)) 0;
     border-bottom: 0.25pt solid #999;
   }
+  /* A bowl is a moment, not a container: the step it must beat is the only
+     reason it gets measured out early, so it is said on its own line. */
   .sheet__bowlname { font-weight: 700; }
+  .bowl__when { display: block; font-style: italic; font-size: calc(8pt * var(--ink)); }
 
   /* The running order. No fills anywhere: a solid block per step, times a
      hundred and eighty students, is a toner cartridge. Rules and weight carry
@@ -1258,25 +1343,30 @@ input[type="checkbox"] {
   .run__tag--warn { font-weight: 700; }
   .run__context,
   .run__checks,
-  .run__shape,
-  .run__source { display: block; font-size: 8pt; }
+  .run__shape { display: block; font-size: calc(8pt * var(--ink)); }
   .run__context { font-style: italic; }
   .run__checks { font-weight: 600; }
   /* Where the number came from, on every row, so a guess never prints looking
-     like something the recipe said. */
-  .run__source { font-style: italic; }
+     like something the recipe said — but beside the number rather than under
+     it, which is a line per step back across the whole page. */
+  .run__source {
+    font-style: italic;
+    font-size: calc(8pt * var(--ink));
+    margin-left: 1.5mm;
+  }
+  .run__span { display: block; }
   .run__long { white-space: nowrap; }
   /* Prep is the orderless block at the front. A left edge says so with a rule
      rather than a fill. */
   .run__step--prep .run__time { border-left: 1.5pt solid #000; padding-left: 1.5mm; }
   /* Hands free reads as the negative space it is. */
-  .run__gap td { border-bottom: none; font-style: italic; font-size: 9pt; }
+  .run__gap td { border-bottom: none; font-style: italic; font-size: calc(9pt * var(--ink)); }
   .run__actual { width: 24mm; }
-  .blank { display: block; border-bottom: 0.5pt solid #000; height: 4.5mm; width: 22mm; }
+  .blank { display: block; border-bottom: 0.5pt solid #000; height: calc(4.5mm * var(--ink)); width: 22mm; }
 
   .printout__empty { font-size: 11pt; }
 
-  /* ---- Sheet three: the timeline ----
+  /* ---- Page two: the timeline ----
      Time runs down, lanes across, the same shape as the board — but drawn in
      OUTLINE. A solid block per step, times a hundred and eighty students, is a
      toner cartridge, so weight and dash carry what colour carries on screen,
