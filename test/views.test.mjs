@@ -526,7 +526,7 @@ function samplePlan() {
   const tree = printout.render(plan);
   const text = allText(tree).join(" | ");
 
-  for (const phrase of ["Before you start", "At the stove", "Running order", "Start cooking"]) {
+  for (const phrase of ["Before you start", "At the stove", "Running order", "Start cooking", "The whole plan"]) {
     check(`the sheet says "${phrase}"`, text.includes(phrase), true);
   }
 
@@ -538,9 +538,59 @@ function samplePlan() {
 
   check("it carries clock times, which is the one thing needed at a stove",
     /\d\d:\d\d/.test(text), true);
-  check("identity leads both sheets, so a separated page two is not anonymous",
-    countClass(tree, "sheet__identity"), 2);
-  check("and it is two sheets", countClass(tree, "sheet"), 2);
+  check("identity leads every sheet, so a separated page is never anonymous",
+    countClass(tree, "sheet__identity"), 3);
+  check("and it is three sheets: gather, run, and the whole plan",
+    countClass(tree, "sheet"), 3);
+}
+
+// --- The timeline, on a page of its own ------------------------------------
+//
+// Teacher, 2026-09-06, reversing the inference that left it off the paper. It
+// is the page you would tape inside a cabinet door, so it is drawn to fill a
+// sheet — and it obeys the toner rule by being outlines rather than fills.
+{
+  const plan = samplePlan();
+  const tree = printout.render(plan);
+  const text = allText(tree).join(" | ");
+
+  check("the timeline gets its own sheet", countClass(tree, "sheet--timeline"), 1);
+  check("with a lane for the cook's own hands", text.includes("You"), true);
+  check("and blocks on it", countClass(tree, "pt__block") > 0, true);
+
+  // Every block is one or the other, and never a filled slab.
+  const hands = countClass(tree, "pt__block--hands");
+  const alone = countClass(tree, "pt__block--alone");
+  check("every block says which kind it is",
+    hands + alone === countClass(tree, "pt__block"), true);
+  check("and both kinds are present in a real plan", hands > 0 && alone > 0, true);
+  check("the shape is said in words, not only drawn",
+    text.includes("hands on") && text.includes("runs by itself"), true);
+
+  // Scale is millimetres, because this is paper.
+  const mm = JSON.stringify(tree).includes("mm");
+  check("it is laid out in millimetres, not pixels", mm, true);
+}
+
+// A plan that does not fit has to say so on the paper — at whichever end it
+// falls off. Under a fixed anchor it starts before the window opens; under
+// "finish early" it starts on time and runs past plate-up instead.
+{
+  const build = (anchor) => {
+    const plan = M.createPlan({ recipe: "Too much", foodUp: "12:35" });
+    plan.schedule.anchor = anchor;
+    for (const name of ["One", "Two", "Three"]) {
+      M.appendStep(plan, M.createStep({
+        recipeId: plan.recipes[0].id, name, mins: 40, shape: "hands", stated: "40",
+      }));
+    }
+    return allText(printout.render(plan)).join(" | ");
+  };
+
+  check("plated on the clock, the sheet says the window opened before you started",
+    build("fixed").includes("time you do not have"), true);
+  check("finishing as early as possible, it says what is running late",
+    build("early").includes("running late"), true);
 }
 
 // Prep has no internal order — that is what lets a team split it — so printing

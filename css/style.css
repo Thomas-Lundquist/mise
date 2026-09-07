@@ -1275,4 +1275,103 @@ input[type="checkbox"] {
   .blank { display: block; border-bottom: 0.5pt solid #000; height: 4.5mm; width: 22mm; }
 
   .printout__empty { font-size: 11pt; }
+
+  /* ---- Sheet three: the timeline ----
+     Time runs down, lanes across, the same shape as the board — but drawn in
+     OUTLINE. A solid block per step, times a hundred and eighty students, is a
+     toner cartridge, so weight and dash carry what colour carries on screen,
+     and every block also says its shape in words. */
+  .sheet--timeline { break-before: page; }
+
+  .pt {
+    display: grid;
+    column-gap: 1.5mm;
+    align-items: start;
+  }
+  .pt__corner { height: 6mm; }
+  .pt__head {
+    height: 6mm;
+    font-size: 8pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 0.75pt solid #000;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .pt__flag {
+    display: block;
+    font-size: 6.5pt;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  .pt__gutter { position: relative; }
+  .pt__tick {
+    position: absolute;
+    right: 1mm;
+    transform: translateY(-50%);
+    font-family: var(--mono);
+    font-size: 7pt;
+  }
+
+  .pt__track { position: relative; }
+  .pt__rule {
+    position: absolute;
+    left: 0;
+    right: 0;
+    border-top: 0.25pt solid #bbb;
+  }
+  /* The edge of the time the student actually has. Heavy, because it is the
+     argument the sheet exists to make. */
+  .pt__limit {
+    position: absolute;
+    left: 0;
+    right: 0;
+    border-top: 1.25pt solid #000;
+  }
+  /* A moment a dish pins you to it. Unlabelled here; sheet two says what. */
+  .pt__notch {
+    position: absolute;
+    left: 0;
+    width: 3mm;
+    border-top: 1pt solid #000;
+  }
+
+  .pt__block {
+    position: absolute;
+    overflow: hidden;
+    padding: 0.4mm 0.8mm;
+    font-size: 7.5pt;
+    line-height: 1.15;
+    background: #fff;
+  }
+  .pt__block--hands { border: 0.75pt solid #000; }
+  /* Dashed, over a whisper of grey — light enough to be honest about toner and
+     still tell the two apart from three feet away. */
+  .pt__block--alone { border: 0.75pt dashed #000; background: #f0f0f0; }
+  .pt__label { display: block; font-weight: 700; }
+  .pt__time { display: block; font-family: var(--mono); font-size: 6.5pt; }
+  .pt__shape { display: block; font-size: 6.5pt; font-style: italic; }
+  /* Too short to hold three lines: the name and the clock time survive, which
+     are the two things you read off a time axis. */
+  .pt__block--tight { padding: 0.2mm 0.8mm; font-size: 6.5pt; }
+  .pt__block--tight .pt__label { display: inline; }
+  .pt__block--tight .pt__time { display: inline; margin-left: 1mm; }
+
+  .pt__inner-notch {
+    position: absolute;
+    left: 0;
+    right: 0;
+    border-top: 0.75pt solid #000;
+  }
+
+  /* Chrome drops backgrounds in print unless told not to, and the dashed and
+     shaded blocks would then look identical. */
+  .pt__block,
+  .pt__block--alone {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 }

@@ -464,15 +464,27 @@ happened.
 
 **Sheet two — At the stove.** A **running order**: one pass down the clock
 carrying every step and every stretch where a pair of hands is free, then the
-clashes in words, then the notes.
+clashes in words, then the notes. This answers *what do I do next*.
 
-> **There is no timeline on the paper.** The board is the planning artefact and
-> belongs on screen; at a stove the question is "what do I do next", which a
-> time-ordered list answers better than a Gantt. A printed Gantt is also exactly
-> the wall of dark fill the toner rule below forbids, and the overlap it teaches
-> has already been taught by the time anything is printed. This is the one part
-> of the stove-sheet decision that was inferred rather than stated — reversing it
-> means putting the board back on sheet two.
+**Sheet three — The whole plan.** The timeline, on a page of its own, answering
+*what does this look like* — the page you would tape inside a cabinet door.
+Added 2026-09-06 by teacher decision, reversing an earlier inference that left
+it off.
+
+> It obeys the toner rule by drawing **outlines, not fills**: hands-on is a
+> solid hairline box, unattended is dashed over a whisper of grey, and every
+> block also says its shape in words, so nothing depends on telling the two
+> apart. Scale is set by the paper, not by the screen: minutes become
+> millimetres at whatever rate fills the sheet, capped at 3mm/min so a short
+> plan is drawn large but not absurd, with a 5mm floor so a one-minute step
+> stays readable. Time the student does not have is a single heavy rule at
+> whichever end it falls — before the window opens under a fixed anchor, past
+> plate-up under "finish early" — rather than a hatched area.
+
+What goes on which lane is decided once, in `schedule.js` (`timelineLanes`,
+`isCheckpoint`, `checkpointsByStep`), and the block packing once in
+`js/layout.js`. The board and the sheet only decide how to paint — they cannot
+disagree about what is on the page, only about ink and scale.
 
 What comes off the paper, decided with the purpose: the recipe-vs-your-plan
 comparison, "where your time goes", the recipe's own claimed times, the review
@@ -482,10 +494,11 @@ because you act on both while cooking.
 ### Rules
 
 - **Clock times must be on it** — the one thing a student needs at the stove.
-- **Nothing may be silently dropped.** Every step appears exactly once, and the
-  mise block appears as one row rather than one row per prep task, because prep
-  is scheduled with no internal order (§5) and six exact minutes would claim a
-  precision the scheduler never asserted.
+- **Nothing may be silently dropped.** Every step appears exactly once in the
+  running order, and the mise block appears as one row rather than one row per
+  prep task, because prep is scheduled with no internal order (§5) and six exact
+  minutes would claim a precision the scheduler never asserted. On the timeline,
+  overlapping blocks pack into sub-columns rather than painting over each other.
 - **An estimate must print as an estimate.** Every row says where its number
   came from, and a time the student supplied — rather than read off the card —
   prints beside a blank to write the actual in. `step.stated` is what carries
@@ -540,6 +553,7 @@ js/
   schedule.js       backward pass, lanes, conflicts
   storage.js        sessionStorage with a memory fallback, save/load, plan labels
   readiness.js      is this plan done enough to hand in? (derived, never a gate)
+  layout.js         packing blocks onto a time axis, in the caller's own unit
   dom.js            h() — the whole rendering vocabulary
   app.js            boot, plan lifecycle, section order
   views/            one module per section, each exporting render() and status()
@@ -616,8 +630,9 @@ Worth revisiting once students have used it, but not holding anything up:
 - Whether the one bottom-up review pass catches as much as the old backward
   elicitation did.
 - Whether one oven warning is too few in practice.
-- Whether sheet two wants the board on it after all (§7). The running order was
-  inferred from "working sheet at the stove", not stated.
+- Whether three sheets is one too many to hand a class (§7). The timeline was
+  added on its own page by decision; if the answer is "students only ever use
+  sheet two", the other two are the ones to argue about.
 - Whether the readiness line reads as help or as a grade. It is deliberately
   neither a score nor a gate, but a student may not read it that way.
 - **How many students skip the big-ideas pass** (§4.0), and whether the ones who

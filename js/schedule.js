@@ -331,6 +331,101 @@ export function planSpan(plan, ranges) {
   return { start, end };
 }
 
+// --- What a timeline is made of -------------------------------------------
+//
+// The board draws this on a screen and the printed sheet draws it on paper, at
+// different scales and with different ink. What they must never disagree about
+// is WHAT is on which lane — so the lanes are built here, once, and each view
+// only decides how to paint them.
+
+// A one-minute hands-on moment that INTERRUPTS waiting already under way —
+// flipping a cutlet, stirring the rice, turning the tray — is not a task so much
+// as an interruption of one. Drawn as its own block it is an illegible sliver on
+// the cook's lane, and worse, it says nothing about WHICH dish is calling. Drawn
+// as a notch across the dish's own block, its position answers that before you
+// read a word.
+//
+// It has to have waiting BEFORE it. A short hands-on line that only has waiting
+// after it is not a moment you are called back for — it is the moment you start
+// the thing, which is exactly the shape every "starts, then runs by itself" step
+// arrives in. Treating those as notches took the one minute your hands are
+// actually busy off the cook's lane, which is the one thing that lane is for.
+const CHECKPOINT_MAX_MINS = 1;
+
+export function isCheckpoint(step, seg) {
+  if (!seg.hands || seg.mins > CHECKPOINT_MAX_MINS) return false;
+  const before = step.segments[step.segments.indexOf(seg) - 1];
+  return Boolean(before && !before.hands);
+}
+
+// Every drawable segment matching a predicate, as { step, seg, range }.
+function segmentBlocks(plan, ranges, predicate) {
+  const out = [];
+  for (const step of plan.steps) {
+    const range = ranges.get(step.id);
+    if (!range) continue;
+    for (const part of range.segments) {
+      if (part.seg.mins <= 0) continue;
+      if (!predicate(step, part.seg)) continue;
+      out.push({ step, seg: part.seg, range: { start: part.start, end: part.end } });
+    }
+  }
+  return out;
+}
+
+// The moments each dish calls you back for, keyed by step, so a view can draw
+// them inside that dish's own block.
+export function checkpointsByStep(plan, ranges) {
+  const out = new Map();
+  for (const item of segmentBlocks(plan, ranges, isCheckpoint)) {
+    if (!out.has(item.step.id)) out.set(item.step.id, []);
+    out.get(item.step.id).push(item);
+  }
+  return out;
+}
+
+// The lanes, in drawing order: the cooks' own hands first, then one lane per
+// station that is actually used.
+//
+// A step is drawn as its LINES, not as one bar — the hands lines go on the
+// cook's lane and the waiting goes on the station's, which is the whole picture
+// the app exists to show: the pan is on the stove for twelve minutes and you are
+// somewhere else for nine of them.
+//
+// Station lanes carry one block per STEP rather than one per waiting segment.
+// The pan is occupied for the whole of "sear the chicken", including the seconds
+// you stand over it, so drawing the segments separately left gaps where the
+// equipment was in fact still in use — and left the checkpoints with nothing to
+// sit inside.
+export function timelineLanes(plan, ranges, cooks) {
+  const byId = equipmentById(plan);
+
+  // A cook with nothing to do keeps their empty lane: that is real information
+  // for whoever is running the kitchen, not clutter to hide.
+  const lanes = Array.from({ length: cooks }, (_, cook) => ({
+    label: cooks === 1 ? "You" : `Cook ${cook + 1}`,
+    station: null,
+    cook,
+    items: segmentBlocks(plan, ranges, (step, seg) =>
+      seg.hands && (step.cook || 0) === cook && !isCheckpoint(step, seg)),
+    notches: segmentBlocks(plan, ranges, (step, seg) =>
+      seg.hands && (step.cook || 0) === cook && isCheckpoint(step, seg)),
+  }));
+
+  // One lane per station, not one per step. An earlier build gave every step its
+  // own lane, so two things fighting over the oven never visually collided and
+  // identical lane labels repeated down the page.
+  for (const station of STATIONS) {
+    const items = plan.steps
+      .filter((step) => hasWaiting(step) && laneForStep(step, byId) === station.id)
+      .map((step) => ({ step, seg: null, range: ranges.get(step.id) }))
+      .filter((item) => item.range);
+    if (items.length > 0) lanes.push({ label: station.label, station, cook: null, items, notches: [] });
+  }
+
+  return lanes;
+}
+
 // --- Hands free -----------------------------------------------------------
 
 // Every stretch a cook's hands are actually occupied, in time order.

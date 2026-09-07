@@ -22,24 +22,37 @@
 //   • checkboxes, because it is a working document and not a receipt
 //   • nothing that addresses a cursor: no "click", no "tap", no buttons
 //
-// WHY THERE IS NO TIMELINE HERE. The board is the planning artefact and it is
-// magnificent on screen, but at a stove the question is "what do I do next",
-// which a time-ordered list answers better than a Gantt — and a printed Gantt
-// is precisely the wall of dark fill the toner constraint rules out. The
-// overlap it teaches has already been taught by the time the paper is printed.
+// THE TIMELINE IS ON SHEET 3, on a page of its own (teacher, 2026-09-06,
+// reversing an inference this file originally made the other way). The running
+// order on sheet 2 answers "what do I do next"; the timeline answers "what does
+// the whole thing look like", and it is the one page you would tape inside a
+// cabinet door.
+//
+// It obeys the toner rule by drawing OUTLINES, not fills: hands-on is a solid
+// hairline box, unattended is a dashed one over a whisper of grey. That is also
+// the distinction carrying a text label, since every block names its shape.
 
 import { STATIONS } from "../config.js";
 import {
   ingredientsForRecipe, ingredientsInBowl,
   stepMins, handsMins, waitingMins, hasWaiting, isUnestimated,
-  recipeById, bigIdeaForStep, isGrouped, cookCount, periodById,
+  recipeById, bigIdeaForStep, isGrouped, cookCount, periodById, foodUpFor,
 } from "../model.js";
 import {
   resolveSchedule, computeConflicts, describeConflict, planSpan, resolvedFoodUp, idleGaps,
+  timelineLanes, checkpointsByStep,
 } from "../schedule.js";
-import { minutesToClock, formatDuration } from "../time.js";
+import { packRows, columnStyle } from "../layout.js";
+import { clockToMinutes, minutesToClock, formatDuration, formatShort } from "../time.js";
 import { readiness, sayReadiness } from "../readiness.js";
 import { h } from "../dom.js";
+
+// Paper, not pixels. A letter page at 12mm margins leaves 190 × 254mm; the
+// sheet header and the lane heads take the rest of the difference.
+const TIMELINE_MM = 196;    // height the drawn timeline may fill
+const MAX_MM_PER_MIN = 3;   // so a 20-minute plan is not a poster
+const MIN_BLOCK_MM = 5;     // a one-minute step still has to be readable
+const TICK_MINS = 5;        // a labelled line every five minutes
 
 export function render(plan) {
   if (plan.steps.length === 0) {
@@ -51,11 +64,18 @@ export function render(plan) {
   const span = planSpan(plan, ranges);
   const conflicts = computeConflicts(plan, ranges);
   const cooks = cookCount(plan);
-  const view = { plan, ranges, span, conflicts, cooks };
+  const view = {
+    plan, ranges, span, conflicts, cooks,
+    // Built in schedule.js, exactly as the board builds them, so the two can
+    // never disagree about what is on which lane.
+    lanes: timelineLanes(plan, ranges, cooks),
+    checkpoints: checkpointsByStep(plan, ranges),
+  };
 
   return h("div", null,
     sheetOne(view),
-    sheetTwo(view));
+    sheetTwo(view),
+    sheetThree(view));
 }
 
 // --- Shared furniture -----------------------------------------------------
@@ -366,4 +386,120 @@ function notes(plan) {
     h("h3", { class: "sheet__h", text: "Don't forget" }),
     h("ul", { class: "sheet__list" }, withNotes.map((step) =>
       h("li", null, h("strong", { text: `${step.name}: ` }), step.note))));
+}
+
+// --- Sheet three: the timeline --------------------------------------------
+//
+// Scaled to its own page: minutes become millimetres at whatever rate makes the
+// plan fill the sheet, capped so a short plan is drawn large but not absurd.
+// The screen board's px-per-minute is irrelevant here — paper has a fixed
+// height and that is the constraint that sets the scale.
+
+function sheetThree(view) {
+  const { plan, span, lanes } = view;
+
+  const top = span.start;
+  // Round the drawn window out to whole ticks, so the last gridline is not a
+  // stub and the final block is not flush against the edge of the page.
+  const totalMins = Math.max(Math.ceil((span.end - top) / TICK_MINS) * TICK_MINS, TICK_MINS);
+  const mmPerMin = Math.min(MAX_MM_PER_MIN, TIMELINE_MM / totalMins);
+  const height = totalMins * mmPerMin;
+
+  const ticks = [];
+  for (let t = Math.ceil(top / TICK_MINS) * TICK_MINS; t <= top + totalMins; t += TICK_MINS) ticks.push(t);
+
+  // Time the student does not have, drawn as a ruled line rather than as a
+  // hatched area — a rule costs no toner. BOTH ends have to be drawn: under a
+  // fixed anchor an over-long plan starts before the window opens, and under
+  // "finish early" it starts on time and runs past plate-up instead.
+  const bottom = top + totalMins;
+  const foodUp = clockToMinutes(foodUpFor(plan));
+  const windowOpen = foodUp - plan.schedule.windowMins;
+  const late = foodUp > top && foodUp < bottom && span.end > foodUp;
+  const early = windowOpen > top && windowOpen < bottom;
+
+  return h("section", { class: "sheet sheet--timeline" },
+    sheetHead(plan, "The whole plan",
+      "Time runs down. Your own hands are the first column; everything else is a machine or a bench doing the work for you."),
+
+    h("div", {
+      class: "pt",
+      style: { gridTemplateColumns: `14mm repeat(${lanes.length}, 1fr)` },
+    },
+      h("div", { class: "pt__corner" }),
+      lanes.map((lane) => h("div", { class: "pt__head" },
+        h("span", { text: lane.label }),
+        lane.station && lane.station.exclusive && h("span", { class: "pt__flag", text: "one at a time" }))),
+
+      h("div", { class: "pt__gutter", style: { height: `${height}mm` } },
+        ticks.map((t) => h("div", {
+          class: "pt__tick",
+          style: { top: `${(t - top) * mmPerMin}mm` },
+          text: minutesToClock(t),
+        }))),
+
+      lanes.map((lane) => {
+        const packed = packRows(lane.items, top, mmPerMin, { minSize: MIN_BLOCK_MM, gap: 0.6 });
+        return h("div", { class: "pt__track", style: { height: `${height}mm` } },
+          ticks.map((t) => h("div", {
+            class: "pt__rule",
+            style: { top: `${(t - top) * mmPerMin}mm` },
+          })),
+
+          late && h("div", {
+            class: "pt__limit",
+            style: { top: `${(foodUp - top) * mmPerMin}mm` },
+          }),
+          early && h("div", {
+            class: "pt__limit",
+            style: { top: `${(windowOpen - top) * mmPerMin}mm` },
+          }),
+
+          // The moments this cook is pinned to a pan for a minute. Unlabelled
+          // here — sheet 2 says what each one is — but the lane must not read
+          // as free when it is not.
+          (lane.notches || []).map((cp) => h("div", {
+            class: "pt__notch",
+            style: { top: `${(cp.range.start - top) * mmPerMin}mm` },
+          })),
+
+          packed.items.map((item) => printBlock(view, item, {
+            tight: item.size < MIN_BLOCK_MM * 1.8,
+            style: {
+              top: `${item.offset}mm`,
+              height: `${item.size}mm`,
+              ...columnStyle(item, packed.rowCount, "0.8mm"),
+            },
+          })));
+      })),
+
+    late && h("p", { class: "sheet__note",
+      text: `The heavy line across every lane is ${minutesToClock(foodUp)} — food up. Anything below it is running late.` }),
+    early && h("p", { class: "sheet__note",
+      text: `The heavy line across every lane is ${minutesToClock(windowOpen)}, when your window opens. Anything above it is time you do not have.` }));
+}
+
+function printBlock(view, item, { tight, style }) {
+  const { checkpoints, cooks } = view;
+  const { step, seg, range } = item;
+  const hands = seg ? seg.hands : false;
+  const label = seg ? (seg.label.trim() || step.name) : step.name;
+  const mins = range.end - range.start;
+  const notches = seg ? [] : (checkpoints.get(step.id) || []);
+
+  return h("div", {
+    class: `pt__block ${hands ? "pt__block--hands" : "pt__block--alone"}${tight ? " pt__block--tight" : ""}`,
+    style,
+  },
+    h("span", { class: "pt__label", text: label }),
+    h("span", { class: "pt__time", text: `${minutesToClock(range.start)} · ${formatShort(mins)}` }),
+    // Colour is never the only signal, and there is no colour here at all — so
+    // the shape is said in words on any block with room for them.
+    !tight && h("span", { class: "pt__shape", text: hands ? "hands on" : "runs by itself" }),
+    // Where a dish calls you back, drawn inside the dish's own block: the
+    // position answers WHICH dish before a word is read.
+    notches.map((cp) => h("span", {
+      class: "pt__inner-notch",
+      style: { top: `${((cp.range.start - range.start) / Math.max(mins, 1)) * 100}%` },
+    })));
 }
