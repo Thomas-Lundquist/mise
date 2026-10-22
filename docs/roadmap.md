@@ -23,12 +23,12 @@
 
 ## Open questions
 
-1. Team size: is "up to 4 others" a maximum of 5 cooks in total?
-2. Filling a bowl: let students estimate the minutes, or use a simple default (for
-   example 1 minute per ingredient, plus prep time for chopping)?
+None right now.
 
 ## Answered
 
+- Team size: **1 to 5 cooks**.
+- Minutes to fill a bowl: **the app suggests a default; students can change it**.
 - Auto-add setup and cleanup: **yes**.
 - How work is checked: **printed guide**, with the screen as backup. Canvas later.
 - Name line on the printout: **no**.

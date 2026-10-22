@@ -2,6 +2,26 @@
 
 Newest first. Each entry: what was decided, and why.
 
+## 2026-10-22: Each step waits for one thing, not several
+
+A step has a single "Starts after" choice (the step before, any time, or one earlier
+step) rather than a checklist of everything it waits for.
+
+**Why:** Simpler screen for students. **Trade-off:** a step that truly needs two things
+(cook pancakes needs rested batter *and* a hot griddle) can only name one. Students work
+around it by ordering steps, e.g. starting the preheat earlier. Revisit if this comes up
+often in real labs.
+
+## 2026-10-22: Critical-path priority and an even split between cooks
+
+Pure recipe-order greedy hands tasks to whoever is free first, which can pile work on one
+cook and delay tasks others are waiting on. Now the scheduler starts the tasks that hold
+up the most work first, and hands each task to the least-busy free cook. In the pancake
+test the split stayed 27 vs 14 hands-on minutes, because one 20-minute step dominates.
+
+**Why:** The teacher wants the plan "greedy, but even", so no student stands around
+waiting while a teammate does everything.
+
 ## 2026-10-22: Team scheduling with a greedy method, in v1
 
 Steps record what they wait for ("Starts after"). A greedy scheduler gives each ready

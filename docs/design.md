@@ -25,7 +25,7 @@ and forth freely. Work saves automatically in the browser.
 | 1 | **Recipe** | Recipe name, servings, class start time, minutes available (default 90), number of cooks (1–5) |
 | 2 | **Ingredients** | Each ingredient: amount, unit, name, prep (e.g. "diced") |
 | 3 | **Equipment** | Each tool or piece of equipment, with quantity |
-| 4 | **Bowls** | Group ingredients into bowls by when they're combined |
+| 4 | **Bowls** | Group ingredients into bowls by when they're combined; check the suggested minutes to fill each |
 | 5 | **Steps** | Each step: what to do, minutes, hands-off or not, which bowls it uses, and what it waits for ("Starts after: Step 3", default: the step before) |
 | — | **Lab guide** | Nothing; this is the result to view or print |
 

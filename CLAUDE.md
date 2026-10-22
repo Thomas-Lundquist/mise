@@ -19,6 +19,16 @@ Read the relevant doc before working on a feature, and update it when a decision
 | [docs/roadmap.md](docs/roadmap.md) | What's in v1, what's later, open questions | Planning the next piece of work |
 | [docs/decisions.md](docs/decisions.md) | Dated log of decisions and why they were made | Before reversing something; after making a call |
 
+## Running it
+
+No install or build. Double-click `index.html`, or serve the folder
+(`python -m http.server 8123`) and open http://127.0.0.1:8123.
+
+- `js/schedule.js`: the time-plan calculation (no screen code; can run in Node for tests)
+- `js/store.js`: saving and loading in the browser
+- `js/app.js`: the screens
+- `css/styles.css`: all styling
+
 ## Ground rules
 
 - **No personal data, ever.** No accounts, no names, no server-side storage. A student's

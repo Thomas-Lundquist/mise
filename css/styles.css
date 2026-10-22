@@ -1,0 +1,169 @@
+/* Calm, roomy, readable. See docs/design.md before adding anything loud. */
+
+:root {
+  --bg: #faf8f4;
+  --surface: #ffffff;
+  --text: #1f1d1a;
+  --muted: #6b665e;
+  --line: #ddd8cf;
+  --accent: #2f6b4f;        /* herb green: the one accent color */
+  --accent-soft: #e6efe9;
+  --radius: 10px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Atkinson Hyperlegible", system-ui, sans-serif;
+  font-size: 18px;
+  line-height: 1.55;
+}
+
+.site-header {
+  padding: 16px;
+  max-width: 40rem;
+  margin: 0 auto;
+}
+.brand {
+  font-weight: 700;
+  font-size: 1.1rem;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}
+
+.page {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 0 16px 48px;
+}
+
+h1 {
+  font-size: 1.75rem;
+  line-height: 1.25;
+  margin: 0 0 0.25rem;
+}
+.lead {
+  color: var(--muted);
+  margin: 0 0 2rem;
+}
+
+/* Progress */
+.progress { margin: 8px 0 32px; }
+.progress-text {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.progress-bar {
+  display: flex;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.progress-bar li {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line);
+}
+.progress-bar li.done { background: var(--accent); }
+
+/* Fields */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 24px;
+}
+.field-label { font-weight: 700; }
+.field-hint {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+input {
+  font: inherit;
+  color: inherit;
+  width: 100%;
+  min-height: 52px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius);
+}
+input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+input::placeholder { color: #b0aaa0; }
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 30rem) {
+  .row { grid-template-columns: 1fr; gap: 0; }
+}
+
+/* Cooks picker */
+.segmented {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  margin-top: 4px;
+}
+.segmented button {
+  font: inherit;
+  font-weight: 700;
+  min-height: 52px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.segmented button[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* Back / Next */
+.nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 40px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+.button-primary,
+.button-quiet {
+  font: inherit;
+  font-weight: 700;
+  min-height: 52px;
+  padding: 0 24px;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.button-primary {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+}
+.button-quiet {
+  background: none;
+  color: var(--muted);
+  border: none;
+  padding-left: 0;
+}
+
+button:focus-visible {
+  outline: 3px solid var(--accent-soft);
+  outline-offset: 2px;
+}
