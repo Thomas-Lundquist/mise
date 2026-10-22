@@ -26,7 +26,8 @@ No install or build. Double-click `index.html`, or serve the folder
 
 - `js/schedule.js`: the time-plan calculation (no screen code; can run in Node for tests)
 - `js/store.js`: saving and loading in the browser
-- `js/app.js`: the screens
+- `js/app.js`: the five entry screens and the shared helpers
+- `js/guide.js`: the lab guide (screen and print)
 - `css/styles.css`: all styling
 
 ## Ground rules

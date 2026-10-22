@@ -2,13 +2,13 @@
 
 ## v1: a real, usable first version
 
-- [ ] The five-screen student flow (see design.md)
-- [ ] Lab guide: equipment, mise en place bowls, time plan with overrun warning
-- [ ] Automatic setup and cleanup tasks
-- [ ] Team scheduling: split the plan between 1–5 cooks (see data-model.md)
-- [ ] Auto-save in the browser; "start a new recipe" button
-- [ ] Print-first lab guide (print or save as PDF), readable in black and white
-- [ ] Works well on phone and Chromebook
+- [x] The five-screen student flow (see design.md)
+- [x] Lab guide: equipment, mise en place bowls, time plan with overrun warning
+- [x] Automatic setup and cleanup tasks
+- [x] Team scheduling: split the plan between 1–5 cooks (see data-model.md)
+- [x] Auto-save in the browser; "start a new recipe" button
+- [ ] Print-first lab guide (print or save as PDF), readable in black and white (print styles written; needs a real test print)
+- [ ] Works well on phone and Chromebook (checked in desktop Chrome at narrow widths; needs a real phone)
 - [ ] Hosted free on GitHub Pages at a simple link
 
 ## Later ideas (not v1)

@@ -21,6 +21,12 @@ function bowlMinutes(bowl, ingredients) {
   return bowl.minutes == null ? suggestBowlMinutes(bowl, ingredients) : bowl.minutes;
 }
 
+// "Bowl 2 · Wet": numbered by position, with the student's label if they gave one.
+function bowlName(bowl, bowls) {
+  var name = "Bowl " + (bowls.indexOf(bowl) + 1);
+  return bowl.label && bowl.label.trim() ? name + " · " + bowl.label.trim() : name;
+}
+
 // Turns bowls and steps into one list of work tasks, in priority order:
 // recipe order, with each bowl just before the first step that uses it.
 function buildWorkTasks(recipe) {
@@ -35,7 +41,7 @@ function buildWorkTasks(recipe) {
     tasks.push({
       id: "fill-" + bowl.id,
       kind: "bowl",
-      label: "Fill bowl: " + (bowl.label || "Bowl"),
+      label: "Fill " + bowlName(bowl, recipe.bowls),
       minutes: bowlMinutes(bowl, recipe.ingredients),
       handsOff: false,
       bowlIds: [bowl.id],
