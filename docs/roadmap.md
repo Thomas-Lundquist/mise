@@ -4,6 +4,7 @@
 
 - [x] The five-screen student flow (see design.md)
 - [x] Lab guide: equipment, mise en place bowls, time plan with overrun warning
+- [ ] Block view of the time plan (on branch `block-schedule`, under review)
 - [x] Automatic setup and cleanup tasks
 - [x] Team scheduling: split the plan between 1–5 cooks (see data-model.md)
 - [x] Auto-save in the browser; "start a new recipe" button

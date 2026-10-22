@@ -420,6 +420,112 @@ select:focus {
   color: var(--muted);
 }
 
+/* ---------- Time plan: block view ---------- */
+
+.section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.section-head h2 { margin: 0; }
+.segmented-small {
+  grid-template-columns: repeat(2, auto);
+  gap: 4px;
+  margin: 0;
+}
+.segmented-small button {
+  min-height: 40px;
+  padding: 0 14px;
+  font-size: 0.9rem;
+}
+
+/* The chart may spread wider than the reading column on big screens.
+   Wide teams scroll sideways inside the box, never the whole page. */
+.blocks-scroll {
+  overflow-x: auto;
+  position: relative;
+  width: min(60rem, calc(100vw - 32px));
+  left: 50%;
+  transform: translateX(-50%);
+}
+.blocks {
+  display: grid;
+  column-gap: 6px;
+  min-width: min-content;
+}
+.blocks-head {
+  font-size: 0.9rem;
+  font-weight: 700;
+  padding-bottom: 8px;
+  border-bottom: 1.5px solid var(--line);
+  margin-bottom: 8px;
+}
+.blocks-head.is-handsoff { color: var(--muted); }
+
+.blocks-axis { position: relative; }
+.blocks-axis span {
+  position: absolute;
+  left: 0;
+  margin-top: -2px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+/* A faint line every 10 minutes (140px at PX_PER_MINUTE = 14 in guide.js). */
+.blocks-lane {
+  position: relative;
+  background-image: repeating-linear-gradient(to bottom, var(--line) 0 1px, transparent 1px 140px);
+}
+
+.block {
+  position: absolute;
+  left: 0;
+  right: 0;
+  overflow: hidden;
+  padding: 3px 8px;
+  border: 1.5px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: 6px;
+  background: var(--surface);
+  font-size: 0.85rem;
+  line-height: 1.25;
+}
+.block-bowl { background: var(--accent-soft); }
+.block-setup,
+.block-cleanup {
+  border-left-color: var(--muted);
+  background: var(--bg);
+  color: var(--muted);
+}
+.block-handsoff {
+  border-style: dashed;
+  border-left: 1.5px dashed var(--muted);
+  background: transparent;
+}
+.block-label {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-weight: 700;
+}
+.block-meta {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.class-ends {
+  position: absolute;
+  left: -6px;
+  right: 0;
+  border-top: 2px dashed #b4541f;
+  z-index: 1;
+}
+
 /* ---------- Printing: black and white, no buttons ---------- */
 
 @media print {
@@ -431,4 +537,9 @@ select:focus {
   .warning { border: 1.5px solid #000; border-radius: 0; }
   .guide-section { break-inside: avoid-page; }
   .plan tr { break-inside: avoid; }
+  .segmented-small { display: none; }
+  .blocks-scroll { overflow: visible; width: auto; left: 0; transform: none; }
+  .block, .block-bowl, .block-setup, .block-cleanup { background: #fff; }
+  .block { border-color: #999; border-left-color: #000; }
+  .block-meta, .blocks-axis span { color: #444; }
 }

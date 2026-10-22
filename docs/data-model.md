@@ -31,6 +31,7 @@ Notes:
 - An ingredient can sit in at most one bowl. Ingredients not in a bowl still appear in
   the mise en place list on their own.
 - `cooks` is the team size, 1–5. Cooks are labeled Cook A, Cook B, and so on (no names).
+- `planView` is `"list"` or `"blocks"`: which time-plan view the guide shows and prints.
 - `after` is what must finish before this step can start: `"previous"` (the default,
   the step right before it), `"any"` (any time after setup), or the id of an earlier step.
 - A bowl's `minutes` is `null` until the student changes it. While it's `null`, the

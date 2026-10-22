@@ -42,13 +42,131 @@ function planRows(tasks, cookCount) {
   return rows;
 }
 
+// ---------- Block view: who does what, side by side ----------
+
+var PX_PER_MINUTE = 14; // keep in step with the 10-minute gridlines in styles.css
+
+// Hands-off tasks get their own column. If two overlap (preheat while batter rests),
+// the second goes in a second hands-off column.
+function handsOffLanes(tasks) {
+  var lanes = [];
+  tasks.filter(function (t) { return t.handsOff; })
+    .sort(function (a, b) { return a.start - b.start; })
+    .forEach(function (t) {
+      var lane = lanes.find(function (l) { return l.end <= t.start; });
+      if (!lane) { lane = { end: 0, tasks: [] }; lanes.push(lane); }
+      lane.tasks.push(t);
+      lane.end = t.end;
+    });
+  return lanes;
+}
+
+function block(t, extra) {
+  var minutes = t.end - t.start;
+  return h("div", {
+    class: "block block-" + t.kind + (t.handsOff ? " block-handsoff" : ""),
+    style: "top:" + t.start * PX_PER_MINUTE + "px;height:" + minutes * PX_PER_MINUTE + "px",
+    title: clock(t.start) + " · " + t.label + " · " + minutes + " min" + (extra ? " · " + extra : "")
+  },
+    h("span", { class: "block-label" }, t.label),
+    minutes >= 5 && h("span", { class: "block-meta" }, clock(t.start) + " · " + minutes + " min" + (extra ? " · " + extra : "")));
+}
+
+function blockView(plan, r, cookCount) {
+  var height = plan.totalMinutes * PX_PER_MINUTE;
+  var columns = [];
+
+  for (var c = 0; c < cookCount; c++) {
+    var cook = COOK_LABELS[c];
+    columns.push({
+      title: cookCount === 1 ? "You" : "Cook " + cook,
+      blocks: plan.tasks.filter(function (t) { return t.cook === cook && !t.handsOff; })
+        .map(function (t) { return block(t); })
+    });
+  }
+  handsOffLanes(plan.tasks).forEach(function (lane, i) {
+    columns.push({
+      title: i === 0 ? "Hands-off" : "",
+      handsOff: true,
+      blocks: lane.tasks.map(function (t) {
+        return block(t, cookCount > 1 ? "Cook " + t.cook + " starts it" : null);
+      })
+    });
+  });
+
+  // Clock times down the side, every 10 minutes.
+  var axis = h("div", { class: "blocks-axis", style: "height:" + height + "px" });
+  for (var m = 0; m <= plan.totalMinutes; m += 10) {
+    axis.append(h("span", { style: "top:" + m * PX_PER_MINUTE + "px" }, clock(m)));
+  }
+
+  var grid = h("div", {
+    class: "blocks",
+    style: "grid-template-columns: 3.5rem repeat(" + columns.length + ", minmax(7.5rem, 1fr))"
+  });
+  grid.append(h("div", { class: "blocks-head" }));
+  columns.forEach(function (col) {
+    grid.append(h("div", { class: "blocks-head" + (col.handsOff ? " is-handsoff" : "") }, col.title));
+  });
+  grid.append(axis);
+  columns.forEach(function (col) {
+    var lane = h("div", { class: "blocks-lane" + (col.handsOff ? " is-handsoff" : ""), style: "height:" + height + "px" });
+    col.blocks.forEach(function (b) { lane.append(b); });
+    // Mark the end of class if the plan runs past it.
+    if (plan.overrunMinutes > 0) {
+      lane.append(h("div", { class: "class-ends", style: "top:" + r.minutesAvailable * PX_PER_MINUTE + "px" }));
+    }
+    grid.append(lane);
+  });
+
+  return h("div", { class: "blocks-scroll" }, grid,
+    plan.overrunMinutes > 0 && h("p", { class: "field-hint" }, "The dashed line is when class ends."));
+}
+
+function listView(plan, r, cookCount) {
+  var bowlsById = {};
+  r.bowls.forEach(function (b) { bowlsById[b.id] = b; });
+  var table = h("table", { class: "plan" },
+    h("thead", {}, h("tr", {},
+      h("th", {}, "Time"),
+      cookCount > 1 && h("th", {}, "Who"),
+      h("th", {}, "Task"),
+      h("th", { class: "num" }, "Min"))));
+  var body = h("tbody");
+  planRows(plan.tasks, cookCount).forEach(function (t) {
+    var bowls = t.kind === "step" && t.bowlIds.length
+      ? t.bowlIds.map(function (id) { return bowlsById[id] && bowlName(bowlsById[id], r.bowls); }).filter(Boolean)
+      : [];
+    body.append(h("tr", { class: t.kind === "step" || t.kind === "bowl" ? "" : "routine" },
+      h("td", { class: "time" }, clock(t.start)),
+      cookCount > 1 && h("td", {}, t.cook),
+      h("td", {},
+        t.label,
+        t.handsOff && h("span", { class: "tag" }, "hands-off"),
+        bowls.length > 0 && h("span", { class: "uses" }, "Uses " + bowls.join(", "))),
+      h("td", { class: "num" }, String(t.end - t.start))));
+  });
+  table.append(body);
+  return table;
+}
+
+function planToggle() {
+  var view = recipe.planView || "list";
+  function option(value, label) {
+    return h("button", {
+      type: "button",
+      "aria-pressed": String(view === value),
+      onclick: function () { update({ planView: value }); render(); }
+    }, label);
+  }
+  return h("div", { class: "segmented segmented-small", role: "group", "aria-label": "Time plan view" },
+    option("list", "List"), option("blocks", "Blocks"));
+}
+
 function guideView() {
   var r = filledRecipe();
   var cookCount = Number(r.cooks) || 1;
   var plan = schedule(r);
-  var bowlsById = {};
-  r.bowls.forEach(function (b) { bowlsById[b.id] = b; });
-
   // Header and summary
   var details = [];
   if (r.servings) details.push("Serves " + r.servings);
@@ -90,29 +208,6 @@ function guideView() {
     mise.append(h("div", { class: "bowl" }, h("h3", {}, r.bowls.length ? "On their own" : "Ingredients"), looseList));
   }
 
-  // 3. Time plan
-  var table = h("table", { class: "plan" },
-    h("thead", {}, h("tr", {},
-      h("th", {}, "Time"),
-      cookCount > 1 && h("th", {}, "Who"),
-      h("th", {}, "Task"),
-      h("th", { class: "num" }, "Min"))));
-  var body = h("tbody");
-  planRows(plan.tasks, cookCount).forEach(function (t) {
-    var bowls = t.kind === "step" && t.bowlIds.length
-      ? t.bowlIds.map(function (id) { return bowlsById[id] && bowlName(bowlsById[id], r.bowls); }).filter(Boolean)
-      : [];
-    body.append(h("tr", { class: t.kind === "step" || t.kind === "bowl" ? "" : "routine" },
-      h("td", { class: "time" }, clock(t.start)),
-      cookCount > 1 && h("td", {}, t.cook),
-      h("td", {},
-        t.label,
-        t.handsOff && h("span", { class: "tag" }, "hands-off"),
-        bowls.length > 0 && h("span", { class: "uses" }, "Uses " + bowls.join(", "))),
-      h("td", { class: "num" }, String(t.end - t.start))));
-  });
-  table.append(body);
-
   return h("article", { class: "guide" },
     h("div", { class: "guide-actions" },
       h("button", { type: "button", class: "button-quiet", onclick: function () { goTo(SCREENS.length - 1); } }, "← Edit"),
@@ -129,8 +224,10 @@ function guideView() {
       h("h2", {}, "2. Mise en place"),
       r.ingredients.length ? mise : h("p", { class: "field-hint" }, "No ingredients yet.")),
     h("section", { class: "guide-section" },
-      h("h2", {}, "3. Time plan"),
-      table),
+      h("div", { class: "section-head" },
+        h("h2", {}, "3. Time plan"),
+        planToggle()),
+      recipe.planView === "blocks" ? blockView(plan, r, cookCount) : listView(plan, r, cookCount)),
     newRecipeControl());
 }
 

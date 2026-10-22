@@ -39,6 +39,13 @@ Three clear sections, in kitchen order:
    steps (baking, chilling) are visibly marked. If the plan runs past the end of class,
    show a calm, clear warning with by how much. With one cook, the "who" column is hidden.
 
+   Two views, switched with **List | Blocks** (the choice is remembered and is what prints):
+   - **List:** one row per task, in time order.
+   - **Blocks:** one column per cook plus "Hands-off" column(s), time running down the
+     page, each task a block as tall as it takes (14px per minute). Shows what happens at
+     the same time, side by side. On narrow screens the chart scrolls sideways inside its
+     box; on wide screens it may spread wider than the reading column.
+
 Setup ("wash hands, set up station") and cleanup ("clean and sanitize") are added
 automatically, so they're always counted in the time plan.
 
