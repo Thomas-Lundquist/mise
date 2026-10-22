@@ -1,0 +1,30 @@
+# mise
+
+A web app that helps culinary students read a recipe *before* class and turn it into a
+lab guide: a time plan, an equipment list, and mise en place bowls.
+
+The owner is a culinary teacher, not a programmer. Claude writes the code; decisions are
+made together. Explain choices in plain language, and keep the code simple enough that
+it can be read and changed later without a build system or framework knowledge.
+
+## The document set
+
+Read the relevant doc before working on a feature, and update it when a decision changes.
+
+| Doc | What it holds | Use it when |
+| --- | --- | --- |
+| [docs/vision.md](docs/vision.md) | Why the app exists, who it's for, goals and non-goals | Deciding whether a feature belongs at all |
+| [docs/design.md](docs/design.md) | Visual rules and the screens of the student flow | Building or changing anything a student sees |
+| [docs/data-model.md](docs/data-model.md) | What a recipe looks like as data, and how the schedule is calculated | Touching saving, loading, or the time plan |
+| [docs/roadmap.md](docs/roadmap.md) | What's in v1, what's later, open questions | Planning the next piece of work |
+| [docs/decisions.md](docs/decisions.md) | Dated log of decisions and why they were made | Before reversing something; after making a call |
+
+## Ground rules
+
+- **No personal data, ever.** No accounts, no names, no server-side storage. A student's
+  work stays in their own browser. Don't add analytics or third-party trackers.
+- **Calm over clever.** If a screen feels busy, cut something. See docs/design.md.
+- **The student does the reading.** Features should make students engage with the
+  recipe, not do it for them (this is why recipe auto-import is not in v1).
+- **Works everywhere.** Chromebook, phone, home computer. Test at phone width.
+- **Commit only when asked.** Log meaningful decisions in docs/decisions.md.
