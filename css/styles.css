@@ -50,27 +50,43 @@ h1 {
   margin: 0 0 2rem;
 }
 
-/* Progress */
+/* Progress: a thin bar per screen, each with its name. Every one is a button. */
 .progress { margin: 8px 0 32px; }
-.progress-text {
-  margin: 0 0 8px;
-  font-size: 0.9rem;
-  color: var(--muted);
-}
-.progress-bar {
+.progress-steps {
   display: flex;
   gap: 6px;
   list-style: none;
   margin: 0;
   padding: 0;
 }
-.progress-bar li {
-  flex: 1;
+.progress-steps li { flex: 1; min-width: 0; }
+.progress-steps button {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 0;
+  font: inherit;
+  font-size: 0.8rem;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.progress-steps button::before {
+  content: "";
+  display: block;
   height: 6px;
+  margin-bottom: 6px;
   border-radius: 3px;
   background: var(--line);
 }
-.progress-bar li.done { background: var(--accent); }
+.progress-steps button.done::before { background: var(--accent); }
+.progress-steps button[aria-current] { color: var(--text); font-weight: 700; }
+.progress-steps button:hover { color: var(--text); }
 
 /* Fields */
 .field {
@@ -110,27 +126,43 @@ input::placeholder { color: #b0aaa0; }
   .row { grid-template-columns: 1fr; gap: 0; }
 }
 
-/* Cooks picker */
+/* Cooks picker: real radio buttons (arrow keys work), drawn as one row of boxes. */
 .segmented {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 8px;
   margin-top: 4px;
 }
-.segmented button {
-  font: inherit;
-  font-weight: 700;
+.segmented label { position: relative; }
+.segmented input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  min-height: 0;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+}
+.segmented span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   min-height: 52px;
+  font-weight: 700;
   background: var(--surface);
   color: var(--text);
   border: 1.5px solid var(--line);
   border-radius: var(--radius);
   cursor: pointer;
 }
-.segmented button[aria-pressed="true"] {
+.segmented input:checked + span {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
+}
+.segmented input:focus-visible + span {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* Back / Next */
@@ -163,9 +195,19 @@ input::placeholder { color: #b0aaa0; }
   padding-left: 0;
 }
 
+/* A clear ring, so keyboard users can always see where they are. */
 button:focus-visible {
-  outline: 3px solid var(--accent-soft);
+  outline: 3px solid var(--accent);
   outline-offset: 2px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 /* ---------- Lists of items (ingredients, equipment, bowls, steps) ---------- */
@@ -195,25 +237,25 @@ button:focus-visible {
   font-size: 1.1rem;
   margin: 0;
 }
-.item-tools { display: flex; gap: 4px; }
-.item-inline-row { display: flex; align-items: center; gap: 8px; }
+.item-tools { display: flex; align-items: center; gap: 4px; }
 
-.ingredient-grid {
+/* An ingredient: amount, unit, name, prep, ×. Two lines on most screens, three on a
+   phone, one on a wide screen (see "Screen sizes" below). */
+.item.ingredient {
   display: grid;
-  grid-template-columns: 5rem 6.5rem 1fr;
+  grid-template-columns: 5rem 6.5rem 1fr auto;
+  grid-template-areas:
+    "amount unit name name"
+    "prep   prep prep remove";
   gap: 8px;
-}
-@media (max-width: 30rem) {
-  .ingredient-grid { grid-template-columns: 1fr 1fr; }
-  .ingredient-grid .span-name { grid-column: 1 / -1; }
-}
-
-.item-inline {
-  flex-direction: row;
   align-items: center;
-  gap: 8px;
-  padding: 8px;
 }
+.in-amount { grid-area: amount; }
+.in-unit { grid-area: unit; }
+.in-name { grid-area: name; }
+.in-prep { grid-area: prep; }
+.ingredient .button-icon { grid-area: remove; }
+
 .in-qty { max-width: 6rem; }
 
 textarea,
@@ -300,11 +342,127 @@ select:focus {
 }
 .button-small:hover { background: var(--bg); color: var(--text); }
 .button-small.danger { color: #9b2c1f; font-weight: 700; }
+/* × ↑ ↓: big enough to see at a glance and to tap. */
+.button-icon {
+  font-size: 1.6rem;
+  line-height: 1;
+  min-width: 48px;
+  min-height: 48px;
+  padding: 0;
+}
 
 .note {
   margin: 24px 0 0;
   color: var(--text);
 }
+.muted { color: var(--muted); font-weight: 400; }
+
+/* ---------- Steps: one open, the rest as one-line summaries ---------- */
+
+.items-tight { gap: 8px; }
+.step-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 16px;
+  font: inherit;
+  text-align: left;
+  color: var(--text);
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.step-line:hover { border-color: var(--accent); }
+.step-line-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.step-line-text { font-weight: 700; }
+.step-line-meta { font-size: 0.9rem; color: var(--muted); }
+.step-line-edit { font-size: 0.9rem; font-weight: 700; color: var(--accent); }
+.step-open { border-color: var(--accent); margin: 8px 0; }
+
+/* Minutes and Starts side by side, Hands-off under them (all three in a row on a wide
+   screen, see "Screen sizes" below). */
+.timing {
+  display: grid;
+  grid-template-columns: 7rem 1fr;
+  gap: 12px;
+  align-items: end;
+}
+.timing .check { grid-column: 1 / -1; }
+.item .check { min-height: 40px; }
+
+/* Tags: what a step uses, each removable, with a box to add more. */
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.tag-item {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 2px 0 16px;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1.5px solid var(--accent);
+  border-radius: 999px;
+}
+.tag-remove {
+  font: inherit;
+  font-size: 1.4rem;
+  line-height: 1;
+  min-width: 40px;
+  min-height: 40px;
+  color: inherit;
+  background: none;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.tags input { flex: 1 1 10rem; width: auto; min-width: 10rem; }
+.extra-tools { margin-top: 32px; }
+
+/* After an undo: a soft ring that fades, so the eye finds what came back. */
+@keyframes flash {
+  from { box-shadow: 0 0 0 4px var(--accent); }
+  to { box-shadow: 0 0 0 4px transparent; }
+}
+.flash { animation: flash 1.6s ease-out; }
+
+/* "Removed flour. Undo" */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: none;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100vw - 32px);
+  padding: 8px 8px 8px 16px;
+  color: #fff;
+  background: var(--text);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+.toast.is-showing { display: flex; }
+.toast-undo {
+  font: inherit;
+  font-weight: 700;
+  min-height: 40px;
+  padding: 0 14px;
+  color: #fff;
+  background: none;
+  border: 1.5px solid rgba(255, 255, 255, 0.5);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.toast-keys { font-size: 0.8rem; opacity: 0.7; }
+@media (pointer: coarse) { .toast-keys { display: none; } }
 
 /* ---------- Lab guide ---------- */
 
@@ -375,39 +533,91 @@ select:focus {
 }
 .bowl h3 { margin: 0 0 8px; font-size: 1rem; }
 
+.gaps {
+  margin: 0 0 24px;
+  padding: 12px 16px;
+  background: var(--accent-soft);
+  border-left: 4px solid var(--accent);
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+.gaps ul { margin: 4px 0 0; padding-left: 20px; }
+.link {
+  font: inherit;
+  padding: 2px 0;
+  color: var(--accent);
+  text-align: left;
+  text-decoration: underline;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+/* ---------- Time plan: the team table ---------- */
+
+/* A team's table may spread wider than the reading column on big screens.
+   On narrow ones it scrolls sideways inside its box, never the whole page. */
+.plan-scroll { overflow-x: auto; }
+.plan-scroll.is-wide {
+  position: relative;
+  width: min(60rem, calc(100vw - 32px));
+  left: 50%;
+  transform: translateX(-50%);
+}
+/* Cells keep their own borders (not shared), so a task's cell stretched over several rows
+   is one clean block: the row lines stop at its edges. */
 .plan {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
 }
 .plan th {
   text-align: left;
   font-size: 0.9rem;
   color: var(--muted);
-  padding: 0 8px 8px 0;
+  padding: 0 12px 8px 11px;
   border-bottom: 1.5px solid var(--line);
 }
 .plan td {
-  padding: 10px 8px 10px 0;
-  border-bottom: 1px solid var(--line);
+  padding: 8px 12px 8px 8px;
+  border-top: 1px solid var(--line);
+  border-left: 3px solid transparent;
   vertical-align: top;
 }
-.plan .time { font-weight: 700; white-space: nowrap; }
-.plan .num { text-align: right; padding-right: 0; white-space: nowrap; }
-.plan tr.routine td { color: var(--muted); }
-.tag {
-  display: inline-block;
-  margin-left: 8px;
-  padding: 0 8px;
-  font-size: 0.8rem;
-  border: 1px solid var(--muted);
-  border-radius: 999px;
-  color: var(--muted);
-}
+.plan tbody tr:first-child td { border-top: none; }
+.plan .time { width: 3.5rem; padding-left: 0; border-left: none; font-weight: 700; white-space: nowrap; }
+.plan th:first-child { padding-left: 0; }
+/* A task: a green rule down its left side, as long as the task. Hands-off: dashed. */
+.plan td.task-cell { border-left-color: var(--accent); }
+.plan td.handsoff-cell { border-left: 3px dashed var(--muted); }
+.task + .task { margin-top: 8px; }
+.task-min { font-size: 0.85rem; color: var(--muted); white-space: nowrap; }
+.task.routine { color: var(--muted); }
 .uses {
   display: block;
   font-size: 0.85rem;
   color: var(--muted);
 }
+.plan tr.class-ends td { border-top: 2px dashed #b4541f; }
+.plan tr.class-ends .time,
+.plan tr.class-ends .time .uses { color: #b4541f; font-weight: 700; }
+.plan tr.done td { color: var(--muted); font-weight: 700; }
+
+.cook-names { margin: 0 0 16px; }
+.cook-names p { margin: 0; }
+.cook-names .field-hint { margin-bottom: 8px; }
+.cook-names-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  gap: 8px 16px;
+}
+.cook-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.cook-name input { min-height: 44px; }
 
 .new-recipe {
   display: flex;
@@ -420,126 +630,73 @@ select:focus {
   color: var(--muted);
 }
 
-/* ---------- Time plan: block view ---------- */
+/* ---------- Screen sizes ---------- */
 
-.section-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 12px;
-}
-.section-head h2 { margin: 0; }
-.segmented-small {
-  grid-template-columns: repeat(2, auto);
-  gap: 4px;
-  margin: 0;
-}
-.segmented-small button {
-  min-height: 40px;
-  padding: 0 14px;
-  font-size: 0.9rem;
+/* Phones: stack the ingredient boxes, show only the current screen's name in the
+   progress bar (the bars still work as buttons), and run the Undo bar edge to edge. */
+@media (max-width: 30rem) {
+  .item.ingredient {
+    grid-template-columns: 1fr 1fr auto;
+    grid-template-areas:
+      "amount unit unit"
+      "name   name name"
+      "prep   prep remove";
+  }
+  .progress-steps button { color: transparent; overflow: visible; }
+  .progress-steps button[aria-current] { color: var(--text); }
+  .toast { left: 16px; right: 16px; transform: none; max-width: none; }
+  .toast > span:first-child { flex: 1; }
 }
 
-/* The chart may spread wider than the reading column on big screens.
-   Wide teams scroll sideways inside the box, never the whole page. */
-.blocks-scroll {
-  overflow-x: auto;
-  position: relative;
-  width: min(60rem, calc(100vw - 32px));
-  left: 50%;
-  transform: translateX(-50%);
-}
-.blocks {
-  display: grid;
-  column-gap: 6px;
-  min-width: min-content;
-}
-.blocks-head {
-  font-size: 0.9rem;
-  font-weight: 700;
-  padding-bottom: 8px;
-  border-bottom: 1.5px solid var(--line);
-  margin-bottom: 8px;
-}
-.blocks-head.is-handsoff { color: var(--muted); }
-
-.blocks-axis { position: relative; }
-.blocks-axis span {
-  position: absolute;
-  left: 0;
-  margin-top: -2px;
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: var(--muted);
-}
-
-/* A faint line every 10 minutes (140px at PX_PER_MINUTE = 14 in guide.js). */
-.blocks-lane {
-  position: relative;
-  background-image: repeating-linear-gradient(to bottom, var(--line) 0 1px, transparent 1px 140px);
-}
-
-.block {
-  position: absolute;
-  left: 0;
-  right: 0;
-  overflow: hidden;
-  padding: 3px 8px;
-  border: 1.5px solid var(--line);
-  border-left: 4px solid var(--accent);
-  border-radius: 6px;
-  background: var(--surface);
-  font-size: 0.85rem;
-  line-height: 1.25;
-}
-.block-bowl { background: var(--accent-soft); }
-.block-setup,
-.block-cleanup {
-  border-left-color: var(--muted);
-  background: var(--bg);
-  color: var(--muted);
-}
-.block-handsoff {
-  border-style: dashed;
-  border-left: 1.5px dashed var(--muted);
-  background: transparent;
-}
-.block-label {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  font-weight: 700;
-}
-.block-meta {
-  display: block;
-  font-size: 0.75rem;
-  color: var(--muted);
-}
-
-.class-ends {
-  position: absolute;
-  left: -6px;
-  right: 0;
-  border-top: 2px dashed #b4541f;
-  z-index: 1;
+/* Wide screens (Chromebooks, laptops): a wider column, each ingredient on one line,
+   a step's timing on one line, and the guide's equipment beside its mise en place. */
+@media screen and (min-width: 64rem) {
+  .page, .site-header { max-width: 52rem; }
+  .item.ingredient {
+    grid-template-columns: 5rem 6.5rem 1fr 1fr auto;
+    grid-template-areas: "amount unit name prep remove";
+  }
+  .timing { grid-template-columns: 7rem 1fr auto; }
+  .timing-first { grid-template-columns: 7rem auto; justify-content: start; }
+  .timing .check { grid-column: auto; }
+  .guide-top {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    column-gap: 32px;
+  }
 }
 
 /* ---------- Printing: black and white, no buttons ---------- */
 
+@page { margin: 0.5in; }
+
 @media print {
   body { background: #fff; font-size: 11pt; color: #000; }
-  .site-header, .guide-actions, .new-recipe { display: none; }
+  .site-header, .progress, .guide-actions button, .new-recipe, .gaps, .toast { display: none !important; }
   .page { max-width: none; padding: 0; }
-  .eyebrow, .plan tr.routine td, .uses, .tag, .plan th { color: #444; }
+  .eyebrow, .plan th, .uses, .task-min, .task.routine, .plan tr.done td { color: #444; }
   .bowl, .warning { background: none; }
   .warning { border: 1.5px solid #000; border-radius: 0; }
   .guide-section { break-inside: avoid-page; }
+  .guide-plan { break-inside: auto; }
+  .plan-scroll, .plan-scroll.is-wide { overflow: visible; width: auto; left: 0; transform: none; }
+  .plan { min-width: 0 !important; }
+  .plan th { border-bottom-color: #000; }
+  .plan td { border-top-color: #999; }
   .plan tr { break-inside: avoid; }
-  .segmented-small { display: none; }
-  .blocks-scroll { overflow: visible; width: auto; left: 0; transform: none; }
-  .block, .block-bowl, .block-setup, .block-cleanup { background: #fff; }
-  .block { border-color: #999; border-left-color: #000; }
-  .block-meta, .blocks-axis span { color: #444; }
+  .plan td.task-cell { border-left-color: #000; }
+  .plan td.handsoff-cell { border-left-color: #444; }
+  .plan tr.class-ends td { border-top-color: #000; }
+  .plan tr.class-ends .time, .plan tr.class-ends .time .uses { color: #000; }
+  .plan-scroll .field-hint { color: #444; }
+  .cook-names .field-hint { display: none; }
+  .cook-names-grid { grid-template-columns: repeat(3, 1fr); }
+  .cook-name input {
+    min-height: 0;
+    padding: 2px 4px;
+    background: none;
+    border: none;
+    border-bottom: 1px solid #000;
+    border-radius: 0;
+  }
 }

@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Printed lab report (sketch)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+  <style>
+    /* A sketch of a lab guide designed for paper first: letter size, black and white.
+       Page 1 is posted at the station. Page 2 is cut apart, one run sheet per cook. */
+
+    @page { size: letter; margin: 0.5in; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #e9e6e0;
+      color: #000;
+      font-family: "Atkinson Hyperlegible", system-ui, sans-serif;
+      font-size: 10pt;
+      line-height: 1.3;
+    }
+
+    /* On screen, each page looks like a sheet of paper. */
+    .about {
+      max-width: 8.5in;
+      margin: 16px auto;
+      padding: 0 16px;
+      font-size: 12pt;
+      color: #444;
+    }
+    .sheet {
+      width: 8.5in;
+      min-height: 11in;
+      margin: 0 auto 24px;
+      padding: 0.5in;
+      background: #fff;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+    }
+    @media screen and (max-width: 8.75in) {
+      .sheet { width: auto; min-height: 0; margin: 0 8px 16px; padding: 16px; }
+    }
+    @media print {
+      body { background: #fff; }
+      .about { display: none; }
+      .sheet { width: auto; min-height: 0; margin: 0; padding: 0; box-shadow: none; }
+      .sheet + .sheet { break-before: page; }
+    }
+
+    h1, h2, h3, p { margin: 0; }
+    .eyebrow { font-size: 8.5pt; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+    .soft { color: #444; }
+    .small { font-size: 8.5pt; }
+
+    /* Header: what, and when. Readable from arm's length. */
+    .head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 24px;
+      padding-bottom: 10pt;
+      border-bottom: 2.5pt solid #000;
+    }
+    .head h1 { font-size: 24pt; line-height: 1.1; margin: 2pt 0; }
+    .clock { text-align: right; }
+    .clock .big { font-size: 20pt; font-weight: 700; line-height: 1.1; }
+    .over { display: inline-block; margin-top: 3pt; padding: 1pt 6pt; border: 1.5pt solid #000; font-weight: 700; }
+
+    .names { display: flex; flex-wrap: wrap; gap: 6pt 24pt; margin: 10pt 0 2pt; font-weight: 700; }
+    .names span { display: inline-block; min-width: 1.8in; border-bottom: 1pt solid #000; }
+
+    section { margin-top: 11pt; }
+    h2 {
+      font-size: 11pt;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding-bottom: 3pt;
+      margin-bottom: 6pt;
+      border-bottom: 1pt solid #000;
+    }
+
+    .top { display: grid; grid-template-columns: 1fr 2.2fr; gap: 20pt; }
+
+    /* Checkboxes drawn as boxes, so they print without background graphics. */
+    .checks { list-style: none; margin: 0; padding: 0; }
+    .checks li { position: relative; padding: 2pt 0 2pt 17pt; }
+    .checks li::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 4pt;
+      width: 9pt;
+      height: 9pt;
+      border: 1pt solid #000;
+    }
+
+    .bowls { display: grid; grid-template-columns: 1fr 1fr; gap: 8pt; }
+    .bowl { border: 1pt solid #000; padding: 6pt 8pt; break-inside: avoid; }
+    .bowl h3 { font-size: 10.5pt; }
+    .bowl .who { font-size: 8.5pt; color: #444; margin-bottom: 3pt; }
+
+    /* Team table, compact. */
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; font-size: 8.5pt; font-weight: 700; padding: 0 6pt 3pt 0; border-bottom: 1pt solid #000; }
+    td { position: relative; padding: 3pt 6pt 3pt 0; border-top: 0.5pt solid #999; vertical-align: top; }
+    tbody tr:first-child td { border-top: none; }
+    td.time { width: 0.55in; font-weight: 700; white-space: nowrap; }
+    th { white-space: nowrap; }
+    /* In the team table a task is one cell stretched over the rows it lasts, with a
+       rule down its left side. Cells keep their own borders so row lines stop at it. */
+    table.team { border-collapse: separate; border-spacing: 0; }
+    table.team th { padding-left: 7pt; }
+    table.team th:first-child { padding-left: 0; }
+    table.team td { padding-left: 5pt; border-left: 2pt solid transparent; }
+    table.team td.time { padding-left: 0; border-left: none; }
+    table.team td.task-cell { border-left-color: #000; }
+    table.team td.handsoff-cell { border-left: 2pt dashed #666; }
+    tr.mark td { border-top: 1.5pt dashed #000; }
+    tr.done td { font-weight: 700; }
+    tr { break-inside: avoid; }
+    .min { font-size: 8.5pt; color: #444; white-space: nowrap; }
+    .uses { display: block; font-size: 8.5pt; color: #444; }
+    .routine { color: #444; }
+
+    /* Page 2: run sheets, one per cook, to cut apart. */
+    .cut-note { margin: 2pt 0 6pt; }
+    .run {
+      padding: 8pt 12pt;
+      margin-bottom: 9pt;
+      border: 1.25pt dashed #000;
+      break-inside: avoid;
+    }
+    .run.solo { border-style: solid; }
+    .run-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4pt; }
+    .run-head h3 { font-size: 14pt; }
+    .run-head h3 span { display: inline-block; min-width: 1.8in; margin-left: 6pt; border-bottom: 1pt solid #000; }
+    .run td { padding: 2.5pt 6pt 2.5pt 0; }
+    .run td.box { width: 16pt; }
+    .run td.box::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 4.5pt;
+      width: 9pt;
+      height: 9pt;
+      border: 1pt solid #000;
+    }
+    .run td.plan, .run th.plan { width: 0.7in; text-align: right; padding-right: 10pt; white-space: nowrap; }
+    .run td.actual { width: 0.85in; }
+    .run td.actual::after { content: ""; display: block; height: 11pt; border-bottom: 1pt solid #000; }
+    .run tr.free td { font-style: italic; color: #444; }
+    .note { display: block; font-size: 8.5pt; color: #444; }
+
+    .reflect { padding: 8pt 12pt; border: 1.25pt solid #000; break-inside: avoid; }
+    .reflect h2 { border: none; margin-bottom: 2pt; }
+    .reflect p { margin-top: 6pt; font-weight: 700; }
+    .reflect .line { height: 14pt; border-bottom: 1pt solid #000; }
+    .reflect .inline { display: inline-block; min-width: 0.8in; border-bottom: 1pt solid #000; }
+  </style>
+</head>
+<body>
+  <p class="about" id="about"></p>
+  <div id="report"></div>
+
+  <script src="../js/schedule.js"></script>
+  <script src="../js/store.js"></script>
+  <script>
+    // A sample recipe, used when nothing has been entered in the app yet.
+    var SAMPLE = {
+      title: "Blueberry Buttermilk Pancakes", servings: "4", startTime: "09:15", minutesAvailable: 90, cooks: 2,
+      ingredients: [
+        { id: "i1", amount: "2", unit: "cups", name: "flour", prep: "" },
+        { id: "i2", amount: "2", unit: "tbsp", name: "sugar", prep: "" },
+        { id: "i3", amount: "2", unit: "tsp", name: "baking powder", prep: "" },
+        { id: "i4", amount: "½", unit: "tsp", name: "salt", prep: "" },
+        { id: "i5", amount: "1 ½", unit: "cups", name: "buttermilk", prep: "" },
+        { id: "i6", amount: "2", unit: "", name: "eggs", prep: "" },
+        { id: "i7", amount: "3", unit: "tbsp", name: "butter", prep: "melted" },
+        { id: "i8", amount: "1", unit: "cup", name: "blueberries", prep: "rinsed" },
+        { id: "i9", amount: "1", unit: "tbsp", name: "butter", prep: "" }
+      ],
+      bowls: [
+        { id: "b1", label: "dry", ingredientIds: ["i1", "i2", "i3", "i4"], minutes: null },
+        { id: "b2", label: "wet", ingredientIds: ["i5", "i6", "i7"], minutes: null },
+        { id: "b3", label: "berries", ingredientIds: ["i8"], minutes: null }
+      ],
+      steps: [
+        { id: "s1", text: "Preheat griddle to 375°F", minutes: "10", handsOff: true, bowlIds: [], tools: ["griddle"], after: "any" },
+        { id: "s2", text: "Whisk dry ingredients", minutes: "2", handsOff: false, bowlIds: ["b1"], tools: ["large bowl", "whisk"], after: "any" },
+        { id: "s3", text: "Whisk wet into dry until just combined", minutes: "3", handsOff: false, bowlIds: ["b2"], tools: ["whisk"], after: "previous" },
+        { id: "s4", text: "Rest batter", minutes: "10", handsOff: true, bowlIds: [], tools: [], after: "previous" },
+        { id: "s5", text: "Wash mixing bowls and whisk", minutes: "8", handsOff: false, bowlIds: [], tools: [], after: "s3" },
+        { id: "s6", text: "Cook pancakes, dotting with berries", minutes: "20", handsOff: false, bowlIds: ["b3"], tools: ["ladle", "spatula"], after: "s4" },
+        { id: "s7", text: "Plate and hold warm", minutes: "3", handsOff: false, bowlIds: [], tools: ["sheet pan"], after: "previous" }
+      ],
+      extraTools: ["towels", "sanitizer bucket"]
+    };
+
+    var saved = loadRecipe();
+    var usingSample = !saved.steps.some(function (s) { return s.text && s.text.trim(); });
+    var recipe = usingSample ? SAMPLE : saved;
+
+    // Same clean-up as the app's guide: drop blank rows.
+    var ingredients = recipe.ingredients.filter(function (i) { return i.name && i.name.trim(); });
+    var ids = ingredients.map(function (i) { return i.id; });
+    var r = Object.assign({}, recipe, {
+      ingredients: ingredients,
+      bowls: recipe.bowls.map(function (b) {
+        return Object.assign({}, b, { ingredientIds: b.ingredientIds.filter(function (id) { return ids.indexOf(id) !== -1; }) });
+      }),
+      steps: recipe.steps.filter(function (s) { return s.text && s.text.trim(); })
+    });
+    var cookCount = Number(r.cooks) || 1;
+    var team = cookCount > 1;
+    var plan = schedule(r);
+
+    function h(tag, attrs) {
+      var el = document.createElement(tag);
+      Object.keys(attrs || {}).forEach(function (k) { if (attrs[k] != null && attrs[k] !== false) el.setAttribute(k, attrs[k]); });
+      for (var i = 2; i < arguments.length; i++) {
+        if (arguments[i] != null && arguments[i] !== false) el.append(arguments[i]);
+      }
+      return el;
+    }
+
+    function clock(minutes) {
+      var match = /^(\d{1,2}):(\d{2})/.exec(r.startTime || "");
+      if (!match) return Math.floor(minutes / 60) + ":" + String(minutes % 60).padStart(2, "0");
+      var total = Number(match[1]) * 60 + Number(match[2]) + minutes;
+      return ((Math.floor(total / 60) % 24) % 12 || 12) + ":" + String(total % 60).padStart(2, "0");
+    }
+
+    function ingredientLine(i) {
+      var text = [i.amount, i.unit, i.name].filter(function (s) { return s && String(s).trim(); }).join(" ");
+      return i.prep && i.prep.trim() ? text + ", " + i.prep.trim() : text;
+    }
+
+    function usesOf(task) {
+      if (task.kind !== "step") return [];
+      return task.bowlIds
+        .map(function (id) { var b = r.bowls.find(function (x) { return x.id === id; }); return b && bowlName(b, r.bowls); })
+        .filter(Boolean)
+        .concat(task.tools || []);
+    }
+
+    function cookName(c) { return team ? "Cook " + c : "You"; }
+
+    // ---------- Page 1: the station sheet ----------
+
+    function stationSheet() {
+      var sheet = h("div", { class: "sheet" });
+      var spare = r.minutesAvailable - plan.totalMinutes;
+
+      sheet.append(h("header", { class: "head" },
+        h("div", {},
+          h("p", { class: "eyebrow" }, "Lab guide"),
+          h("h1", {}, r.title || "Your recipe"),
+          h("p", { class: "soft" }, [r.servings && "Serves " + r.servings, team ? "Team of " + cookCount : "Solo"].filter(Boolean).join(" · "))),
+        h("div", { class: "clock" },
+          h("p", { class: "soft" }, "Class " + clock(0) + "–" + clock(r.minutesAvailable)),
+          h("p", { class: "big" }, "Done by " + clock(plan.totalMinutes)),
+          spare >= 0
+            ? h("p", { class: "soft" }, plan.totalMinutes + " of " + r.minutesAvailable + " min · " + spare + " to spare")
+            : h("p", { class: "over" }, -spare + " minutes over"))));
+
+      if (team) {
+        var names = h("div", { class: "names" });
+        COOK_LABELS.slice(0, cookCount).forEach(function (c) { names.append(h("p", {}, "Cook " + c + ": ", h("span"))); });
+        sheet.append(names);
+      }
+
+      // Pull list and bowls, side by side.
+      var pull = h("ul", { class: "checks" });
+      var tools = [];
+      r.steps.forEach(function (s) { (s.tools || []).forEach(add); });
+      (r.extraTools || []).forEach(add);
+      function add(t) { if (!tools.some(function (x) { return x.toLowerCase() === t.toLowerCase(); })) tools.push(t); }
+      var filled = r.bowls.filter(function (b) { return b.ingredientIds.length; });
+      tools.forEach(function (t) { pull.append(h("li", {}, t)); });
+      if (filled.length) pull.append(h("li", {}, filled.length + " small bowls for mise en place"));
+
+      var bowls = h("div", { class: "bowls" });
+      var inBowl = {};
+      filled.forEach(function (b) {
+        var fill = plan.tasks.find(function (t) { return t.id === "fill-" + b.id; });
+        var list = h("ul", { class: "checks" });
+        b.ingredientIds.forEach(function (id) {
+          inBowl[id] = true;
+          list.append(h("li", {}, ingredientLine(r.ingredients.find(function (i) { return i.id === id; }))));
+        });
+        bowls.append(h("div", { class: "bowl" },
+          h("h3", {}, bowlName(b, r.bowls)),
+          fill && h("p", { class: "who" }, (team ? cookName(fill.cook) + " · " : "") + clock(fill.start) + " · " + (fill.end - fill.start) + " min"),
+          list));
+      });
+      var loose = r.ingredients.filter(function (i) { return !inBowl[i.id]; });
+      if (loose.length) {
+        var list = h("ul", { class: "checks" });
+        loose.forEach(function (i) { list.append(h("li", {}, ingredientLine(i))); });
+        bowls.append(h("div", { class: "bowl" }, h("h3", {}, "On their own"), list));
+      }
+
+      sheet.append(h("div", { class: "top" },
+        h("section", {}, h("h2", {}, "Pull"), pull),
+        h("section", {}, h("h2", {}, "Mise en place"), bowls)));
+
+      sheet.append(h("section", {}, h("h2", {}, "Time plan"), teamTable()));
+      return sheet;
+    }
+
+    function teamTable() {
+      var t = planTable(plan, cookCount);
+      var columns = t.cooks.length + (t.handsOff ? 1 : 0);
+      function taskEl(task, opts) {
+        opts = opts || {};
+        var uses = usesOf(task);
+        var minutes = (task.end - task.start) + " min";
+        if (task.handsOff) minutes += " · ready " + clock(task.end);
+        else if (opts.long) minutes += " · until " + clock(task.end);
+        return h("div", { class: isRoutine(task) ? "routine" : "" },
+          task.label, " ", h("span", { class: "min" }, minutes),
+          opts.note && h("span", { class: "uses" }, opts.note),
+          uses.length > 0 && h("span", { class: "uses" }, uses.join(", ")));
+      }
+      // Null for a row that the cell above already stretches over.
+      function cell(c, handsOff) {
+        if (c.covered) return null;
+        if (!c.tasks) return h("td");
+        var td = h("td", { class: handsOff ? "handsoff-cell" : "task-cell", rowspan: c.span > 1 ? c.span : null });
+        c.tasks.forEach(function (x) {
+          td.append(taskEl(x, { long: c.span > 1, note: handsOff && team ? cookName(x.cook) + " starts it" : null }));
+        });
+        return td;
+      }
+      var head = h("tr", {}, h("th", {}, "Time"));
+      t.cooks.forEach(function (c) { head.append(h("th", {}, team ? cookName(c) : "Task")); });
+      if (t.handsOff) head.append(h("th", {}, "Hands-off"));
+      var body = h("tbody");
+      t.rows.forEach(function (row) {
+        var time = h("td", { class: "time" }, clock(row.time));
+        if (row.kind === "done") body.append(h("tr", { class: "done" }, time, h("td", { colspan: columns }, "Done")));
+        else if (row.kind === "everyone") body.append(h("tr", {}, time, h("td", { colspan: t.cooks.length }, taskEl(row.task, { note: "Everyone" })), t.handsOff && h("td")));
+        else {
+          if (row.kind === "classEnds") time.append(h("span", { class: "uses" }, "Class ends"));
+          var tr = h("tr", { class: row.kind === "classEnds" ? "mark" : null }, time);
+          row.cells.concat(t.handsOff ? [row.handsOff] : []).forEach(function (c, i) {
+            var td = cell(c, i === row.cells.length);
+            if (td) tr.append(td);
+          });
+          body.append(tr);
+        }
+      });
+      return h("table", { class: "team" }, h("thead", {}, head), body);
+    }
+
+    // ---------- Page 2: run sheets and reflection ----------
+
+    // One cook's own list, in order: their tasks, the hands-off things they start (with a
+    // timer note), and any free stretch long enough to clean as you go.
+    function runItems(cook) {
+      var items = [];
+      var mine = plan.tasks.filter(function (t) { return t.cook === cook; });
+      mine.forEach(function (t) {
+        if (t.handsOff) {
+          items.push({ time: t.start, order: 0, label: "Start: " + t.label,
+            note: "Hands-off · set a timer for " + (t.end - t.start) + " min (ready " + clock(t.end) + ")" });
+        } else {
+          var uses = usesOf(t);
+          items.push({ time: t.start, order: 1, label: t.label, minutes: t.end - t.start, actual: true,
+            routine: isRoutine(t), note: uses.length ? "Uses " + uses.join(", ") : null });
+        }
+      });
+      // Free stretches between hands-on tasks.
+      var handsOn = mine.filter(function (t) { return !t.handsOff; }).sort(function (a, b) { return a.start - b.start; });
+      for (var i = 1; i < handsOn.length; i++) {
+        var from = handsOn[i - 1].end, to = handsOn[i].start;
+        if (to - from >= 5) {
+          items.push({ time: from, order: 2, free: true, label: "Free until " + clock(to),
+            note: team ? "Help a teammate, or clean as you go" : "Clean as you go" });
+        }
+      }
+      return items.sort(function (a, b) { return a.time - b.time || a.order - b.order; });
+    }
+
+    function runSheet(cook) {
+      var items = runItems(cook);
+      var handsOnMinutes = plan.tasks
+        .filter(function (t) { return t.cook === cook && !t.handsOff; })
+        .reduce(function (sum, t) { return sum + t.end - t.start; }, 0);
+      var body = h("tbody");
+      items.forEach(function (it) {
+        body.append(h("tr", { class: it.free ? "free" : (it.routine ? "routine" : null) },
+          h("td", { class: it.free ? null : "box" }),
+          h("td", { class: "time" }, clock(it.time)),
+          h("td", {}, it.label, it.note && h("span", { class: "note" }, it.note)),
+          h("td", { class: "plan" }, it.minutes != null ? it.minutes + " min" : ""),
+          h("td", { class: it.actual ? "actual" : null })));
+      });
+      return h("div", { class: "run" + (team ? "" : " solo") },
+        h("div", { class: "run-head" },
+          h("h3", {}, team ? cookName(cook) : "Your run sheet", team && h("span")),
+          h("p", { class: "soft small" }, (r.title || "") + " · " + handsOnMinutes + " min hands-on")),
+        h("table", {},
+          h("thead", {}, h("tr", {}, h("th", {}), h("th", {}, "Time"), h("th", {}, "Task"),
+            h("th", { class: "plan" }, "Plan"), h("th", {}, "Actual"))),
+          body));
+    }
+
+    function runSheets() {
+      var sheet = h("div", { class: "sheet" });
+      sheet.append(h("h2", {}, team ? "Run sheets" : "Run sheet"));
+      sheet.append(h("p", { class: "cut-note soft" }, team
+        ? "Cut along the dashed lines. Each cook keeps their own. Check off each task and write how long it really took."
+        : "Check off each task and write how long it really took."));
+      COOK_LABELS.slice(0, cookCount).forEach(function (c) { sheet.append(runSheet(c)); });
+
+      sheet.append(h("div", { class: "reflect" },
+        h("h2", {}, "After the lab"),
+        h("p", {}, "Planned ", plan.totalMinutes, " min. Actual: ", h("span", { class: "inline" }), " min."),
+        h("p", {}, "Which step took longer than you planned? Why?"),
+        h("div", { class: "line" }), h("div", { class: "line" }),
+        h("p", {}, "What will you do differently next time?"),
+        h("div", { class: "line" }), h("div", { class: "line" })));
+      return sheet;
+    }
+
+    document.getElementById("about").textContent =
+      "Sketch of a printed lab report, separate from the app. " +
+      (usingSample ? "Showing a sample recipe (nothing is entered in the app yet). " : "Showing the recipe saved in this browser. ") +
+      "Press Ctrl+P to see it as paper.";
+    document.getElementById("report").append(stationSheet(), runSheets());
+  </script>
+</body>
+</html>

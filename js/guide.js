@@ -7,7 +7,6 @@ function filledRecipe() {
   var ids = ingredients.map(function (i) { return i.id; });
   return Object.assign({}, recipe, {
     ingredients: ingredients,
-    equipment: recipe.equipment.filter(function (e) { return e.name && e.name.trim(); }),
     bowls: recipe.bowls.map(function (b) {
       return Object.assign({}, b, { ingredientIds: b.ingredientIds.filter(function (id) { return ids.indexOf(id) !== -1; }) });
     }),
@@ -26,141 +25,142 @@ function clock(minutes) {
   return (hours % 12 || 12) + ":" + String(total % 60).padStart(2, "0");
 }
 
-// Setup and cleanup are the same for every cook, so show each as one "Everyone" row.
-function planRows(tasks, cookCount) {
-  var rows = [];
-  var seen = {};
-  tasks.forEach(function (t) {
-    if ((t.kind === "setup" || t.kind === "cleanup") && cookCount > 1) {
-      if (seen[t.kind]) return;
-      seen[t.kind] = true;
-      rows.push(Object.assign({}, t, { cook: "All" }));
-    } else {
-      rows.push(t);
+// Everything to pull: tools from the steps in order of first use, the extras, then the
+// mise en place bowls.
+function equipmentList(r) {
+  var items = knownTools(r);
+  var bowls = r.bowls.filter(function (b) { return b.ingredientIds.length; }).length;
+  if (bowls) items.push(bowls + (bowls === 1 ? " small bowl" : " small bowls") + " for mise en place");
+  return items;
+}
+
+// Things the student probably meant to fill in, each with where to fix it.
+// Shown on screen, never printed.
+function recipeGaps(r) {
+  var gaps = [];
+  var steps = screenNamed("Steps");
+  recipe.steps.forEach(function (s, i) {
+    var name = "Step " + (i + 1);
+    if (norm(s.text) && !hasMinutes(s)) {
+      gaps.push({ text: name + " has no minutes.", screen: steps, step: s.id, focus: s.id + "-minutes" });
+    } else if (!norm(s.text) && (hasMinutes(s) || s.tools.length || s.bowlIds.length)) {
+      gaps.push({ text: name + " has no words, so it's left out.", screen: steps, step: s.id, focus: s.id });
     }
   });
-  return rows;
-}
-
-// ---------- Block view: who does what, side by side ----------
-
-var PX_PER_MINUTE = 14; // keep in step with the 10-minute gridlines in styles.css
-
-// Hands-off tasks get their own column. If two overlap (preheat while batter rests),
-// the second goes in a second hands-off column.
-function handsOffLanes(tasks) {
-  var lanes = [];
-  tasks.filter(function (t) { return t.handsOff; })
-    .sort(function (a, b) { return a.start - b.start; })
-    .forEach(function (t) {
-      var lane = lanes.find(function (l) { return l.end <= t.start; });
-      if (!lane) { lane = { end: 0, tasks: [] }; lanes.push(lane); }
-      lane.tasks.push(t);
-      lane.end = t.end;
-    });
-  return lanes;
-}
-
-function block(t, extra) {
-  var minutes = t.end - t.start;
-  return h("div", {
-    class: "block block-" + t.kind + (t.handsOff ? " block-handsoff" : ""),
-    style: "top:" + t.start * PX_PER_MINUTE + "px;height:" + minutes * PX_PER_MINUTE + "px",
-    title: clock(t.start) + " · " + t.label + " · " + minutes + " min" + (extra ? " · " + extra : "")
-  },
-    h("span", { class: "block-label" }, t.label),
-    minutes >= 5 && h("span", { class: "block-meta" }, clock(t.start) + " · " + minutes + " min" + (extra ? " · " + extra : "")));
-}
-
-function blockView(plan, r, cookCount) {
-  var height = plan.totalMinutes * PX_PER_MINUTE;
-  var columns = [];
-
-  for (var c = 0; c < cookCount; c++) {
-    var cook = COOK_LABELS[c];
-    columns.push({
-      title: cookCount === 1 ? "You" : "Cook " + cook,
-      blocks: plan.tasks.filter(function (t) { return t.cook === cook && !t.handsOff; })
-        .map(function (t) { return block(t); })
-    });
-  }
-  handsOffLanes(plan.tasks).forEach(function (lane, i) {
-    columns.push({
-      title: i === 0 ? "Hands-off" : "",
-      handsOff: true,
-      blocks: lane.tasks.map(function (t) {
-        return block(t, cookCount > 1 ? "Cook " + t.cook + " starts it" : null);
-      })
-    });
-  });
-
-  // Clock times down the side, every 10 minutes.
-  var axis = h("div", { class: "blocks-axis", style: "height:" + height + "px" });
-  for (var m = 0; m <= plan.totalMinutes; m += 10) {
-    axis.append(h("span", { style: "top:" + m * PX_PER_MINUTE + "px" }, clock(m)));
-  }
-
-  var grid = h("div", {
-    class: "blocks",
-    style: "grid-template-columns: 3.5rem repeat(" + columns.length + ", minmax(7.5rem, 1fr))"
-  });
-  grid.append(h("div", { class: "blocks-head" }));
-  columns.forEach(function (col) {
-    grid.append(h("div", { class: "blocks-head" + (col.handsOff ? " is-handsoff" : "") }, col.title));
-  });
-  grid.append(axis);
-  columns.forEach(function (col) {
-    var lane = h("div", { class: "blocks-lane" + (col.handsOff ? " is-handsoff" : ""), style: "height:" + height + "px" });
-    col.blocks.forEach(function (b) { lane.append(b); });
-    // Mark the end of class if the plan runs past it.
-    if (plan.overrunMinutes > 0) {
-      lane.append(h("div", { class: "class-ends", style: "top:" + r.minutesAvailable * PX_PER_MINUTE + "px" }));
+  // An empty bowl only matters if the student named it or a step uses it.
+  r.bowls.forEach(function (b) {
+    var used = recipe.steps.some(function (s) { return s.bowlIds.indexOf(b.id) !== -1; });
+    if (!b.ingredientIds.length && (norm(b.label) || used)) {
+      gaps.push({ text: bowlName(b, r.bowls) + " is empty.", screen: screenNamed("Bowls"), focus: b.id });
     }
-    grid.append(lane);
   });
-
-  return h("div", { class: "blocks-scroll" }, grid,
-    plan.overrunMinutes > 0 && h("p", { class: "field-hint" }, "The dashed line is when class ends."));
+  return gaps;
 }
 
-function listView(plan, r, cookCount) {
+function gapsNote(gaps) {
+  if (!gaps.length) return null;
+  var list = h("ul");
+  gaps.forEach(function (g) {
+    list.append(h("li", {}, h("button", {
+      type: "button", class: "link",
+      onclick: function () {
+        if (g.step) openStepId = g.step;
+        focusAfterRender = g.focus;
+        goTo(g.screen);
+      }
+    }, g.text)));
+  });
+  return h("div", { class: "gaps" }, h("strong", {}, "Before you print"), list);
+}
+
+// ---------- Time plan: the team table ----------
+// One row per moment something starts; a column per cook. See planTable() in schedule.js.
+
+function planView(plan, r, cookCount) {
+  var table = planTable(plan, cookCount);
+  var team = cookCount > 1;
+  var columns = table.cooks.length + (table.handsOff ? 1 : 0);
   var bowlsById = {};
   r.bowls.forEach(function (b) { bowlsById[b.id] = b; });
-  var table = h("table", { class: "plan" },
-    h("thead", {}, h("tr", {},
-      h("th", {}, "Time"),
-      cookCount > 1 && h("th", {}, "Who"),
-      h("th", {}, "Task"),
-      h("th", { class: "num" }, "Min"))));
+
+  // "6 min", or "6 min · until 9:26" for a task that stretches over more than one row.
+  // Hands-off: "10 min · ready 9:39".
+  function taskEl(task, opts) {
+    opts = opts || {};
+    var uses = task.kind !== "step" ? [] : task.bowlIds
+      .map(function (id) { return bowlsById[id] && bowlName(bowlsById[id], r.bowls); })
+      .filter(Boolean)
+      .concat(task.tools || []);
+    var minutes = (task.end - task.start) + " min";
+    if (task.handsOff) minutes += " · ready " + clock(task.end);
+    else if (opts.long) minutes += " · until " + clock(task.end);
+    return h("div", { class: "task" + (isRoutine(task) ? " routine" : "") },
+      task.label, " ",
+      h("span", { class: "task-min" }, minutes),
+      opts.note && h("span", { class: "uses" }, opts.note),
+      uses.length > 0 && h("span", { class: "uses" }, "Uses " + uses.join(", ")));
+  }
+
+  // Returns null for a row the cell above already stretches over.
+  function cell(c, handsOff) {
+    if (c.covered) return null;
+    if (!c.tasks) return h("td");
+    var td = h("td", { class: handsOff ? "handsoff-cell" : "task-cell", rowspan: c.span > 1 ? String(c.span) : null });
+    c.tasks.forEach(function (t) {
+      td.append(taskEl(t, { long: c.span > 1, note: handsOff && team ? "Cook " + t.cook + " starts it" : null }));
+    });
+    return td;
+  }
+
+  var head = h("tr", {}, h("th", { class: "time" }, "Time"));
+  table.cooks.forEach(function (c) { head.append(h("th", {}, team ? "Cook " + c : "Task")); });
+  if (table.handsOff) head.append(h("th", {}, "Hands-off"));
+
   var body = h("tbody");
-  planRows(plan.tasks, cookCount).forEach(function (t) {
-    var bowls = t.kind === "step" && t.bowlIds.length
-      ? t.bowlIds.map(function (id) { return bowlsById[id] && bowlName(bowlsById[id], r.bowls); }).filter(Boolean)
-      : [];
-    body.append(h("tr", { class: t.kind === "step" || t.kind === "bowl" ? "" : "routine" },
-      h("td", { class: "time" }, clock(t.start)),
-      cookCount > 1 && h("td", {}, t.cook),
-      h("td", {},
-        t.label,
-        t.handsOff && h("span", { class: "tag" }, "hands-off"),
-        bowls.length > 0 && h("span", { class: "uses" }, "Uses " + bowls.join(", "))),
-      h("td", { class: "num" }, String(t.end - t.start))));
+  table.rows.forEach(function (row) {
+    var time = h("td", { class: "time" }, clock(row.time));
+    if (row.kind === "done") {
+      body.append(h("tr", { class: "done" }, time, h("td", { colspan: String(columns) }, "Done")));
+    } else if (row.kind === "everyone") {
+      body.append(h("tr", {}, time,
+        h("td", { colspan: String(table.cooks.length) }, taskEl(row.task, { note: "Everyone" })),
+        table.handsOff && h("td")));
+    } else {
+      // A "class ends" row has cells too: a task running past the end of class stretches
+      // right through it.
+      var tr = h("tr", { class: row.kind === "classEnds" ? "class-ends" : null },
+        row.kind === "classEnds" ? h("td", { class: "time" }, clock(row.time), h("span", { class: "uses" }, "Class ends")) : time);
+      row.cells.concat(table.handsOff ? [row.handsOff] : []).forEach(function (c, i) {
+        var td = cell(c, i === row.cells.length);
+        if (td) tr.append(td);
+      });
+      body.append(tr);
+    }
   });
-  table.append(body);
-  return table;
+
+  return h("div", { class: "plan-scroll" + (team ? " is-wide" : "") },
+    h("table", { class: "plan", style: team ? "min-width:" + (4 + columns * 9) + "rem" : null },
+      h("thead", {}, head), body),
+    team && h("p", { class: "field-hint" }, "A long task stretches down through the rows it lasts. Blank means free."));
 }
 
-function planToggle() {
-  var view = recipe.planView || "list";
-  function option(value, label) {
-    return h("button", {
-      type: "button",
-      "aria-pressed": String(view === value),
-      onclick: function () { update({ planView: value }); render(); }
-    }, label);
-  }
-  return h("div", { class: "segmented segmented-small", role: "group", "aria-label": "Time plan view" },
-    option("list", "List"), option("blocks", "Blocks"));
+// Typed on the guide for the printout only. Never saved: gone when the page closes.
+var cookNames = [];
+
+function cookNamesBox(cookCount) {
+  var grid = h("div", { class: "cook-names-grid" });
+  COOK_LABELS.slice(0, cookCount).forEach(function (label, c) {
+    grid.append(h("label", { class: "cook-name" },
+      h("span", {}, "Cook " + label + ":"),
+      h("input", {
+        type: "text", value: cookNames[c] || "", autocomplete: "off", "data-focus": "cook-" + c,
+        oninput: function (e) { cookNames[c] = e.target.value; }
+      })));
+  });
+  return h("div", { class: "cook-names" },
+    h("p", { class: "field-label" }, "Who's who?"),
+    h("p", { class: "field-hint" }, "Type names for the printout, or write them in by hand. Names are never saved."),
+    grid);
 }
 
 function guideView() {
@@ -183,10 +183,9 @@ function guideView() {
     : null;
 
   // 1. Equipment
+  var tools = equipmentList(r);
   var equipment = h("ul", { class: "checklist" });
-  r.equipment.forEach(function (e) {
-    equipment.append(h("li", {}, (e.qty > 1 ? e.qty + " × " : "") + e.name));
-  });
+  tools.forEach(function (name) { equipment.append(h("li", {}, name)); });
 
   // 2. Mise en place
   var mise = h("div", { class: "bowls" });
@@ -205,33 +204,34 @@ function guideView() {
   if (loose.length) {
     var looseList = h("ul", { class: "checklist" });
     loose.forEach(function (i) { looseList.append(h("li", {}, ingredientLine(i))); });
-    mise.append(h("div", { class: "bowl" }, h("h3", {}, r.bowls.length ? "On their own" : "Ingredients"), looseList));
+    mise.append(h("div", { class: "bowl" }, h("h3", {}, mise.childNodes.length ? "On their own" : "Ingredients"), looseList));
   }
 
   return h("article", { class: "guide" },
     h("div", { class: "guide-actions" },
-      h("button", { type: "button", class: "button-quiet", onclick: function () { goTo(SCREENS.length - 1); } }, "← Edit"),
+      h("p", { class: "eyebrow" }, "Lab guide"),
       h("button", { type: "button", class: "button-primary", onclick: function () { window.print(); } }, "Print")),
-    h("p", { class: "eyebrow" }, "Lab guide"),
     h("h1", {}, r.title || "Your recipe"),
     h("p", { class: "lead" }, details.join(" · ")),
     summary,
     fit,
-    h("section", { class: "guide-section" },
-      h("h2", {}, "1. Equipment"),
-      r.equipment.length ? equipment : h("p", { class: "field-hint" }, "None listed.")),
-    h("section", { class: "guide-section" },
-      h("h2", {}, "2. Mise en place"),
-      r.ingredients.length ? mise : h("p", { class: "field-hint" }, "No ingredients yet.")),
-    h("section", { class: "guide-section" },
-      h("div", { class: "section-head" },
-        h("h2", {}, "3. Time plan"),
-        planToggle()),
-      recipe.planView === "blocks" ? blockView(plan, r, cookCount) : listView(plan, r, cookCount)),
+    gapsNote(recipeGaps(r)),
+    // Side by side on a wide screen; stacked on a phone and on paper.
+    h("div", { class: "guide-top" },
+      h("section", { class: "guide-section" },
+        h("h2", {}, "1. Equipment"),
+        tools.length ? equipment : h("p", { class: "field-hint" }, "None listed. Add tools to your steps.")),
+      h("section", { class: "guide-section" },
+        h("h2", {}, "2. Mise en place"),
+        r.ingredients.length ? mise : h("p", { class: "field-hint" }, "No ingredients yet."))),
+    h("section", { class: "guide-section guide-plan" },
+      h("h2", {}, "3. Time plan"),
+      cookCount > 1 && cookNamesBox(cookCount),
+      planView(plan, r, cookCount)),
     newRecipeControl());
 }
 
-// "Start a new recipe" asks for a second tap instead of a pop-up.
+// "Start a new recipe" asks for a second tap instead of a pop-up, and can be undone.
 var confirmingNew = false;
 function newRecipeControl() {
   var box = h("div", { class: "new-recipe" });
@@ -244,9 +244,12 @@ function newRecipeControl() {
       h("span", {}, "This clears everything you entered. "),
       h("button", { type: "button", class: "button-small danger", onclick: function () {
         confirmingNew = false;
+        remember(null);
         recipe = emptyRecipe();
+        openStepId = null;
         save();
         goTo(0);
+        showToast("Cleared the recipe.");
       } }, "Yes, clear it"),
       h("button", { type: "button", class: "button-small", onclick: function () {
         confirmingNew = false; render();

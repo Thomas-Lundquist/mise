@@ -26,14 +26,16 @@ No install or build. Double-click `index.html`, or serve the folder
 
 - `js/schedule.js`: the time-plan calculation (no screen code; can run in Node for tests)
 - `js/store.js`: saving and loading in the browser
-- `js/app.js`: the five entry screens and the shared helpers
+- `js/app.js`: the four entry screens, the shared helpers, and undo
 - `js/guide.js`: the lab guide (screen and print)
 - `css/styles.css`: all styling
 
 ## Ground rules
 
-- **No personal data, ever.** No accounts, no names, no server-side storage. A student's
-  work stays in their own browser. Don't add analytics or third-party trackers.
+- **No personal data stored, ever.** No accounts, no stored names, no server-side storage.
+  A student's work stays in their own browser. Cook names typed on the lab guide are for
+  printing only and are never saved. Don't add analytics or third-party trackers.
+- **Keyboard first.** Most students use Chromebooks: everything must work without a mouse.
 - **Calm over clever.** If a screen feels busy, cut something. See docs/design.md.
 - **The student does the reading.** Features should make students engage with the
   recipe, not do it for them (this is why recipe auto-import is not in v1).

@@ -35,8 +35,9 @@ function buildWorkTasks(recipe) {
   var bowlsById = {};
   recipe.bowls.forEach(function (b) { bowlsById[b.id] = b; });
 
+  // An empty bowl has nothing to fill, so it isn't a task.
   function addBowl(bowl) {
-    if (placedBowls[bowl.id]) return;
+    if (placedBowls[bowl.id] || !bowl.ingredientIds.length) return;
     placedBowls[bowl.id] = true;
     tasks.push({
       id: "fill-" + bowl.id,
@@ -45,6 +46,7 @@ function buildWorkTasks(recipe) {
       minutes: bowlMinutes(bowl, recipe.ingredients),
       handsOff: false,
       bowlIds: [bowl.id],
+      tools: [],
       waitsFor: []
     });
   }
@@ -53,7 +55,7 @@ function buildWorkTasks(recipe) {
     var waitsFor = [];
     (step.bowlIds || []).forEach(function (bowlId) {
       var bowl = bowlsById[bowlId];
-      if (!bowl) return;
+      if (!bowl || !bowl.ingredientIds.length) return;
       addBowl(bowl);
       waitsFor.push("fill-" + bowl.id);
     });
@@ -74,6 +76,7 @@ function buildWorkTasks(recipe) {
       minutes: Math.max(0, Number(step.minutes) || 0),
       handsOff: !!step.handsOff,
       bowlIds: step.bowlIds || [],
+      tools: step.tools || [],
       waitsFor: waitsFor
     });
   });
@@ -109,7 +112,7 @@ function schedule(recipe) {
 
   for (var c = 0; c < cookCount; c++) {
     plan.push({ id: "setup-" + c, kind: "setup", label: "Wash hands and set up station",
-      cook: COOK_LABELS[c], start: 0, end: SETUP_MINUTES, handsOff: false, bowlIds: [] });
+      cook: COOK_LABELS[c], start: 0, end: SETUP_MINUTES, handsOff: false, bowlIds: [], tools: [] });
     cookFreeAt.push(SETUP_MINUTES);
   }
 
@@ -155,14 +158,14 @@ function schedule(recipe) {
     cookFreeAt[cook] = task.handsOff ? start : end;
     if (!task.handsOff) workDone[cook] += task.minutes;
     plan.push({ id: task.id, kind: task.kind, label: task.label, cook: COOK_LABELS[cook],
-      start: start, end: end, handsOff: task.handsOff, bowlIds: task.bowlIds });
+      start: start, end: end, handsOff: task.handsOff, bowlIds: task.bowlIds, tools: task.tools });
     pending.splice(pick.index, 1);
   }
 
   var lastEnd = plan.reduce(function (m, t) { return Math.max(m, t.end); }, SETUP_MINUTES);
   for (var k = 0; k < cookCount; k++) {
     plan.push({ id: "cleanup-" + k, kind: "cleanup", label: "Clean and sanitize station",
-      cook: COOK_LABELS[k], start: lastEnd, end: lastEnd + CLEANUP_MINUTES, handsOff: false, bowlIds: [] });
+      cook: COOK_LABELS[k], start: lastEnd, end: lastEnd + CLEANUP_MINUTES, handsOff: false, bowlIds: [], tools: [] });
   }
 
   plan.sort(function (a, b) { return a.start - b.start || a.cook.localeCompare(b.cook); });
@@ -171,6 +174,79 @@ function schedule(recipe) {
   return { tasks: plan, totalMinutes: total, overrunMinutes: Math.max(0, total - available) };
 }
 
+function isRoutine(task) { return task.kind === "setup" || task.kind === "cleanup"; }
+
+// Lays the plan out as the lab guide's team table: one row for each moment something
+// starts, with a cell per cook and one for hands-off work. For a team, setup and cleanup
+// are one "everyone" row. Also marks when class ends (if the plan runs over) and when
+// everything is done.
+//
+// A cook's task is one cell that stretches down over every row it lasts (like merged
+// cells in a spreadsheet), so a long task reads as one block:
+//   { tasks, span }  the task(s) starting here, covering `span` rows from this one
+//   { covered: true } a row the cell above already stretches over (draw nothing)
+//   {}               free
+// Hands-off tasks don't stretch; they sit at their start, and the guide says when they're ready.
+function planTable(plan, cookCount) {
+  var cooks = COOK_LABELS.slice(0, cookCount);
+  var team = cookCount > 1;
+  var times = [];
+  plan.tasks.forEach(function (t) { if (times.indexOf(t.start) === -1) times.push(t.start); });
+  times.sort(function (a, b) { return a - b; });
+
+  var rows = [];
+  times.forEach(function (time) {
+    var starting = plan.tasks.filter(function (t) { return t.start === time; });
+    var routine = team ? starting.filter(isRoutine) : [];
+    var everyone = routine.length ? { kind: "everyone", time: time, task: routine[0] } : null;
+    // Setup comes before anything else at its time; cleanup after.
+    if (everyone && routine[0].kind === "setup") rows.push(everyone);
+    if (routine.length < starting.length) rows.push({ kind: "tasks", time: time });
+    if (everyone && routine[0].kind === "cleanup") rows.push(everyone);
+  });
+
+  // "Class ends" is a row of its own, so a task running past it visibly crosses the line.
+  if (plan.overrunMinutes > 0) {
+    var ends = plan.totalMinutes - plan.overrunMinutes;
+    var mark = { kind: "classEnds", time: ends };
+    var at = rows.findIndex(function (r) { return r.time >= ends; });
+    if (at === -1) rows.push(mark); else rows.splice(at, 0, mark);
+  }
+  rows.push({ kind: "done", time: plan.totalMinutes });
+
+  function hasCells(row) { return row && (row.kind === "tasks" || row.kind === "classEnds"); }
+  rows.forEach(function (row) {
+    if (!hasCells(row)) return;
+    row.cells = cooks.map(function () { return {}; });
+    var handsOff = plan.tasks.filter(function (t) { return t.handsOff && t.start === row.time; });
+    row.handsOff = row.kind === "tasks" && handsOff.length ? { tasks: handsOff } : {};
+  });
+
+  cooks.forEach(function (cook, c) {
+    var mine = plan.tasks.filter(function (t) {
+      return t.cook === cook && !t.handsOff && !(team && isRoutine(t));
+    });
+    rows.forEach(function (row, i) {
+      if (row.kind !== "tasks" || row.cells[c].covered) return;
+      var starting = mine.filter(function (t) { return t.start === row.time; });
+      if (!starting.length) return;
+      var end = Math.max.apply(null, starting.map(function (t) { return t.end; }));
+      var span = 1;
+      while (hasCells(rows[i + span]) && rows[i + span].time < end) {
+        rows[i + span].cells[c] = { covered: true };
+        span++;
+      }
+      row.cells[c] = { tasks: starting, span: span };
+    });
+  });
+
+  return {
+    cooks: cooks,
+    handsOff: plan.tasks.some(function (t) { return t.handsOff; }),
+    rows: rows
+  };
+}
+
 if (typeof module !== "undefined") {
-  module.exports = { schedule: schedule, suggestBowlMinutes: suggestBowlMinutes };
+  module.exports = { schedule: schedule, planTable: planTable, suggestBowlMinutes: suggestBowlMinutes };
 }
