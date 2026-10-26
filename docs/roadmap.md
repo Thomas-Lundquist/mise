@@ -4,7 +4,7 @@
 
 - [x] The student flow: four entry screens and the lab guide (see design.md)
 - [x] Lab guide: equipment, mise en place bowls, time plan with overrun warning
-- [ ] Smoother student workflow (on branch `student-flow`, under review): equipment from
+- [x] Smoother student workflow: equipment from
       the steps, one open step at a time, the team table time plan, "Before you print"
       check, clickable progress bar, keyboard-first entry, undo, optional cook names
 - [x] Automatic setup and cleanup tasks
@@ -12,7 +12,8 @@
 - [x] Auto-save in the browser; "start a new recipe" button
 - [ ] Print-first lab guide (print or save as PDF), readable in black and white (print styles checked on screen; needs a real test print)
 - [ ] Works well on phone and Chromebook (checked in Chrome down to 360px wide and by keyboard only; needs a real phone and Chromebook)
-- [ ] Hosted free on GitHub Pages at a simple link
+- [x] Hosted free on GitHub Pages: https://thomas-lundquist.github.io/mise/ (updates
+      whenever `master` is pushed)
 
 ## Later ideas (not v1)
 
