@@ -73,6 +73,18 @@ function gapsNote(gaps) {
   return h("div", { class: "gaps" }, h("strong", {}, "Before you print"), list);
 }
 
+// What a step uses, by name: its bowls, then its tools. Setup and cleanup use nothing.
+function usesOf(task, r) {
+  if (task.kind !== "step") return [];
+  return task.bowlIds
+    .map(function (id) {
+      var bowl = r.bowls.find(function (b) { return b.id === id; });
+      return bowl && bowlName(bowl, r.bowls);
+    })
+    .filter(Boolean)
+    .concat(task.tools || []);
+}
+
 // ---------- Time plan: the team table ----------
 // One row per moment something starts; a column per cook. See planTable() in schedule.js.
 
@@ -80,17 +92,12 @@ function planView(plan, r, cookCount) {
   var table = planTable(plan, cookCount);
   var team = cookCount > 1;
   var columns = table.cooks.length + (table.handsOff ? 1 : 0);
-  var bowlsById = {};
-  r.bowls.forEach(function (b) { bowlsById[b.id] = b; });
 
   // "6 min", or "6 min · until 9:26" for a task that stretches over more than one row.
   // Hands-off: "10 min · ready 9:39".
   function taskEl(task, opts) {
     opts = opts || {};
-    var uses = task.kind !== "step" ? [] : task.bowlIds
-      .map(function (id) { return bowlsById[id] && bowlName(bowlsById[id], r.bowls); })
-      .filter(Boolean)
-      .concat(task.tools || []);
+    var uses = usesOf(task, r);
     var minutes = (task.end - task.start) + " min";
     if (task.handsOff) minutes += " · ready " + clock(task.end);
     else if (opts.long) minutes += " · until " + clock(task.end);
@@ -154,13 +161,174 @@ function cookNamesBox(cookCount) {
       h("span", {}, "Cook " + label + ":"),
       h("input", {
         type: "text", value: cookNames[c] || "", autocomplete: "off", "data-focus": "cook-" + c,
-        oninput: function (e) { cookNames[c] = e.target.value; }
+        oninput: function (e) {
+          cookNames[c] = e.target.value;
+          // Copy the name onto the printed report's name lines as it's typed.
+          document.querySelectorAll('[data-cook-name="' + label + '"]').forEach(function (line) {
+            line.textContent = e.target.value;
+          });
+        }
       })));
   });
   return h("div", { class: "cook-names" },
     h("p", { class: "field-label" }, "Who's who?"),
     h("p", { class: "field-hint" }, "Type names for the printout, or write them in by hand. Names are never saved."),
     grid);
+}
+
+// ---------- The printed report ----------
+// What Print gives you, built for paper (letter, black and white). Hidden on screen.
+// Page 1, the station sheet, is posted at the station. Page 2 holds a run sheet per
+// cook, to cut apart, and an "After the lab" reflection.
+
+function cookName(label, team) { return team ? "Cook " + label : "You"; }
+
+// A line to write a cook's name on, filled in if a name was typed in "Who's who?".
+function nameLine(label) {
+  return h("span", { class: "name-line", "data-cook-name": label }, cookNames[COOK_LABELS.indexOf(label)] || "");
+}
+
+function stationSheet(r, plan, cookCount) {
+  var team = cookCount > 1;
+  var available = Number(r.minutesAvailable) || 0;
+  var spare = available - plan.totalMinutes;
+
+  // Without a class start time there are no clock times to show, only minutes.
+  var when = r.startTime
+    ? [h("p", { class: "soft" }, "Class " + clock(0) + "–" + clock(available)),
+       h("p", { class: "big" }, "Done by " + clock(plan.totalMinutes))]
+    : [h("p", { class: "soft" }, available + " min class"),
+       h("p", { class: "big" }, "Takes " + plan.totalMinutes + " min")];
+  when.push(spare >= 0
+    ? h("p", { class: "soft" }, plan.totalMinutes + " of " + available + " min · " + spare + " to spare")
+    : h("p", { class: "over" }, -spare + " minutes over"));
+
+  var details = [r.servings && "Serves " + r.servings, team ? "Team of " + cookCount : "Solo"];
+  var sheet = h("div", { class: "sheet" },
+    h("header", { class: "sheet-head" },
+      h("div", {},
+        h("p", { class: "eyebrow" }, "Lab guide"),
+        h("h1", {}, r.title || "Your recipe"),
+        h("p", { class: "soft" }, details.filter(Boolean).join(" · "))),
+      h("div", { class: "when" }, ...when)));
+
+  if (team) {
+    var names = h("div", { class: "names" });
+    COOK_LABELS.slice(0, cookCount).forEach(function (label) {
+      names.append(h("p", {}, "Cook " + label + ": ", nameLine(label)));
+    });
+    sheet.append(names);
+  }
+
+  // Pull list
+  var pull = h("ul", { class: "checks" });
+  equipmentList(r).forEach(function (name) { pull.append(h("li", {}, name)); });
+
+  // Mise en place: each bowl with who fills it and when.
+  var bowls = h("div", { class: "report-bowls" });
+  var inBowl = {};
+  r.bowls.forEach(function (bowl) {
+    if (!bowl.ingredientIds.length) return;
+    var fill = plan.tasks.find(function (t) { return t.id === "fill-" + bowl.id; });
+    var lines = h("ul", { class: "checks" });
+    bowl.ingredientIds.forEach(function (id) {
+      inBowl[id] = true;
+      lines.append(h("li", {}, ingredientLine(r.ingredients.find(function (i) { return i.id === id; }))));
+    });
+    bowls.append(h("div", { class: "report-bowl" },
+      h("h3", {}, bowlName(bowl, r.bowls)),
+      fill && h("p", { class: "who" },
+        (team ? cookName(fill.cook, team) + " · " : "") + clock(fill.start) + " · " + (fill.end - fill.start) + " min"),
+      lines));
+  });
+  var loose = r.ingredients.filter(function (i) { return !inBowl[i.id]; });
+  if (loose.length) {
+    var looseList = h("ul", { class: "checks" });
+    loose.forEach(function (i) { looseList.append(h("li", {}, ingredientLine(i))); });
+    bowls.append(h("div", { class: "report-bowl" },
+      h("h3", {}, bowls.childNodes.length ? "On their own" : "Ingredients"), looseList));
+  }
+
+  sheet.append(
+    h("div", { class: "sheet-top" },
+      h("section", {}, h("h2", {}, "Pull"), pull),
+      h("section", {}, h("h2", {}, "Mise en place"), bowls)),
+    h("section", {}, h("h2", {}, "Time plan"), planView(plan, r, cookCount)));
+  return sheet;
+}
+
+// One cook's own list, in order: their tasks, the hands-off things they start (with a
+// timer note), and any free stretch long enough to clean as you go.
+function runItems(cook, r, plan, team) {
+  var items = [];
+  var mine = plan.tasks.filter(function (t) { return t.cook === cook; });
+  mine.forEach(function (t) {
+    if (t.handsOff) {
+      items.push({ time: t.start, order: 0, label: "Start: " + t.label,
+        note: "Hands-off · set a timer for " + (t.end - t.start) + " min (ready " + clock(t.end) + ")" });
+    } else {
+      var uses = usesOf(t, r);
+      items.push({ time: t.start, order: 1, label: t.label, minutes: t.end - t.start,
+        routine: isRoutine(t), note: uses.length ? "Uses " + uses.join(", ") : null });
+    }
+  });
+  // Free stretches of 5 minutes or more between hands-on tasks.
+  var handsOn = mine.filter(function (t) { return !t.handsOff; }).sort(function (a, b) { return a.start - b.start; });
+  for (var i = 1; i < handsOn.length; i++) {
+    var from = handsOn[i - 1].end, to = handsOn[i].start;
+    if (to - from >= 5) {
+      items.push({ time: from, order: 2, free: true, label: "Free until " + clock(to),
+        note: team ? "Help a teammate, or clean as you go" : "Clean as you go" });
+    }
+  }
+  return items.sort(function (a, b) { return a.time - b.time || a.order - b.order; });
+}
+
+function runSheet(cook, r, plan, team) {
+  var handsOnMinutes = plan.tasks
+    .filter(function (t) { return t.cook === cook && !t.handsOff; })
+    .reduce(function (sum, t) { return sum + t.end - t.start; }, 0);
+  var body = h("tbody");
+  runItems(cook, r, plan, team).forEach(function (it) {
+    var timed = it.minutes != null;
+    body.append(h("tr", { class: it.free ? "free" : (it.routine ? "routine" : null) },
+      h("td", { class: it.free ? null : "box" }),
+      h("td", { class: "time" }, clock(it.time)),
+      h("td", {}, it.label, it.note && h("span", { class: "run-note" }, it.note)),
+      h("td", { class: "planned" }, timed ? it.minutes + " min" : ""),
+      h("td", { class: timed ? "actual" : null })));
+  });
+  return h("div", { class: "run" + (team ? "" : " solo") },
+    h("div", { class: "run-head" },
+      h("h3", {}, team ? cookName(cook, team) : "Your run sheet", team && nameLine(cook)),
+      h("p", { class: "soft small" }, (r.title || "Your recipe") + " · " + handsOnMinutes + " min hands-on")),
+    h("table", { class: "run-table" },
+      h("thead", {}, h("tr", {},
+        h("th", {}), h("th", {}, "Time"), h("th", {}, "Task"),
+        h("th", { class: "planned" }, "Plan"), h("th", {}, "Actual"))),
+      body));
+}
+
+function runSheets(r, plan, cookCount) {
+  var team = cookCount > 1;
+  var sheet = h("div", { class: "sheet" },
+    h("h2", {}, team ? "Run sheets" : "Run sheet"),
+    h("p", { class: "cut-note soft" }, team
+      ? "Cut along the dashed lines. Each cook keeps their own. Check off each task and write how long it really took."
+      : "Check off each task and write how long it really took."));
+  COOK_LABELS.slice(0, cookCount).forEach(function (cook) { sheet.append(runSheet(cook, r, plan, team)); });
+  sheet.append(h("div", { class: "reflect" },
+    h("h2", {}, "After the lab"),
+    h("p", {}, "Planned " + plan.totalMinutes + " min. Actual: ", h("span", { class: "blank" }), " min."),
+    h("p", {}, "Which step took longer than you planned? Why?"),
+    h("div", { class: "line" }), h("div", { class: "line" }),
+    h("p", {}, "What will you do differently next time?"),
+    h("div", { class: "line" }), h("div", { class: "line" })));
+  return sheet;
+}
+
+function labReport(r, plan, cookCount) {
+  return h("div", { class: "report" }, stationSheet(r, plan, cookCount), runSheets(r, plan, cookCount));
 }
 
 function guideView() {
@@ -211,6 +379,7 @@ function guideView() {
     h("div", { class: "guide-actions" },
       h("p", { class: "eyebrow" }, "Lab guide"),
       h("button", { type: "button", class: "button-primary", onclick: function () { window.print(); } }, "Print")),
+    h("p", { class: "field-hint print-hint" }, "Prints a station sheet to post and run sheets to cut apart."),
     h("h1", {}, r.title || "Your recipe"),
     h("p", { class: "lead" }, details.join(" · ")),
     summary,
@@ -228,7 +397,8 @@ function guideView() {
       h("h2", {}, "3. Time plan"),
       cookCount > 1 && cookNamesBox(cookCount),
       planView(plan, r, cookCount)),
-    newRecipeControl());
+    newRecipeControl(),
+    labReport(r, plan, cookCount));
 }
 
 // "Start a new recipe" asks for a second tap instead of a pop-up, and can be undone.

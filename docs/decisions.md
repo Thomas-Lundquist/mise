@@ -2,6 +2,21 @@
 
 Newest first. Each entry: what was decided, and why.
 
+## 2026-10-26: Print gives a paper report, not the guide screen
+
+Print no longer prints the guide as it looks on screen. It prints a report designed for
+paper. Page 1 is a **station sheet** to post: the big "Done by" time, cook name lines,
+the pull list, the bowls (with who fills each and when), and the team table. Page 2 has
+a **run sheet per cook** to cut apart: a checkbox, planned minutes, and an "Actual" blank
+for each task, timer notes for hands-off steps, and "Free until…" gaps. It ends with
+"After the lab" questions. The guide on screen is unchanged.
+
+**Why:** Paper is the main way the guide is used in class. A posted sheet, plus a
+personal list each cook can hold, works better at a station than one long page. The
+"Actual" blanks and the reflection turn the lab into practice at estimating time.
+**Trade-off:** what prints doesn't look like what's on screen, so the guide says so in
+one line under Print. A team of 3 or more needs a third page for the reflection.
+
 ## 2026-10-25: Equipment comes from the steps; no Equipment screen
 
 Each step records what it uses (bowls and tools) in one "Uses" box. The guide's equipment

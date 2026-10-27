@@ -10,7 +10,8 @@
 - [x] Automatic setup and cleanup tasks
 - [x] Team scheduling: split the plan between 1–5 cooks (see data-model.md)
 - [x] Auto-save in the browser; "start a new recipe" button
-- [ ] Print-first lab guide (print or save as PDF), readable in black and white (print styles checked on screen; needs a real test print)
+- [ ] Print-first lab guide (print or save as PDF), readable in black and white: the paper
+      report (station sheet + run sheets). Checked as PDFs from Chrome; needs a real test print
 - [ ] Works well on phone and Chromebook (checked in Chrome down to 360px wide and by keyboard only; needs a real phone and Chromebook)
 - [x] Hosted free on GitHub Pages: https://thomas-lundquist.github.io/mise/ (updates
       whenever `master` is pushed)
@@ -30,16 +31,12 @@
 
 ## Open questions
 
-- **A paper-first printed report?** A sketch is in `prototype/report.html` (not part of
-  the app yet). Page 1 is a station sheet to post: big "done by" time, cook name lines,
-  pull list, mise en place bowls showing who fills each and when, and the team table.
-  Page 2 is a run sheet per cook to cut apart, with a checkbox, planned minutes, and an
-  "Actual" blank for each task, timer notes for hands-off steps, and "free: clean as you
-  go" gaps, plus an "After the lab" reflection. Should this replace printing the guide
-  page?
+(None right now.)
 
 ## Answered
 
+- A paper-first printed report: **yes, it replaces printing the guide page**: a station
+  sheet plus run sheets (2026-10-26).
 - Team size: **1 to 5 cooks**.
 - Minutes to fill a bowl: **the app suggests a default; students can change it**.
 - Auto-add setup and cleanup: **yes**.

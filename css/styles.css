@@ -666,37 +666,124 @@ select:focus {
   }
 }
 
-/* ---------- Printing: black and white, no buttons ---------- */
+/* ---------- Printing: the paper report ---------- */
+/* Print gives the report built in guide.js, not the guide on screen. Letter size, black
+   and white, sized in points. Page 1 is posted at the station; page 2 is cut apart, one
+   run sheet per cook. */
 
-@page { margin: 0.5in; }
+@page { size: letter; margin: 0.5in; }
+
+.print-hint { margin: -24px 0 32px; text-align: right; }
+.report { display: none; }
 
 @media print {
-  body { background: #fff; font-size: 11pt; color: #000; }
-  .site-header, .progress, .guide-actions button, .new-recipe, .gaps, .toast { display: none !important; }
+  body { background: #fff; color: #000; }
+  .site-header, .progress, .toast, .guide > :not(.report) { display: none !important; }
   .page { max-width: none; padding: 0; }
-  .eyebrow, .plan th, .uses, .task-min, .task.routine, .plan tr.done td { color: #444; }
-  .bowl, .warning { background: none; }
-  .warning { border: 1.5px solid #000; border-radius: 0; }
-  .guide-section { break-inside: avoid-page; }
-  .guide-plan { break-inside: auto; }
-  .plan-scroll, .plan-scroll.is-wide { overflow: visible; width: auto; left: 0; transform: none; }
-  .plan { min-width: 0 !important; }
-  .plan th { border-bottom-color: #000; }
-  .plan td { border-top-color: #999; }
-  .plan tr { break-inside: avoid; }
-  .plan td.task-cell { border-left-color: #000; }
-  .plan td.handsoff-cell { border-left-color: #444; }
-  .plan tr.class-ends td { border-top-color: #000; }
-  .plan tr.class-ends .time, .plan tr.class-ends .time .uses { color: #000; }
-  .plan-scroll .field-hint { color: #444; }
-  .cook-names .field-hint { display: none; }
-  .cook-names-grid { grid-template-columns: repeat(3, 1fr); }
-  .cook-name input {
-    min-height: 0;
-    padding: 2px 4px;
-    background: none;
-    border: none;
-    border-bottom: 1px solid #000;
-    border-radius: 0;
-  }
+  .report { display: block; font-size: 10pt; line-height: 1.3; }
 }
+
+.report .sheet + .sheet { break-before: page; }
+.report h1, .report h2, .report h3, .report p { margin: 0; }
+.report .eyebrow { margin: 0; font-size: 8.5pt; letter-spacing: 0.08em; color: #000; }
+.report .soft { color: #444; }
+.report .small { font-size: 8.5pt; }
+
+/* Header: what, and when. Readable from arm's length. */
+.report .sheet-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 24px;
+  padding-bottom: 10pt;
+  border-bottom: 2.5pt solid #000;
+}
+.report .sheet-head h1 { font-size: 24pt; line-height: 1.1; margin: 2pt 0; }
+.report .when { text-align: right; }
+.report .big { font-size: 20pt; font-weight: 700; line-height: 1.1; }
+.report .over { display: inline-block; margin-top: 3pt; padding: 1pt 6pt; border: 1.5pt solid #000; font-weight: 700; }
+
+.report .names { display: flex; flex-wrap: wrap; gap: 6pt 24pt; margin: 10pt 0 2pt; font-weight: 700; }
+.report .name-line { display: inline-block; min-width: 1.8in; border-bottom: 1pt solid #000; font-weight: 400; }
+
+.report section { margin-top: 11pt; }
+.report h2 {
+  font-size: 11pt;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding-bottom: 3pt;
+  margin-bottom: 6pt;
+  border-bottom: 1pt solid #000;
+}
+.report .sheet-top { display: grid; grid-template-columns: 1fr 2.2fr; gap: 20pt; }
+
+/* Checkboxes drawn as boxes, so they print without background graphics. */
+.report .checks { list-style: none; margin: 0; padding: 0; }
+.report .checks li { position: relative; padding: 2pt 0 2pt 17pt; }
+.report .checks li::before,
+.report .run-table td.box::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 4pt;
+  width: 9pt;
+  height: 9pt;
+  border: 1pt solid #000;
+}
+
+.report .report-bowls { display: grid; grid-template-columns: 1fr 1fr; gap: 8pt; }
+.report .report-bowl { border: 1pt solid #000; padding: 6pt 8pt; break-inside: avoid; }
+.report .report-bowl h3 { font-size: 10.5pt; }
+.report .who { font-size: 8.5pt; color: #444; margin-bottom: 3pt; }
+
+/* The team table, the same one as on screen, made compact and black and white. */
+.report .plan-scroll, .report .plan-scroll.is-wide { overflow: visible; width: auto; left: 0; transform: none; }
+.report .plan-scroll .field-hint { display: none; }
+.report .plan { min-width: 0 !important; }
+.report .plan th { font-size: 8.5pt; color: #000; padding: 0 6pt 3pt 7pt; border-bottom: 1pt solid #000; white-space: nowrap; }
+.report .plan th:first-child { padding-left: 0; }
+.report .plan td { padding: 3pt 6pt 3pt 5pt; border-top: 0.5pt solid #999; border-left-width: 2pt; }
+.report .plan tbody tr:first-child td { border-top: none; }
+.report .plan .time { width: 0.55in; padding-left: 0; }
+.report .plan td.task-cell { border-left-color: #000; }
+.report .plan td.handsoff-cell { border-left: 2pt dashed #666; }
+.report .plan tr.class-ends td { border-top: 1.5pt dashed #000; }
+.report .plan tr.class-ends .time, .report .plan tr.class-ends .time .uses { color: #000; }
+.report .plan tr.done td { color: #000; }
+.report .plan tr { break-inside: avoid; }
+.report .task + .task { margin-top: 4pt; }
+.report .task-min, .report .uses { font-size: 8.5pt; color: #444; }
+.report .task.routine { color: #444; }
+
+/* Page 2: run sheets, one per cook, to cut apart. */
+.report .cut-note { margin: 2pt 0 6pt; }
+.report .run {
+  padding: 8pt 12pt;
+  margin-bottom: 9pt;
+  border: 1.25pt dashed #000;
+  break-inside: avoid;
+}
+.report .run.solo { border-style: solid; }
+.report .run-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4pt; }
+.report .run-head h3 { font-size: 14pt; }
+.report .run-head .name-line { margin-left: 6pt; }
+.report .run-table { width: 100%; border-collapse: collapse; }
+.report .run-table th { text-align: left; font-size: 8.5pt; padding: 0 6pt 3pt 0; border-bottom: 1pt solid #000; white-space: nowrap; }
+.report .run-table td { position: relative; padding: 2.5pt 6pt 2.5pt 0; border-top: 0.5pt solid #999; vertical-align: top; }
+.report .run-table tbody tr:first-child td { border-top: none; }
+.report .run-table tr { break-inside: avoid; }
+.report .run-table td.box { width: 16pt; }
+.report .run-table td.box::before { top: 4.5pt; }
+.report .run-table .time { width: 0.55in; font-weight: 700; white-space: nowrap; }
+.report .run-table .planned { width: 0.7in; text-align: right; padding-right: 10pt; white-space: nowrap; }
+.report .run-table td.actual { width: 0.85in; }
+.report .run-table td.actual::after { content: ""; display: block; height: 11pt; border-bottom: 1pt solid #000; }
+.report .run-table tr.free td, .report .run-table tr.routine td { color: #444; }
+.report .run-table tr.free td { font-style: italic; }
+.report .run-note { display: block; font-size: 8.5pt; color: #444; }
+
+.report .reflect { padding: 8pt 12pt; border: 1.25pt solid #000; break-inside: avoid; }
+.report .reflect h2 { border: none; margin-bottom: 2pt; }
+.report .reflect p { margin-top: 6pt; font-weight: 700; }
+.report .reflect .line { height: 14pt; border-bottom: 1pt solid #000; }
+.report .reflect .blank { display: inline-block; min-width: 0.8in; border-bottom: 1pt solid #000; }

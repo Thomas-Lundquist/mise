@@ -52,7 +52,8 @@ or Enter opens it. The open step has three parts:
 - **Most screens:** a 40rem reading column; each ingredient on two lines.
 - **Wide** (Chromebooks and laptops, 1024px and up): a wider 52rem column; each
   ingredient on one line; a step's Minutes · Starts · Hands-off on one line; on the guide,
-  Equipment sits beside Mise en place. Printing always uses the narrow layout.
+  Equipment sits beside Mise en place. Printing doesn't depend on screen size: it always
+  gives the paper report (see below).
 - Symbol buttons (× ↑ ↓) are drawn large (about 1.6× text size, 48px to tap).
 
 ### Keyboard first
@@ -116,9 +117,25 @@ that's empty. It only shows when there's something to fix, and never prints.
 Setup ("wash hands, set up station") and cleanup ("clean and sanitize") are added
 automatically, so they're always counted in the time plan.
 
-**Printing is the main way the guide is used**, so the print layout gets as much care as
-the screen. The screen is the backup. The only names on the printout are the optional
-cook names above the time plan.
+### The printed report
+
+**Printing is the main way the guide is used**, so Print gives a report designed for
+paper (letter size, black and white) rather than a copy of the screen. The screen is the
+backup. One line under the Print button says what prints.
+
+- **Page 1, the station sheet** (posted at the station): recipe name, class times, and a
+  big "Done by 10:12" (or "N minutes over" in a box); "Cook A: ____" lines for a team;
+  **Pull** (the equipment checklist) beside **Mise en place** (each bowl, with who fills
+  it, when, and for how long); then the team table.
+- **Page 2, run sheets** (cut apart along dashed lines, one per cook; solo, one solid
+  box): each of that cook's tasks in order, with a checkbox, the time, planned minutes,
+  and an "Actual" blank. Hands-off steps read "Start: Rest batter" with a timer note.
+  A gap of 5 minutes or more reads "Free until 9:39: help a teammate, or clean as you go."
+- **After the lab:** planned vs. actual minutes, and two short reflection questions.
+
+Without a class start time, the header shows "Takes 57 min" instead of clock times.
+The only names on the printout are the optional cook names from "Who's who?", which
+fill the name lines; left blank, they stay lines to write on.
 
 ### Example: pancakes
 
